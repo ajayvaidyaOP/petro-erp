@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-navy-950 text-ink-200 antialiased;
+    background-image:
+      radial-gradient(1000px 600px at 100% -10%, rgba(56, 189, 248, 0.07), transparent 60%),
+      radial-gradient(800px 500px at -10% 110%, rgba(45, 212, 191, 0.05), transparent 55%);
+    background-attachment: fixed;
+  }
+  * {
+    @apply border-navy-700/60;
+  }
+  ::selection {
+    background: rgba(56, 189, 248, 0.28);
+  }
+  :focus-visible {
+    @apply outline-none ring-2 ring-accent/60 ring-offset-2 ring-offset-navy-950;
+  }
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-navy-700;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border border-navy-700/70 bg-navy-850/80 shadow-card backdrop-blur-sm;
+  }
+  .card-hover {
+    @apply transition-colors hover:border-navy-600/80;
+  }
+  .label {
+    @apply mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-500;
+  }
+  .input {
+    @apply w-full rounded-lg border border-navy-600/80 bg-navy-900/80 px-3 py-2 text-sm text-ink-100
+      placeholder:text-ink-500/70 transition focus:border-accent/70 focus:outline-none focus:ring-2 focus:ring-accent/20
+      disabled:cursor-not-allowed disabled:opacity-60;
+  }
+  .table-wrap {
+    @apply w-full overflow-x-auto;
+  }
+  .data-table {
+    @apply w-full min-w-[640px] border-collapse text-sm;
+  }
+  .data-table thead th {
+    @apply sticky top-0 z-[1] whitespace-nowrap border-b border-navy-700 bg-navy-850/95 px-4 py-2.5 text-left
+      text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-500 backdrop-blur;
+  }
+  .data-table tbody td {
+    @apply border-b border-navy-800/80 px-4 py-3 align-middle text-ink-200;
+  }
+  .data-table tbody tr {
+    @apply transition-colors hover:bg-navy-800/40;
+  }
+  .num {
+    @apply font-mono tabular-nums;
+  }
+  .link {
+    @apply text-accent underline-offset-4 transition hover:text-accent-teal hover:underline;
+  }
+  .scroll-thin {
+    scrollbar-width: thin;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
