@@ -48,6 +48,9 @@ export function createApp() {
   app.use(
     helmet({
       contentSecurityPolicy: false,
+      // Arena embeds development previews on a different origin. Keep the
+      // production clickjacking protection, but allow the local preview iframe.
+      frameguard: env.isProd ? { action: 'sameorigin' } : false,
       crossOriginResourcePolicy: { policy: 'cross-origin' },
       crossOriginEmbedderPolicy: false,
     }),

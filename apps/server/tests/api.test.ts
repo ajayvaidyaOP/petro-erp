@@ -46,6 +46,13 @@ beforeAll(async () => {
 });
 
 describe('authentication & authorization', () => {
+  it('allows development previews to be embedded without dropping other security headers', async () => {
+    const res = await request(app).get('/api/v1/health');
+    expect(res.status).toBe(200);
+    expect(res.headers['x-frame-options']).toBeUndefined();
+    expect(res.headers['x-content-type-options']).toBe('nosniff');
+  });
+
   it('rejects protected endpoints without a session', async () => {
     expect((await request(app).get('/api/v1/catalog/stations')).status).toBe(401);
     expect((await request(app).get('/api/v1/reports/owner-dashboard?stationId=x')).status).toBe(401);
