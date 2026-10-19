@@ -7,11 +7,12 @@
  *   PETROFLOW_DEVICE_KEY=pfk_... npm run simulate -w @petroflow/gateway
  */
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import { CloudClient } from './client.js';
 import { SimulatedDispenserAdapter } from './adapters/simulated.js';
 
-const ROOT = path.resolve(process.cwd(), '../..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 dotenv.config({ path: path.join(ROOT, '.env') });
 
 const API_URL = process.env.PETROFLOW_API_URL ?? 'http://127.0.0.1:4000';

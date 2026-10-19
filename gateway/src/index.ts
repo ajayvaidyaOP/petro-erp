@@ -1,11 +1,12 @@
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import { EventSpool } from './spool.js';
 import { CloudClient } from './client.js';
 import { createAdapter } from './adapters/index.js';
 import type { GatewayEvent } from './types.js';
 
-const ROOT = path.resolve(process.cwd(), '../..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 dotenv.config({ path: path.join(ROOT, '.env') });
 
 const API_URL = process.env.PETROFLOW_API_URL ?? 'http://127.0.0.1:4000';

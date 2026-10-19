@@ -6,7 +6,9 @@ node_modules/
 dist/
 build/
 *.tsbuildinfo
-apps/*/dist/
+frontend/dist/
+backend/dist/
+gateway/dist/
 
 # environment / secrets — never commit real values
 .env
