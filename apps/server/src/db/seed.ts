@@ -382,6 +382,9 @@ export async function runSeed(options: { force?: boolean } = {}) {
       const hours = dayOffset === 0 ? [6, 11] : [6, 12, 18];
       for (const hour of hours) {
         const at = isoAt(date, hour, Math.floor(randBetween(0, 50)));
+        // Never seed a totalizer reading in the future: a later-dated row would
+        // make every genuine device event look out of order.
+        if (new Date(at).getTime() > Date.now()) continue;
         for (const nozzle of stationANozzles) {
           const increment = D(randBetween(60, 320));
           nozzle.totalizer = nozzle.totalizer.plus(increment);
