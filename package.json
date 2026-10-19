@@ -1,0 +1,27 @@
+{
+  "name": "petroflow-erp",
+  "private": true,
+  "version": "1.0.0",
+  "description": "PetroFlow ERP — multi-tenant petrol pump management SaaS for India",
+  "workspaces": [
+    "packages/shared",
+    "apps/server",
+    "apps/web",
+    "apps/gateway"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,web -c blue,green \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "npm run dev -w @petroflow/server",
+    "dev:web": "npm run dev -w @petroflow/web",
+    "dev:gateway": "npm run dev -w @petroflow/gateway",
+    "build": "npm run build -w @petroflow/web && npm run build -w @petroflow/server",
+    "typecheck": "npm run typecheck -w @petroflow/shared && npm run typecheck -w @petroflow/server && npm run typecheck -w @petroflow/web",
+    "test": "npm run test -w @petroflow/server",
+    "db:reset": "npm run db:reset -w @petroflow/server",
+    "db:seed": "npm run db:seed -w @petroflow/server",
+    "db:mysql-ddl": "node scripts/generate-mysql-ddl.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

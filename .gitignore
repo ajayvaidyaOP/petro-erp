@@ -1,0 +1,44 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build output
+dist/
+build/
+*.tsbuildinfo
+apps/*/dist/
+
+# environment / secrets — never commit real values
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# local databases & backups
+db/*.db
+db/*.db-wal
+db/*.db-shm
+db/backups/
+*.sqlite
+*.sqlite3
+
+# logs & runtime
+logs/
+*.log
+npm-debug.log*
+.pids/
+
+# test / tooling caches
+coverage/
+.vitest/
+.nyc_output/
+.eslintcache
+.turbo/
+
+# editors & OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
