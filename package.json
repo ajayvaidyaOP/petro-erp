@@ -3,19 +3,25 @@
   "private": true,
   "version": "1.0.0",
   "description": "PetroFlow ERP — multi-tenant petrol pump management SaaS for India",
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "workspaces": [
     "packages/shared",
-    "apps/server",
-    "apps/web",
-    "apps/gateway"
+    "backend",
+    "frontend",
+    "gateway"
   ],
   "scripts": {
-    "dev": "concurrently -n server,web -c blue,green \"npm:dev:server\" \"npm:dev:web\"",
-    "dev:server": "npm run dev -w @petroflow/server",
-    "dev:web": "npm run dev -w @petroflow/web",
+    "dev": "concurrently -k -n backend,frontend -c blue,green \"npm:dev:backend\" \"npm:dev:frontend\"",
+    "dev:backend": "npm run dev -w @petroflow/server",
+    "dev:frontend": "npm run dev -w @petroflow/web",
+    "dev:server": "npm run dev:backend",
+    "dev:web": "npm run dev:frontend",
     "dev:gateway": "npm run dev -w @petroflow/gateway",
+    "start": "npm run start -w @petroflow/server",
     "build": "npm run build -w @petroflow/web && npm run build -w @petroflow/server",
-    "typecheck": "npm run typecheck -w @petroflow/shared && npm run typecheck -w @petroflow/server && npm run typecheck -w @petroflow/web",
+    "typecheck": "npm run typecheck -w @petroflow/shared && npm run typecheck -w @petroflow/server && npm run typecheck -w @petroflow/web && npm run typecheck -w @petroflow/gateway",
     "test": "npm run test -w @petroflow/server",
     "db:reset": "npm run db:reset -w @petroflow/server",
     "db:seed": "npm run db:seed -w @petroflow/server",

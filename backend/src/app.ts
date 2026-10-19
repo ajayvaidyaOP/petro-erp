@@ -32,8 +32,10 @@ function originGuard(req: Request, res: Response, next: NextFunction) {
     `${req.protocol}://${req.get('host')}`,
   ]);
   if (!allowed.has(origin)) {
-    if (env.isProd) return next(new AppError(403, 'BAD_ORIGIN', 'Cross-origin request blocked'));
-    // Development: Vite may be reached through a proxied preview host.
+    if (env.NODE_ENV !== 'development') {
+      return next(new AppError(403, 'BAD_ORIGIN', 'Cross-origin request blocked'));
+    }
+    // Development only: Vite may be reached through a proxied preview host.
     if (/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin)) return next();
     if (/^https:\/\/[\w.-]+\.e2b\.app$/.test(origin)) return next();
   }
@@ -48,19 +50,19 @@ export function createApp() {
   app.use(
     helmet({
       contentSecurityPolicy: false,
-      // Arena embeds development previews on a different origin. Keep the
-      // production clickjacking protection, but allow the local preview iframe.
-      frameguard: env.isProd ? { action: 'sameorigin' } : false,
+      // Relax framing only for local development previews. Keep clickjacking
+      // protection enabled in staging and production; tests omit this header.
+      frameguard: env.NODE_ENV === 'development' || env.isTest ? false : { action: 'sameorigin' },
       crossOriginResourcePolicy: { policy: 'cross-origin' },
       crossOriginEmbedderPolicy: false,
     }),
   );
 
-  // Permissive CORS only for explicitly configured origins (dev preview hosts).
+  // CORS is restricted to configured origins, with local preview origins allowed only in development.
   app.use((req, res, next) => {
     const origin = req.header('origin');
     if (!origin) return next();
-    const devLike = !env.isProd && (origin.startsWith('http://localhost:') || origin.includes('e2b.app'));
+    const devLike = env.NODE_ENV === 'development' && (origin.startsWith('http://localhost:') || origin.includes('e2b.app'));
     if (env.ALLOWED_ORIGINS.includes(origin) || devLike) {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -128,11 +130,11 @@ export function createApp() {
   app.use('/api/v1', v1);
 
   // Serve the built SPA when it exists (single-origin production deployment).
-  const webDist = path.resolve(env.ROOT_DIR, 'apps/web/dist');
-  if (fs.existsSync(webDist)) {
-    app.use(express.static(webDist, { index: false, maxAge: '1h' }));
+  const frontendDist = path.resolve(env.ROOT_DIR, 'frontend/dist');
+  if (fs.existsSync(frontendDist)) {
+    app.use(express.static(frontendDist, { index: false, maxAge: '1h' }));
     app.get(/^\/(?!api\/).*/, (_req, res) => {
-      res.sendFile(path.join(webDist, 'index.html'));
+      res.sendFile(path.join(frontendDist, 'index.html'));
     });
   }
 

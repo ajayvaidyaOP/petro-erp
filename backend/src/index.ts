@@ -1,10 +1,11 @@
 import { createApp } from './app.js';
-import { env } from './env.js';
+import { assertProductionConfig, env } from './env.js';
 import { get, migrate } from './db/index.js';
 import { logger } from './lib/logger.js';
 import { runSeed } from './db/seed.js';
 
 async function bootstrap() {
+  assertProductionConfig();
   migrate();
   const userCount = get<{ count: number }>('SELECT COUNT(*) AS count FROM users')?.count ?? 0;
   if (userCount === 0) {

@@ -4,7 +4,9 @@ import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-export const ROOT_DIR = path.resolve(here, '../../..');
+// backend/src -> backend -> repository root. Resolve paths from the module so
+// database/schema locations stay stable regardless of the command's cwd.
+export const ROOT_DIR = path.resolve(here, '../..');
 
 const envFiles = [path.join(ROOT_DIR, '.env'), path.join(process.cwd(), '.env')];
 for (const file of envFiles) {
