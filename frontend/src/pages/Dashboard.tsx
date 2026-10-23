@@ -235,11 +235,7 @@ export default function Dashboard() {
           <CardHeader
             title="Your pumps today"
             subtitle={`Side-by-side totals for all ${stations.length} outlets on this business date`}
-            action={
-              <Badge tone="accent">
-                {summaryQuery.data.stations.filter((row) => row.id === stationId).length > 0 ? 'Multi-outlet' : 'Consolidated'}
-              </Badge>
-            }
+            action={<Badge tone="accent">{summaryQuery.data.stations.length} outlets</Badge>}
           />
           <TableScrollHint />
           <div className="table-wrap">
