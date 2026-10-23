@@ -178,3 +178,33 @@ export function tanksForProduct(stationId: string, productId: string) {
     [stationId, productId],
   );
 }
+
+/**
+ * Split a dispensed (or reversed) volume across every active tank holding the
+ * product. Pumps commonly run two tanks of the same grade, so posting the whole
+ * volume to the first tank would overdraw it and leave the second untouched.
+ * The split follows current book stock; with no stock on record it falls back to
+ * an equal split. Rounding remainder is assigned to the last tank so the sum
+ * always equals the requested litres.
+ */
+export function allocateAcrossTanks(stationId: string, productId: string, litres: Decimal) {
+  const tanks = tanksForProduct(stationId, productId);
+  if (tanks.length === 0) return [] as { tankId: string; litres: Decimal }[];
+  if (tanks.length === 1) return [{ tankId: tanks[0]!.id, litres }];
+  const stocks = tanks.map((tank) => ({
+    tankId: tank.id,
+    book: Math.max(0, Number(tankBookStock(tank.id))),
+  }));
+  const totalBook = stocks.reduce((sum, entry) => sum + entry.book, 0);
+  let remaining = litres;
+  return stocks.map((entry, index) => {
+    const isLast = index === stocks.length - 1;
+    const share = isLast
+      ? remaining
+      : totalBook > 0
+        ? litres.mul(entry.book).div(totalBook)
+        : litres.div(stocks.length);
+    remaining = remaining.minus(share);
+    return { tankId: entry.tankId, litres: share };
+  });
+}

@@ -136,7 +136,7 @@ export default function Tenants() {
 
       <Card>
         <div className="flex flex-wrap items-end gap-2 border-b border-navy-700/60 p-3">
-          <div className="relative w-64">
+          <div className="relative w-full sm:w-64">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500" />
             <Input
               className="pl-8"
@@ -145,7 +145,7 @@ export default function Tenants() {
               placeholder="Search name, slug or email"
             />
           </div>
-          <Field label="Status" className="w-44">
+          <Field label="Status" className="w-full sm:w-44">
             <Select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}>
               <option value="">All statuses</option>
               <option value="ACTIVE">Active</option>

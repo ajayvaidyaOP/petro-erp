@@ -200,13 +200,13 @@ export default function Finance() {
             title="Payment register"
             subtitle="Recorded payments are distinct from settlement. Cash is settled at collection; digital needs a settlement reference."
             action={
-              <div className="flex gap-2">
-                <Select value={direction} onChange={(e) => { setDirection(e.target.value); setPage(1); }} className="h-8 w-36 py-1 text-xs">
+              <div className="flex gap-2 max-sm:w-full">
+                <Select value={direction} onChange={(e) => { setDirection(e.target.value); setPage(1); }} className="h-9 w-[calc(50%-0.25rem)] py-1 text-xs sm:h-8 sm:w-36">
                   <option value="">All directions</option>
                   <option value="RECEIPT">Receipts</option>
                   <option value="PAYOUT">Payouts</option>
                 </Select>
-                <Select value={mode} onChange={(e) => { setMode(e.target.value); setPage(1); }} className="h-8 w-32 py-1 text-xs">
+                <Select value={mode} onChange={(e) => { setMode(e.target.value); setPage(1); }} className="h-9 w-[calc(50%-0.25rem)] py-1 text-xs sm:h-8 sm:w-32">
                   <option value="">All modes</option>
                   {['CASH', 'UPI', 'CARD', 'BANK'].map((m) => <option key={m} value={m}>{m}</option>)}
                 </Select>

@@ -6,6 +6,7 @@ import {
   Banknote,
   BarChart3,
   Building2,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -35,6 +36,20 @@ import { useAuth, useStations } from '../lib/auth';
 import { cn } from '../lib/utils';
 import { Badge, Button, Field, Input, Modal, useToast } from './ui';
 import { apiPost } from '../lib/api';
+
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(() =>
+    typeof window === 'undefined' ? false : window.matchMedia(query).matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const onChange = () => setMatches(mq.matches);
+    onChange();
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, [query]);
+  return matches;
+}
 
 interface NavItem {
   to: string;
@@ -166,6 +181,9 @@ export function Layout() {
   const { me, logout, can } = useAuth();
   const { stations, station, selectStation } = useStations();
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('petroflow.sidebar') === 'collapsed');
+  // Tablets (768–1023px) get a compact icon rail instead of a full drawer.
+  const isTablet = useMediaQuery('(min-width: 768px) and (max-width: 1023px)');
+  const railCollapsed = collapsed || isTablet;
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenu, setUserMenu] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
@@ -183,6 +201,28 @@ export function Layout() {
     setMobileOpen(false);
     setUserMenu(false);
   }, [location.pathname]);
+
+  // Lock background scrolling while the mobile drawer is open and allow Escape to close it.
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileOpen(false);
+    };
+    // Rotating a tablet to landscape reveals the rail — drop the drawer (and the scroll lock) with it.
+    const desktop = window.matchMedia('(min-width: 768px)');
+    const onDesktop = () => {
+      if (desktop.matches) setMobileOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    desktop.addEventListener('change', onDesktop);
+    return () => {
+      document.body.style.overflow = previous;
+      document.removeEventListener('keydown', onKey);
+      desktop.removeEventListener('change', onDesktop);
+    };
+  }, [mobileOpen]);
 
   useEffect(() => {
     const handler = (event: MouseEvent) => {
@@ -225,7 +265,7 @@ export function Layout() {
     new Date(subscription.trialEndsAt).getTime() - Date.now() < 5 * 86_400_000;
 
   return (
-    <div className="flex min-h-full bg-navy-950">
+    <div className="flex min-h-dvh bg-navy-950">
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[70] focus:rounded focus:bg-accent focus:px-3 focus:py-2 focus:text-navy-950"
@@ -236,36 +276,71 @@ export function Layout() {
       {/* desktop sidebar */}
       <aside
         className={cn(
-          'sticky top-0 hidden h-screen shrink-0 flex-col border-r border-navy-700/60 bg-navy-900/70 backdrop-blur transition-[width] duration-200 lg:flex',
-          collapsed ? 'w-[68px]' : 'w-[252px]',
+          'sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-navy-700/60 bg-navy-900/70 backdrop-blur transition-[width] duration-200 md:flex',
+          railCollapsed ? 'w-[68px]' : 'w-[252px]',
         )}
       >
-        <Brand collapsed={collapsed} />
-        <SidebarNav groups={groups} collapsed={collapsed} />
-        <div className="border-t border-navy-700/60 p-2">
-          <button
-            onClick={toggleCollapsed}
-            className="flex w-full items-center justify-center gap-2 rounded-lg px-2 py-2 text-xs text-ink-500 transition hover:bg-navy-800/60 hover:text-ink-200"
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-            {!collapsed && 'Collapse'}
-          </button>
-        </div>
+        <Brand collapsed={railCollapsed} />
+        <SidebarNav groups={groups} collapsed={railCollapsed} />
+        {!isTablet && (
+          <div className="border-t border-navy-700/60 p-2">
+            <button
+              onClick={toggleCollapsed}
+              className="flex w-full items-center justify-center gap-2 rounded-lg px-2 py-2 text-xs text-ink-500 transition hover:bg-navy-800/60 hover:text-ink-200"
+              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+              {!collapsed && 'Collapse'}
+            </button>
+          </div>
+        )}
       </aside>
 
       {/* mobile drawer */}
       {mobileOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden">
+        <div className="fixed inset-0 z-40 md:hidden">
           <div className="absolute inset-0 bg-navy-950/70 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
-          <aside className="animate-slide-in relative flex h-full w-[270px] flex-col border-r border-navy-700 bg-navy-900">
-            <div className="flex items-center justify-between px-3">
+          <aside className="animate-slide-in relative flex h-[100dvh] w-[270px] max-w-[85vw] flex-col border-r border-navy-700 bg-navy-900">
+            <div className="flex shrink-0 items-center justify-between px-3">
               <Brand collapsed={false} />
               <button onClick={() => setMobileOpen(false)} aria-label="Close menu" className="p-2 text-ink-400">
                 <X className="h-5 w-5" />
               </button>
             </div>
+            {!me?.isSuperAdmin && stations.length > 0 && (
+              <div className="shrink-0 border-b border-navy-700/60 px-2 py-3">
+                <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-500/70">
+                  {stations.length > 1 ? 'Switch station' : 'Active station'}
+                </p>
+                <div className="space-y-0.5">
+                  {stations.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => {
+                        selectStation(s.id);
+                        navigate(location.pathname);
+                        setMobileOpen(false);
+                      }}
+                      className={cn(
+                        'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors',
+                        s.id === station?.id
+                          ? 'bg-accent/10 font-medium text-ink-100'
+                          : 'text-ink-400 hover:bg-navy-800/60 hover:text-ink-100',
+                      )}
+                    >
+                      <Store className="h-4 w-4 shrink-0" />
+                      <span className="min-w-0 flex-1 truncate">{s.name}</span>
+                      {s.id === station?.id && <Check className="h-3.5 w-3.5 shrink-0 text-accent" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <SidebarNav groups={groups} collapsed={false} />
+            <div className="shrink-0 border-t border-navy-700/60 px-4 py-3 text-[11px] text-ink-500 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+              <p className="truncate text-ink-300">{me?.user.name}</p>
+              <p className="truncate">{me?.tenant?.name ?? 'Platform administration'}</p>
+            </div>
           </aside>
         </div>
       )}
@@ -273,12 +348,34 @@ export function Layout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-navy-700/60 bg-navy-900/80 px-3 backdrop-blur sm:px-5">
           <button
-            className="rounded-md p-2 text-ink-300 hover:bg-navy-800 lg:hidden"
+            className="shrink-0 rounded-md p-2 text-ink-300 hover:bg-navy-800 md:hidden"
             onClick={() => setMobileOpen(true)}
             aria-label="Open navigation"
           >
             <Menu className="h-5 w-5" />
           </button>
+
+          {/* Phones: the active station must stay switchable — this tenant runs multiple pumps. */}
+          {!me?.isSuperAdmin && stations.length > 0 && (
+            <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:hidden">
+              <Store className="h-3.5 w-3.5 shrink-0 text-ink-500" />
+              <select
+                value={station?.id ?? ''}
+                onChange={(e) => {
+                  selectStation(e.target.value);
+                  navigate(location.pathname);
+                }}
+                className="min-w-0 flex-1 cursor-pointer truncate rounded-md border border-navy-700/70 bg-navy-850/60 px-1.5 py-1 text-xs font-medium text-ink-100 focus:border-accent/50 focus:outline-none"
+                aria-label="Active station"
+              >
+                {stations.map((s) => (
+                  <option key={s.id} value={s.id} className="bg-navy-850">
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="hidden items-center gap-2 sm:flex">
             {me?.isSuperAdmin ? (
@@ -376,7 +473,10 @@ export function Layout() {
           </div>
         </header>
 
-        <main id="main" className="mx-auto w-full max-w-[1500px] flex-1 px-3 py-5 sm:px-5 lg:px-6">
+        <main
+          id="main"
+          className="mx-auto w-full max-w-[1500px] flex-1 px-3 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-5 lg:px-6"
+        >
           {isDemoTenant && (
             <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs text-amber-200/90">
               <ShieldCheck className="h-3.5 w-3.5 shrink-0" />

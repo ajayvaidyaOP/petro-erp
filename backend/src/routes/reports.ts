@@ -3,7 +3,7 @@ import { all, get, shape, shapeAll } from '../db/index.js';
 import { asyncHandler, ok } from '../lib/http.js';
 import { badRequest, forbidden, notFound, unprocessable } from '../lib/errors.js';
 import { can, requireAuth, type AuthContext } from '../lib/auth.js';
-import { getStationOrThrow, tenantIdOf } from '../lib/tenant.js';
+import { accessibleStationIds, getStationOrThrow, tenantIdOf } from '../lib/tenant.js';
 import { istDayEnd, istDayStart, isIsoDate, todayIst } from '../lib/time.js';
 import { D, money } from '../lib/decimal.js';
 import { tankSummary, signedLitres, tankBookStock } from '../lib/stock.js';
@@ -77,11 +77,11 @@ reportsRouter.get(
          FROM fuel_products p
          LEFT JOIN nozzles n ON n.product_id = p.id
          LEFT JOIN shift_nozzle_readings snr ON snr.nozzle_id = n.id
-         LEFT JOIN shifts s ON s.id = snr.shift_id AND s.business_date = ?
+         LEFT JOIN shifts s ON s.id = snr.shift_id AND s.business_date = ? AND s.station_id = ?
         WHERE p.tenant_id = ?
         GROUP BY p.id, p.name, p.code, p.color
         ORDER BY p.code`,
-      [date, station.tenant_id],
+      [date, station.id, station.tenant_id],
     );
 
     const devices = all<{ last_heartbeat_at: string | null; status: string }>(
@@ -184,6 +184,77 @@ reportsRouter.get(
       recentActivity: shapeAll(activity),
       disclaimer: `${ACCOUNTING_DISCLAIMER} ${HARDWARE_DISCLAIMER}`,
     });
+  }),
+);
+
+reportsRouter.get(
+  '/station-summary',
+  asyncHandler((req, res) => {
+    const auth = req.auth as AuthContext;
+    if (!can(auth, 'reports.read')) throw forbidden();
+    const tenantId = tenantIdOf(auth);
+    const date = dateParam(req.query.date);
+    const start = istDayStart(date);
+    const end = istDayEnd(date);
+    const allowed = new Set(accessibleStationIds(auth));
+
+    const stations = all<Record<string, unknown>>(
+      `SELECT id, code, name, status FROM stations WHERE tenant_id = ? ORDER BY name`,
+      [tenantId],
+    ).filter((station) => allowed.has(String(station.id)));
+
+    const rows = stations.map((station) => {
+      const stationId = String(station.id);
+      const shift = get<{ litres: string; value: string; count: number; open_count: number }>(
+        `SELECT COALESCE(SUM(CASE WHEN status IN ('CLOSED','FLAGGED') THEN CAST(total_litres AS REAL) ELSE 0 END), 0) AS litres,
+                COALESCE(SUM(CASE WHEN status IN ('CLOSED','FLAGGED') THEN CAST(total_value AS REAL) ELSE 0 END), 0) AS value,
+                COALESCE(SUM(CASE WHEN status IN ('CLOSED','FLAGGED') THEN 1 ELSE 0 END), 0) AS count,
+                COALESCE(SUM(CASE WHEN status = 'OPEN' THEN 1 ELSE 0 END), 0) AS open_count
+           FROM shifts WHERE station_id = ? AND business_date = ?`,
+        [stationId, date],
+      );
+      const tx = get<{ litres: string; value: string; count: number }>(
+        `SELECT COALESCE(SUM(CAST(quantity_litres AS REAL)), 0) AS litres,
+                COALESCE(SUM(CAST(amount AS REAL)), 0) AS value,
+                COUNT(*) AS count
+           FROM fuel_transactions
+          WHERE station_id = ? AND occurred_at >= ? AND occurred_at <= ? AND voided_at IS NULL`,
+        [stationId, start, end],
+      );
+      const lowStock = tankSummary(stationId).filter(
+        (tank) => D(tank.capacityLitres).gt(0) && D(tank.fillPct).lt(15),
+      ).length;
+      const devices = all<{ last_heartbeat_at: string | null }>(
+        "SELECT last_heartbeat_at FROM hardware_devices WHERE station_id = ? AND status != 'DISABLED'",
+        [stationId],
+      );
+      const online = devices.filter(
+        (d) => d.last_heartbeat_at && Date.now() - new Date(d.last_heartbeat_at).getTime() < 5 * 60_000,
+      ).length;
+      const flagged = get<{ count: number }>(
+        "SELECT COUNT(*) AS count FROM shifts WHERE station_id = ? AND business_date = ? AND status = 'FLAGGED'",
+        [stationId, date],
+      )?.count ?? 0;
+      return {
+        id: stationId,
+        code: station.code,
+        name: station.name,
+        status: station.status,
+        shiftLitres: D(shift?.litres ?? 0).toFixed(3),
+        shiftValue: money(shift?.value ?? 0),
+        closedShifts: Number(shift?.count ?? 0),
+        openShifts: Number(shift?.open_count ?? 0),
+        flaggedShifts: Number(flagged),
+        transactionLitres: D(tx?.litres ?? 0).toFixed(3),
+        transactionValue: money(tx?.value ?? 0),
+        transactions: Number(tx?.count ?? 0),
+        lowStockTanks: lowStock,
+        devicesTotal: devices.length,
+        devicesOnline: online,
+      };
+    });
+
+    return ok(res, { date, stations: rows });
   }),
 );
 
@@ -387,7 +458,7 @@ reportsRouter.get(
         'Stock closing is a book figure (opening + received − dispensed ± adjustments). Physical dips are recorded separately and are not substituted for book stock.',
         'Credit sales and customer receipts are recorded in the credit ledger and are not counted as cash until a receipt is recorded.',
         flaggedShifts > 0 ? `${flaggedShifts} flagged shift(s) on this date require owner/manager approval.` : 'All shifts on this date are approved or closed without variances.',
-        `Tank stocks below are shown in litres; one tank per product is used to post aggregate dispensed volume until pump-to-tank mapping is configured.`,
+        `Tank stocks below are shown in litres. Aggregate dispensed volume is spread across every active tank holding that grade in proportion to book stock, because totalizer capture is per nozzle, not per tank.`,
         ACCOUNTING_DISCLAIMER,
       ],
     });

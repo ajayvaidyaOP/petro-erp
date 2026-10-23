@@ -7,6 +7,7 @@ import { formatDateTime, formatINR, formatLitres, formatNumber, todayIst } from 
 import { downloadCsv } from '../lib/utils';
 import {
   Badge,
+  TableScrollHint,
   Button,
   Card,
   CardBody,
@@ -289,16 +290,16 @@ export default function Shifts() {
 
       <Card className="mt-3">
         <div className="flex flex-wrap items-end gap-2 border-b border-navy-700/60 p-3">
-          <Field label="Status" className="w-40">
+          <Field label="Status" className="w-full sm:w-40">
             <Select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}>
               <option value="">All statuses</option>
               {statuses.map((s) => <option key={s} value={s}>{s}</option>)}
             </Select>
           </Field>
-          <Field label="From" className="w-40">
+          <Field label="From" className="w-[calc(50%-0.25rem)] sm:w-40">
             <Input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1); }} />
           </Field>
-          <Field label="To" className="w-40">
+          <Field label="To" className="w-[calc(50%-0.25rem)] sm:w-40">
             <Input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPage(1); }} />
           </Field>
           <Button
@@ -319,6 +320,7 @@ export default function Shifts() {
           <EmptyState title="No shifts yet" description="Open a shift to start capturing opening totalizers." icon={<Clock className="h-4 w-4" />} />
         ) : (
           <>
+            <TableScrollHint />
             <div className="table-wrap">
               <table className="data-table">
                 <thead>

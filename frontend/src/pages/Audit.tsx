@@ -87,9 +87,9 @@ export default function Audit() {
               setPage(1);
             }}
             placeholder="Search summary, actor or entity"
-            className="w-64"
+            className="w-full sm:w-64"
           />
-          <Field label="Action" className="w-52">
+          <Field label="Action" className="w-full sm:w-52">
             <Select
               value={action}
               onChange={(e) => {
@@ -105,10 +105,10 @@ export default function Audit() {
               ))}
             </Select>
           </Field>
-          <Field label="From" className="w-40">
+          <Field label="From" className="w-[calc(50%-0.25rem)] sm:w-40">
             <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
           </Field>
-          <Field label="To" className="w-40">
+          <Field label="To" className="w-[calc(50%-0.25rem)] sm:w-40">
             <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
           </Field>
           {(search || action || from || to) && (

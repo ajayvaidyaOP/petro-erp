@@ -34,7 +34,7 @@ import NotFound from './pages/NotFound';
 
 function FullPageLoader() {
   return (
-    <div className="grid min-h-screen place-items-center bg-navy-950">
+    <div className="grid min-h-dvh place-items-center bg-navy-950">
       <div className="flex flex-col items-center gap-3">
         <Spinner className="h-7 w-7" />
         <p className="text-xs uppercase tracking-[0.2em] text-ink-500">Loading PetroFlow</p>

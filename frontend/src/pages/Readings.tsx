@@ -200,16 +200,16 @@ export default function Readings() {
           title="Reading history"
           subtitle="Cumulative snapshots with derived deltas. Each event is stored once; retries are deduplicated by device event id."
           action={
-            <div className="flex flex-wrap gap-2">
-              <Select value={nozzleId} onChange={(e) => { setNozzleId(e.target.value); setPage(1); }} className="h-8 w-40 py-1 text-xs">
+            <div className="flex flex-wrap gap-2 max-sm:w-full">
+              <Select value={nozzleId} onChange={(e) => { setNozzleId(e.target.value); setPage(1); }} className="h-9 w-[calc(50%-0.25rem)] py-1 text-xs sm:h-8 sm:w-40">
                 <option value="">All nozzles</option>
                 {(nozzles.data ?? []).map((n) => <option key={n.id} value={n.id}>{n.label}</option>)}
               </Select>
-              <Select value={quality} onChange={(e) => { setQuality(e.target.value); setPage(1); }} className="h-8 w-36 py-1 text-xs">
+              <Select value={quality} onChange={(e) => { setQuality(e.target.value); setPage(1); }} className="h-9 w-[calc(50%-0.25rem)] py-1 text-xs sm:h-8 sm:w-36">
                 <option value="">All quality</option>
                 {qualities.map((q) => <option key={q} value={q}>{q}</option>)}
               </Select>
-              <Select value={source} onChange={(e) => { setSource(e.target.value); setPage(1); }} className="h-8 w-32 py-1 text-xs">
+              <Select value={source} onChange={(e) => { setSource(e.target.value); setPage(1); }} className="h-9 w-full py-1 text-xs sm:h-8 sm:w-32">
                 <option value="">All sources</option>
                 <option value="SIMULATOR">SIMULATOR</option>
                 <option value="DEVICE">DEVICE</option>

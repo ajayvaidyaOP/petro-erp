@@ -107,7 +107,7 @@ export default function AdminStations() {
         <CardHeader
           title="All stations"
           action={
-            <Select className="w-64" value={tenantFilter} onChange={(e) => setTenantFilter(e.target.value)}>
+            <Select className="w-full sm:w-64" value={tenantFilter} onChange={(e) => setTenantFilter(e.target.value)}>
               <option value="">All organizations</option>
               {(Array.isArray(tenants.data) ? tenants.data : []).map((tenant) => (
                 <option key={tenant.id} value={tenant.id}>{tenant.name}</option>

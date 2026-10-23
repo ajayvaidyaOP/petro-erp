@@ -59,7 +59,7 @@ export default function Login() {
   };
 
   return (
-    <div className="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
+    <div className="grid min-h-dvh lg:grid-cols-[1.05fr_1fr]">
       <div className="relative hidden flex-col justify-between overflow-hidden border-r border-navy-800 bg-navy-900/40 p-10 lg:flex">
         <div className="absolute inset-0 opacity-60 [background:radial-gradient(600px_400px_at_20%_10%,rgba(56,189,248,0.12),transparent_60%),radial-gradient(500px_400px_at_80%_90%,rgba(45,212,191,0.08),transparent_60%)]" />
         <div className="relative">

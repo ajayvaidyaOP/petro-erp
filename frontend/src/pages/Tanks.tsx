@@ -6,6 +6,7 @@ import { useAuth, useStations } from '../lib/auth';
 import { formatDateTime, formatINR, formatLitres, formatNumber } from '../lib/format';
 import {
   Badge,
+  TableScrollHint,
   Button,
   Card,
   CardHeader,
@@ -388,7 +389,9 @@ export default function Tanks() {
         ) : ledger.isError ? (
           <ErrorState error={ledger.error} onRetry={() => void ledger.refetch()} />
         ) : ledger.data ? (
-          <div className="table-wrap rounded-lg border border-navy-700/60">
+          <div>
+          <TableScrollHint className="rounded-t-lg border border-b-0 border-navy-700/60" />
+          <div className="table-wrap rounded-b-lg border border-t-0 border-navy-700/60">
             <table className="data-table min-w-[720px]">
               <thead><tr><th>Date</th><th>Type</th><th className="text-right">Signed</th><th className="text-right">Running</th><th>Note</th></tr></thead>
               <tbody>
@@ -403,6 +406,7 @@ export default function Tanks() {
                 ))}
               </tbody>
             </table>
+          </div>
           </div>
         ) : null}
       </Modal>

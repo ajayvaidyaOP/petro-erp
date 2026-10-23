@@ -159,9 +159,9 @@ export default function Deliveries() {
           title="Purchase & delivery register"
           subtitle="Received quantity updates the tank ledger; invoiced quantity is retained for reconciliation"
           action={
-            <div className="flex flex-wrap items-center gap-2">
-              <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="Invoice or supplier…" className="w-48" />
-              <Select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className="h-8 w-32 py-1 text-xs">
+            <div className="flex flex-wrap items-center gap-2 max-sm:w-full">
+              <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="Invoice or supplier…" className="w-full sm:w-48" />
+              <Select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className="h-9 w-full py-1 text-xs sm:h-8 sm:w-32">
                 <option value="">All statuses</option>
                 {['DRAFT', 'RECEIVED', 'DISPUTED'].map((s) => <option key={s} value={s}>{s}</option>)}
               </Select>

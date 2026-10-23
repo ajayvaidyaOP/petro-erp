@@ -42,6 +42,7 @@ import {
   PageHeader,
   StatCard,
   StatusBadge,
+  TableScrollHint,
 } from '../components/ui';
 
 interface DashboardData {
@@ -73,6 +74,24 @@ interface DashboardData {
   disclaimer: string;
 }
 
+interface StationSummaryRow {
+  id: string;
+  code: string;
+  name: string;
+  status: string;
+  shiftLitres: string;
+  shiftValue: string;
+  closedShifts: number;
+  openShifts: number;
+  flaggedShifts: number;
+  transactionLitres: string;
+  transactionValue: string;
+  transactions: number;
+  lowStockTanks: number;
+  devicesTotal: number;
+  devicesOnline: number;
+}
+
 interface ShiftAlert {
   type: string;
   severity: string;
@@ -83,13 +102,21 @@ interface ShiftAlert {
 
 export default function Dashboard() {
   const { can } = useAuth();
-  const { station, stationId } = useStations();
+  const { stations, station, stationId, selectStation } = useStations();
   const [date, setDate] = useState(todayIst());
 
   const dashboard = useQuery({
     queryKey: ['dashboard', stationId, date],
     queryFn: () => apiGet<DashboardData>(`/reports/owner-dashboard?stationId=${stationId}&date=${date}`),
     enabled: Boolean(stationId),
+    refetchInterval: 60_000,
+  });
+
+  // Owners running more than one outlet get a side-by-side view for the same date.
+  const summaryQuery = useQuery<{ date: string; stations: StationSummaryRow[] }>({
+    queryKey: ['station-summary', date],
+    queryFn: () => apiGet(`/reports/station-summary?date=${date}`),
+    enabled: stations.length > 1 && can('reports.read'),
     refetchInterval: 60_000,
   });
 
@@ -198,10 +225,86 @@ export default function Dashboard() {
         <StatCard
           label="Supplier payables"
           value={formatINR(data.payables, true)}
-          hint="Received purchases less recorded payouts"
+          hint="Organization-wide received purchases less recorded payouts"
           icon={<Truck className="h-4 w-4" />}
         />
       </div>
+
+      {stations.length > 1 && summaryQuery.data && (
+        <Card className="mt-3">
+          <CardHeader
+            title="Your pumps today"
+            subtitle={`Side-by-side totals for all ${stations.length} outlets on this business date`}
+            action={<Badge tone="accent">{summaryQuery.data.stations.length} outlets</Badge>}
+          />
+          <TableScrollHint />
+          <div className="table-wrap">
+            <table className="data-table min-w-[720px]">
+              <thead>
+                <tr>
+                  <th>Outlet</th>
+                  <th className="text-right">Shift litres</th>
+                  <th className="text-right">Est. value</th>
+                  <th className="text-right">Recorded sales</th>
+                  <th className="text-right">Shifts</th>
+                  <th>Attention</th>
+                  <th>Gateway</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {summaryQuery.data.stations.map((row) => {
+                  const active = row.id === stationId;
+                  return (
+                    <tr key={row.id} className={active ? 'bg-accent/[0.06]' : undefined}>
+                      <td>
+                        <p className="font-medium text-ink-100">{row.name}</p>
+                        <p className="text-[10px] text-ink-500">{row.code}</p>
+                      </td>
+                      <td className="num whitespace-nowrap text-right">{formatNumber(row.shiftLitres, 3)} L</td>
+                      <td className="num whitespace-nowrap text-right">{formatINR(row.shiftValue, true)}</td>
+                      <td className="num whitespace-nowrap text-right">
+                        {formatINR(row.transactionValue, true)}
+                        <span className="block text-[10px] text-ink-500">{row.transactions} txn</span>
+                      </td>
+                      <td className="text-right text-xs text-ink-300">
+                        {row.closedShifts} closed
+                        {row.openShifts > 0 && <span className="block text-emerald-300">{row.openShifts} open</span>}
+                      </td>
+                      <td>
+                        {row.flaggedShifts > 0 || row.lowStockTanks > 0 ? (
+                          <span className="flex flex-wrap gap-1">
+                            {row.flaggedShifts > 0 && <Badge tone="warning">{row.flaggedShifts} flagged</Badge>}
+                            {row.lowStockTanks > 0 && <Badge tone="danger">{row.lowStockTanks} low stock</Badge>}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-ink-500">—</span>
+                        )}
+                      </td>
+                      <td className="text-xs text-ink-300">
+                        {row.devicesTotal === 0 ? <span className="text-ink-500">none</span> : `${row.devicesOnline}/${row.devicesTotal} online`}
+                      </td>
+                      <td className="text-right">
+                        {active ? (
+                          <Badge tone="success">Active</Badge>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => selectStation(row.id)}
+                          >
+                            Open
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
 
       <div className="mt-3 grid gap-3 lg:grid-cols-3">
         <Card className="lg:col-span-2">
@@ -224,7 +327,14 @@ export default function Dashboard() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1b2d4d" vertical={false} />
-                <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#6b81a3' }} axisLine={false} tickLine={false} />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 10, fill: '#6b81a3' }}
+                  axisLine={false}
+                  tickLine={false}
+                  interval="preserveStartEnd"
+                  minTickGap={16}
+                />
                 <YAxis tick={{ fontSize: 10, fill: '#6b81a3' }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
                 <Tooltip
                   contentStyle={{ background: '#0d1628', border: '1px solid #27405f', borderRadius: 8, fontSize: 12 }}

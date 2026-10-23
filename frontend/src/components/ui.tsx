@@ -70,7 +70,7 @@ export function Button({
       disabled={disabled || loading}
       className={cn(
         'inline-flex select-none items-center justify-center whitespace-nowrap rounded-lg transition-colors',
-        'disabled:cursor-not-allowed disabled:opacity-50',
+        'btn-touch disabled:cursor-not-allowed disabled:opacity-50',
         buttonVariants[variant],
         buttonSizes[size],
         className,
@@ -108,7 +108,7 @@ export function CardHeader({
         <h2 className="text-sm font-semibold text-ink-100">{title}</h2>
         {subtitle && <p className="mt-0.5 text-xs text-ink-500">{subtitle}</p>}
       </div>
-      {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}
+      {action && <div className="flex min-w-0 flex-wrap items-center gap-2 max-sm:w-full">{action}</div>}
     </div>
   );
 }
@@ -402,18 +402,18 @@ export function Modal({
   const widths = { sm: 'max-w-md', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl' };
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-navy-950/70 p-0 backdrop-blur-sm sm:items-center sm:p-6">
+    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto overscroll-contain bg-navy-950/70 p-0 backdrop-blur-sm sm:items-center sm:p-6">
       <div
         ref={ref}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         className={cn(
-          'animate-fade-in my-auto w-full rounded-t-2xl border border-navy-700/80 bg-navy-850 shadow-2xl sm:rounded-2xl',
+          'animate-fade-in my-auto flex max-h-[92dvh] w-full flex-col rounded-t-2xl border border-navy-700/80 bg-navy-850 shadow-2xl sm:max-h-[88dvh] sm:rounded-2xl',
           widths[size],
         )}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-navy-700/60 px-5 py-4">
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-navy-700/60 px-4 py-4 sm:px-5">
           <div>
             <h2 id={titleId} className="text-base font-semibold text-ink-100">
               {title}
@@ -429,9 +429,9 @@ export function Modal({
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="max-h-[70vh] overflow-y-auto px-5 py-4 scroll-thin">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 scroll-thin sm:px-5">{children}</div>
         {footer && (
-          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-navy-700/60 px-5 py-3">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-navy-700/60 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 sm:pb-3">
             {footer}
           </div>
         )}
@@ -528,7 +528,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <div
         aria-live="polite"
-        className="pointer-events-none fixed bottom-4 right-4 z-[60] flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-2"
+        className="pointer-events-none fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-[60] flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-2"
       >
         {toasts.map((t) => (
           <div
@@ -624,7 +624,7 @@ export function PageHeader({
         <h1 className="text-xl font-semibold tracking-tight text-ink-100 sm:text-2xl">{title}</h1>
         {description && <p className="mt-1 max-w-2xl text-sm text-ink-400">{description}</p>}
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {actions && <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">{actions}</div>}
     </div>
   );
 }
@@ -657,7 +657,7 @@ export function StatCard({
         <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-500">{label}</p>
         {icon && <div className="rounded-md bg-navy-800 p-1.5 text-ink-400">{icon}</div>}
       </div>
-      <p className={cn('mt-2 text-[22px] font-semibold leading-tight tracking-tight', tones[tone])}>{value}</p>
+      <p className={cn('mt-2 break-words text-xl font-semibold leading-tight tracking-tight sm:text-[22px]', tones[tone])}>{value}</p>
       {hint && <p className="mt-1 text-xs text-ink-500">{hint}</p>}
       {footer && <div className="mt-3 border-t border-navy-700/60 pt-2 text-xs text-ink-500">{footer}</div>}
     </div>
@@ -695,6 +695,20 @@ export function Tabs({
         </button>
       ))}
     </div>
+  );
+}
+
+export function TableScrollHint({ className }: { className?: string }) {
+  return (
+    <p
+      className={cn(
+        'flex items-center justify-between gap-2 border-b border-navy-700/60 px-4 py-1.5 text-[10px] uppercase tracking-wider text-ink-500 sm:hidden',
+        className,
+      )}
+    >
+      <span>Swipe the table sideways for more columns</span>
+      <span aria-hidden>↔</span>
+    </p>
   );
 }
 

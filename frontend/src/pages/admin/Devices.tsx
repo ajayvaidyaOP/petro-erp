@@ -86,8 +86,8 @@ export default function AdminDevices() {
           subtitle={query.data?.note}
           action={
             <div className="flex gap-2">
-              <SearchInput value={search} onChange={setSearch} placeholder="Search gateway or organization" className="w-56" />
-              <Select className="w-40" value={status} onChange={(e) => setStatus(e.target.value)}>
+              <SearchInput value={search} onChange={setSearch} placeholder="Search gateway or organization" className="w-full sm:w-56" />
+              <Select className="w-full sm:w-40" value={status} onChange={(e) => setStatus(e.target.value)}>
                 <option value="">All statuses</option>
                 <option value="ONLINE">Online</option>
                 <option value="OFFLINE">Offline</option>

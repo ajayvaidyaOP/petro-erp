@@ -11,7 +11,7 @@ import { nowIso, todayIst } from '../lib/time.js';
 import { D, Decimal, money, rate as fmtRate } from '../lib/decimal.js';
 import { evaluateReading, latestCountableReading, lastReading } from '../lib/meter.js';
 import { priceAt } from '../lib/pricing.js';
-import { recordMovement, tanksForProduct } from '../lib/stock.js';
+import { allocateAcrossTanks, recordMovement } from '../lib/stock.js';
 import { settingsValue } from '../lib/settings.js';
 
 export const shiftRouter = Router();
@@ -632,25 +632,27 @@ shiftRouter.post(
         );
       }
 
-      // Stock movements are posted only on close, from countable litres.
+      // Stock movements are posted only on close, from countable litres. When a
+      // grade is stored in more than one tank the volume is shared by book stock.
       for (const [productId, total] of productTotals) {
         if (total.litres.lte(0)) continue;
-        const tanks = tanksForProduct(shift.station_id, productId);
-        if (tanks.length === 0) continue;
-        recordMovement({
-          tenantId: shift.tenant_id,
-          stationId: shift.station_id,
-          tankId: tanks[0]!.id,
-          productId,
-          type: 'DISPENSED',
-          quantityLitres: total.litres.toFixed(3),
-          occurredAt: nowIso(),
-          referenceType: 'SHIFT',
-          referenceId: shift.id,
-          note: `Dispensed during shift #${shift.shift_number} (aggregate totalizer litres)`,
-          createdBy: auth.user.id,
-          isDemo: Boolean(shift.is_demo),
-        });
+        for (const allocation of allocateAcrossTanks(shift.station_id, productId, total.litres)) {
+          if (allocation.litres.lte(0)) continue;
+          recordMovement({
+            tenantId: shift.tenant_id,
+            stationId: shift.station_id,
+            tankId: allocation.tankId,
+            productId,
+            type: 'DISPENSED',
+            quantityLitres: allocation.litres.toFixed(3),
+            occurredAt: nowIso(),
+            referenceType: 'SHIFT',
+            referenceId: shift.id,
+            note: `Dispensed during shift #${shift.shift_number} (aggregate totalizer litres)`,
+            createdBy: auth.user.id,
+            isDemo: Boolean(shift.is_demo),
+          });
+        }
       }
 
       const status = flagged ? 'FLAGGED' : 'CLOSED';
@@ -743,22 +745,24 @@ shiftRouter.post(
     tx(() => {
       for (const [productId, litres] of byProduct) {
         if (litres.lte(0)) continue;
-        const tanks = tanksForProduct(shift.station_id, productId);
-        if (tanks.length === 0) continue;
-        recordMovement({
-          tenantId: shift.tenant_id,
-          stationId: shift.station_id,
-          tankId: tanks[0]!.id,
-          productId,
-          type: 'ADJUSTMENT',
-          quantityLitres: litres.negated().toFixed(3),
-          occurredAt: nowIso(),
-          referenceType: 'SHIFT_REVERSAL',
-          referenceId: shift.id,
-          note: `Reversal of shift #${shift.shift_number}: ${body.reason}`,
-          createdBy: auth.user.id,
-          isDemo: Boolean(shift.is_demo),
-        });
+        // Reverse in the same proportions the original sale was allocated.
+        for (const allocation of allocateAcrossTanks(shift.station_id, productId, litres)) {
+          if (allocation.litres.lte(0)) continue;
+          recordMovement({
+            tenantId: shift.tenant_id,
+            stationId: shift.station_id,
+            tankId: allocation.tankId,
+            productId,
+            type: 'ADJUSTMENT',
+            quantityLitres: allocation.litres.negated().toFixed(3),
+            occurredAt: nowIso(),
+            referenceType: 'SHIFT_REVERSAL',
+            referenceId: shift.id,
+            note: `Reversal of shift #${shift.shift_number}: ${body.reason}`,
+            createdBy: auth.user.id,
+            isDemo: Boolean(shift.is_demo),
+          });
+        }
       }
       run("UPDATE shifts SET status = 'REVERSED', close_notes = ?, updated_at = ? WHERE id = ?", [
         `${shift.close_notes ? `${shift.close_notes}\n` : ''}REVERSED: ${body.reason}`, nowIso(), shift.id,

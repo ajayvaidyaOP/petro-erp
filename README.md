@@ -57,6 +57,8 @@ Open **http://localhost:5173**. Vite proxies `/api` to the Express server on por
 
 On the first non-production start, an empty database is created at `db/petroflow.db` and populated with demo records. Demo sign-in:
 
+The demo tenant **Sunrise Fuels** runs two outlets (Baner and Hinjewadi) with separate nozzles, tanks, shifts, deliveries and reconciliations, so multi-station behaviour can be reviewed without any setup. Switch between outlets from the station picker in the header (or the mobile menu) and compare both on the dashboard.
+
 - Owner: `owner@sunrisefuels.in`
 - Platform administrator: `superadmin@petroflow.dev`
 - Password: `PetroFlow@2025` (or the `DEMO_PASSWORD` in your ignored `.env`)
