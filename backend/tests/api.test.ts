@@ -219,10 +219,16 @@ describe('shift operations', () => {
   });
 
   it('records shift readings via manual entry with an audit trail', async () => {
-    const opened = await ownerAgent
-      .post('/api/v1/shifts')
-      .send({ stationId: stationBId, openingCash: '5000', captureReadings: false });
-    expect(opened.status).toBe(201);
+    // The demo seed keeps an open shift at every outlet (a real forecourt is
+    // always mid-shift). Reuse it when present, otherwise open a new one.
+    const openShifts = await ownerAgent.get(`/api/v1/shifts?stationId=${stationBId}&status=OPEN`);
+    const existingShift = (openShifts.body.data as { id: string }[])[0];
+    const opened = existingShift
+      ? await ownerAgent.get(`/api/v1/shifts/${existingShift.id}`)
+      : await ownerAgent
+          .post('/api/v1/shifts')
+          .send({ stationId: stationBId, openingCash: '5000', captureReadings: false });
+    expect(opened.status).toBe(existingShift ? 200 : 201);
     const newShiftId = opened.body.data.id as string;
     const nozzleId = opened.body.data.nozzles[0].nozzleId as string;
 

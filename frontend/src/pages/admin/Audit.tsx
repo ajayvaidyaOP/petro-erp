@@ -74,12 +74,12 @@ export default function AdminAudit() {
                   setPage(1);
                 }}
                 placeholder="Search action, actor or summary"
-                className="w-56"
+                className="w-full sm:w-56"
               />
-              <Field label="From" className="w-36">
+              <Field label="From" className="w-[calc(50%-0.25rem)] sm:w-36">
                 <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
               </Field>
-              <Field label="To" className="w-36">
+              <Field label="To" className="w-[calc(50%-0.25rem)] sm:w-36">
                 <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
               </Field>
             </div>

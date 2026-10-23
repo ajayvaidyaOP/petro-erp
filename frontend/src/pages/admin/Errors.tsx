@@ -75,7 +75,7 @@ export default function Errors() {
           title="Error log"
           action={
             <Select
-              className="w-44"
+              className="w-full sm:w-44"
               value={scope}
               onChange={(e) => {
                 setScope(e.target.value as 'open' | 'all');

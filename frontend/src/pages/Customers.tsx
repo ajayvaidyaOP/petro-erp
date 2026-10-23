@@ -6,6 +6,7 @@ import { useAuth, useStations } from '../lib/auth';
 import { formatDate, formatDateTime, formatINR, formatNumber, todayIst } from '../lib/format';
 import {
   Badge,
+  TableScrollHint,
   Button,
   Card,
   CardHeader,
@@ -176,7 +177,7 @@ export default function Customers() {
         <CardHeader
           title="Customer accounts"
           subtitle="Balances are derived from the credit entry ledger"
-          action={<SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="Search name, code, phone…" className="w-56" />}
+          action={<SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="Search name, code, phone…" className="w-full sm:w-56" />}
         />
         {list.isLoading ? (
           <LoadingBlock rows={5} />
@@ -332,7 +333,8 @@ export default function Customers() {
                 {ledger.data.overdueEntries.length} overdue credit sale(s) beyond the agreed credit period.
               </div>
             )}
-            <div className="table-wrap rounded-lg border border-navy-700/60">
+            <TableScrollHint className="rounded-t-lg border border-b-0 border-navy-700/60" />
+            <div className="table-wrap rounded-b-lg border border-t-0 border-navy-700/60">
               <table className="data-table min-w-[720px]">
                 <thead>
                   <tr><th>Date</th><th>Type</th><th>Reference</th><th>Due</th><th className="text-right">Amount</th><th className="text-right">Running</th></tr>

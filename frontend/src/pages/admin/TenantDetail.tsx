@@ -325,7 +325,7 @@ export default function TenantDetail() {
             {data.auditTrail.length === 0 ? (
               <EmptyState title="No audit records" description="Actions on this organization will appear here." />
             ) : (
-              <div className="max-h-[480px] overflow-y-auto">
+              <div className="max-h-[480px] overflow-y-auto overflow-x-auto">
                 <table className="data-table">
                   <thead><tr><th>When</th><th>Action</th><th>Summary</th><th>Actor</th></tr></thead>
                   <tbody>

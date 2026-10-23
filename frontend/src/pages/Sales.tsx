@@ -206,7 +206,7 @@ export default function Sales() {
                   <Select
                     value={nozzleId || selectedNozzle?.id || ''}
                     onChange={(e) => setNozzleId(e.target.value)}
-                    className="h-8 w-44 py-1 text-xs"
+                    className="h-9 w-full max-w-[11rem] py-1 text-xs sm:h-8 sm:w-44"
                   >
                     {(nozzles.data ?? []).map((n) => <option key={n.id} value={n.id}>{n.label}</option>)}
                   </Select>

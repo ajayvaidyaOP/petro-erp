@@ -7,6 +7,7 @@ import { formatDate, formatDateTime, formatINR, formatNumber, todayIst } from '.
 import { downloadCsv } from '../lib/utils';
 import {
   Badge,
+  TableScrollHint,
   Button,
   Card,
   CardHeader,
@@ -211,6 +212,7 @@ export default function Reports() {
           <div className="grid gap-3 lg:grid-cols-2">
             <Card>
               <CardHeader title="Stock position" subtitle="Book stock is ledger-derived; physical dips are separate" />
+              <TableScrollHint />
               <div className="table-wrap">
                 <table className="data-table min-w-[560px]">
                   <thead><tr><th>Tank</th><th className="text-right">Opening</th><th className="text-right">Delivered</th><th className="text-right">Dispensed</th><th className="text-right">Book closing</th><th className="text-right">Measured</th></tr></thead>

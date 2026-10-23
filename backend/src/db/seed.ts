@@ -216,6 +216,7 @@ export async function runSeed(options: { force?: boolean } = {}) {
     const ownerA = userSpecs[1].id;
     const managerA = userSpecs[2].id;
     const cashierA = userSpecs[3].id;
+    const ownerB = userSpecs[6].id;
 
     // ---------------------------------------------------------- products ----
     const productSpecs = [
@@ -375,7 +376,10 @@ export async function runSeed(options: { force?: boolean } = {}) {
       )?.rate_per_litre ?? '0';
 
     const readingsByNode = new Map<string, { value: string; at: string; id: string }>();
-    const stationANozzles = nozzles.filter((n) => n.stationId === stationA.id);
+    // The demo tenant runs two outlets (Baner + Hinjewadi); both must carry data.
+    const seededNozzles = nozzles.filter((n) => n.tenantId === tenantA || n.tenantId === tenantB);
+    const tenantANozzles = seededNozzles;
+    const nozzlesOf = (stationId: string) => seededNozzles.filter((n) => n.stationId === stationId);
 
     for (let dayOffset = 6; dayOffset >= 0; dayOffset -= 1) {
       const date = businessDate(dayOffset);
@@ -385,7 +389,7 @@ export async function runSeed(options: { force?: boolean } = {}) {
         // Never seed a totalizer reading in the future: a later-dated row would
         // make every genuine device event look out of order.
         if (new Date(at).getTime() > Date.now()) continue;
-        for (const nozzle of stationANozzles) {
+        for (const nozzle of seededNozzles) {
           const increment = D(randBetween(60, 320));
           nozzle.totalizer = nozzle.totalizer.plus(increment);
           nozzle.sequence += 1;
@@ -403,7 +407,7 @@ export async function runSeed(options: { force?: boolean } = {}) {
               (id, tenant_id, station_id, device_id, event_id, event_type, sequence, occurred_at, received_at,
                payload, payload_hash, status, processed_at, source_ip)
              VALUES (?, ?, ?, ?, ?, 'TOTALIZER_SNAPSHOT', ?, ?, ?, ?, ?, 'PROCESSED', ?, '127.0.0.1')`,
-            [eventId, tenantA, stationA.id, nozzle.deviceId, externalId, nozzle.sequence, at, at,
+            [eventId, nozzle.tenantId, nozzle.stationId, nozzle.deviceId, externalId, nozzle.sequence, at, at,
               JSON.stringify(payload), createHash('sha256').update(JSON.stringify(payload)).digest('hex'),
               at],
           );
@@ -412,7 +416,7 @@ export async function runSeed(options: { force?: boolean } = {}) {
               (id, tenant_id, station_id, nozzle_id, device_id, device_event_id, reading_value, unit, source,
                quality, reading_at, sequence, delta_litres, previous_reading_id, is_countable, is_simulated, note, created_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, 'L', 'SIMULATOR', 'VALID', ?, ?, ?, ?, 1, 1, 'SIMULATED reading from demo gateway', ?)`,
-            [readingId, tenantA, stationA.id, nozzle.id, nozzle.deviceId, eventId, fmtLitres(nozzle.totalizer),
+            [readingId, nozzle.tenantId, nozzle.stationId, nozzle.id, nozzle.deviceId, eventId, fmtLitres(nozzle.totalizer),
               at, nozzle.sequence, previous ? fmtLitres(increment) : null, previous?.id ?? null, at],
           );
           readingsByNode.set(nozzle.id, { value: fmtLitres(nozzle.totalizer), at, id: readingId });
@@ -421,96 +425,114 @@ export async function runSeed(options: { force?: boolean } = {}) {
     }
 
     // ------------------------------------------------------------- shifts ---
+    const seededOutlets = [
+      { station: stationA, tenant: tenantA, operator: cashierA, approver: ownerA },
+      { station: stationB, tenant: tenantA, operator: cashierA, approver: ownerA },
+      { station: stationC, tenant: tenantB, operator: ownerB, approver: ownerB },
+    ];
     for (let dayOffset = 6; dayOffset >= 1; dayOffset -= 1) {
       const date = businessDate(dayOffset);
-      const flagged = dayOffset === 2;
-      const shiftId = newId('shf');
-      let totalLitres = D(0);
-      let totalValue = D(0);
-      run(
-        `INSERT INTO shifts
-          (id, tenant_id, station_id, shift_number, business_date, opened_at, closed_at, operator_id, opened_by,
-           closed_by, status, opening_cash, closing_cash, notes, is_demo, created_at, updated_at)
-         VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, '5000', '5000', 'Demo shift', 1, ?, ?)`,
-        [shiftId, tenantA, stationA.id, date, isoAt(date, 6), isoAt(date, 18), cashierA, cashierA, cashierA,
-          flagged ? 'FLAGGED' : 'CLOSED', nowIso(), nowIso()],
-      );
-      for (const nozzle of stationANozzles) {
-        const readings = all<Record<string, unknown>>(
-          `SELECT id, reading_value, reading_at, source FROM meter_readings
-            WHERE nozzle_id = ? AND reading_at >= ? AND reading_at <= ? ORDER BY reading_at`,
-          [nozzle.id, isoAt(date, 0), isoAt(date, 23)],
-        );
-        if (readings.length < 2) continue;
-        const first = readings[0];
-        const last = readings[readings.length - 1];
-        let opening = first.reading_value as string;
-        let closing = last.reading_value as string;
-        let variance: string | null = null;
-        let status = 'CAPTURED';
-        if (flagged && nozzle.number === 1) {
-          closing = D(closing).plus('3.500').toFixed(3);
-          variance = '3.500';
-          status = 'FLAGGED';
-        }
-        const qty = D(closing).minus(opening);
-        const rate = D(priceFor(tenantA, nozzle.productId));
+      for (const [outletIndex, outlet] of seededOutlets.entries()) {
+        const stationRow = outlet.station;
+        // Only the first Sunrise outlet carries the demo variance/flag scenario.
+        const flagged = dayOffset === 2 && outletIndex === 0;
+        const shiftId = newId('shf');
+        let totalLitres = D(0);
+        let totalValue = D(0);
         run(
-          `INSERT INTO shift_nozzle_readings
-            (id, shift_id, nozzle_id, opening_reading, closing_reading, opening_reading_id, closing_reading_id,
-             opening_source, closing_source, litres_sold, rate, sales_value, variance_litres, status, note, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'SIMULATOR', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [newId('snr'), shiftId, nozzle.id, opening, closing, String(first.id), String(last.id),
-            flagged && nozzle.number === 1 ? 'MANUAL' : 'SIMULATOR', fmtLitres(qty), fmtRate(rate),
-            money(qty.mul(rate)), variance, status, variance ? 'Manual closing differs from device reading' : null,
-            nowIso(), nowIso()],
+          `INSERT INTO shifts
+            (id, tenant_id, station_id, shift_number, business_date, opened_at, closed_at, operator_id, opened_by,
+             closed_by, status, opening_cash, closing_cash, notes, is_demo, created_at, updated_at)
+           VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, '5000', '5000', 'Demo shift', 1, ?, ?)`,
+          [shiftId, outlet.tenant, stationRow.id, date, isoAt(date, 6), isoAt(date, 18), outlet.operator, outlet.operator,
+            outlet.operator, flagged ? 'FLAGGED' : 'CLOSED', nowIso(), nowIso()],
         );
-        totalLitres = totalLitres.plus(qty);
-        totalValue = totalValue.plus(qty.mul(rate));
-      }
-      run('UPDATE shifts SET total_litres = ?, total_value = ?, approved_by = ?, approved_at = ? WHERE id = ?', [
-        fmtLitres(totalLitres), money(totalValue), flagged ? null : ownerA, flagged ? null : isoAt(date, 19), shiftId,
-      ]);
-      // aggregate stock out by product
-      for (const productId of [msA, hsdA, xpA]) {
-        const sum = all<{ litres: string | null }>(
-          `SELECT SUM(CAST(snr.litres_sold AS REAL)) AS litres FROM shift_nozzle_readings snr
-             JOIN nozzles n ON n.id = snr.nozzle_id
-            WHERE snr.shift_id = ? AND n.product_id = ?`,
-          [shiftId, productId],
-        )[0]?.litres;
-        if (sum && Number(sum) > 0) {
-          const tank = get<{ id: string }>('SELECT id FROM tanks WHERE station_id = ? AND product_id = ?', [stationA.id, productId]);
-          if (!tank) continue;
-          run(
-            `INSERT INTO stock_movements
-              (id, tenant_id, station_id, tank_id, product_id, type, quantity_litres, reference_type, reference_id,
-               occurred_at, note, is_demo, created_at)
-             VALUES (?, ?, ?, ?, ?, 'DISPENSED', ?, 'SHIFT', ?, ?, 'Aggregate dispensed (demo)', 1, ?)`,
-            [newId('mov'), tenantA, stationA.id, tank.id, productId, fmtLitres(D(sum)), shiftId, isoAt(date, 18), nowIso()],
+        for (const nozzle of nozzlesOf(stationRow.id)) {
+          const readings = all<Record<string, unknown>>(
+            `SELECT id, reading_value, reading_at, source FROM meter_readings
+              WHERE nozzle_id = ? AND reading_at >= ? AND reading_at <= ? ORDER BY reading_at`,
+            [nozzle.id, isoAt(date, 0), isoAt(date, 23)],
           );
+          if (readings.length < 2) continue;
+          const first = readings[0];
+          const last = readings[readings.length - 1];
+          const opening = first.reading_value as string;
+          let closing = last.reading_value as string;
+          let variance: string | null = null;
+          let status = 'CAPTURED';
+          if (flagged && nozzle.number === 1) {
+            closing = D(closing).plus('3.500').toFixed(3);
+            variance = '3.500';
+            status = 'FLAGGED';
+          }
+          const qty = D(closing).minus(opening);
+          const rate = D(priceFor(outlet.tenant, nozzle.productId));
+          run(
+            `INSERT INTO shift_nozzle_readings
+              (id, shift_id, nozzle_id, opening_reading, closing_reading, opening_reading_id, closing_reading_id,
+               opening_source, closing_source, litres_sold, rate, sales_value, variance_litres, status, note, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'SIMULATOR', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [newId('snr'), shiftId, nozzle.id, opening, closing, String(first.id), String(last.id),
+              flagged && nozzle.number === 1 ? 'MANUAL' : 'SIMULATOR', fmtLitres(qty), fmtRate(rate),
+              money(qty.mul(rate)), variance, status, variance ? 'Manual closing differs from device reading' : null,
+              nowIso(), nowIso()],
+          );
+          totalLitres = totalLitres.plus(qty);
+          totalValue = totalValue.plus(qty.mul(rate));
+        }
+        run('UPDATE shifts SET total_litres = ?, total_value = ?, approved_by = ?, approved_at = ? WHERE id = ?', [
+          fmtLitres(totalLitres), money(totalValue), flagged ? null : outlet.approver,
+          flagged ? null : isoAt(date, 19), shiftId,
+        ]);
+        // aggregate stock out by product
+        const outletProducts = new Set(nozzlesOf(stationRow.id).map((n) => n.productId));
+        for (const productId of outletProducts) {
+          const sum = all<{ litres: string | null }>(
+            `SELECT SUM(CAST(snr.litres_sold AS REAL)) AS litres FROM shift_nozzle_readings snr
+               JOIN nozzles n ON n.id = snr.nozzle_id
+              WHERE snr.shift_id = ? AND n.product_id = ?`,
+            [shiftId, productId],
+          )[0]?.litres;
+          if (sum && Number(sum) > 0) {
+            const tank = get<{ id: string }>(
+              'SELECT id FROM tanks WHERE station_id = ? AND product_id = ?',
+              [stationRow.id, productId],
+            );
+            if (!tank) continue;
+            run(
+              `INSERT INTO stock_movements
+                (id, tenant_id, station_id, tank_id, product_id, type, quantity_litres, reference_type, reference_id,
+                 occurred_at, note, is_demo, created_at)
+               VALUES (?, ?, ?, ?, ?, 'DISPENSED', ?, 'SHIFT', ?, ?, 'Aggregate dispensed (demo)', 1, ?)`,
+              [newId('mov'), outlet.tenant, stationRow.id, tank.id, productId, fmtLitres(D(sum)), shiftId,
+                isoAt(date, 18), nowIso()],
+            );
+          }
         }
       }
     }
 
-    // Open shift for today at station A
+    // Open shift for today at every seeded outlet
     const today = businessDate(0);
-    const openShiftId = newId('shf');
-    run(
-      `INSERT INTO shifts
-        (id, tenant_id, station_id, shift_number, business_date, opened_at, operator_id, opened_by, status,
-         opening_cash, notes, is_demo, created_at, updated_at)
-       VALUES (?, ?, ?, 1, ?, ?, ?, ?, 'OPEN', '8000', 'Current day shift', 1, ?, ?)`,
-      [openShiftId, tenantA, stationA.id, today, nowIso(), managerA, managerA, nowIso(), nowIso()],
-    );
-    for (const nozzle of stationANozzles) {
-      const last = readingsByNode.get(nozzle.id);
+    for (const outlet of seededOutlets) {
+      const stationRow = outlet.station;
+      const openShiftId = newId('shf');
       run(
-        `INSERT INTO shift_nozzle_readings
-          (id, shift_id, nozzle_id, opening_reading, opening_reading_id, opening_source, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 'SIMULATOR', 'PENDING', ?, ?)`,
-        [newId('snr'), openShiftId, nozzle.id, last?.value ?? null, last?.id ?? null, nowIso(), nowIso()],
+        `INSERT INTO shifts
+          (id, tenant_id, station_id, shift_number, business_date, opened_at, operator_id, opened_by, status,
+           opening_cash, notes, is_demo, created_at, updated_at)
+         VALUES (?, ?, ?, 1, ?, ?, ?, ?, 'OPEN', '8000', 'Current day shift', 1, ?, ?)`,
+        [openShiftId, outlet.tenant, stationRow.id, today, nowIso(), outlet.operator, outlet.operator, nowIso(), nowIso()],
       );
+      for (const nozzle of nozzlesOf(stationRow.id)) {
+        const last = readingsByNode.get(nozzle.id);
+        run(
+          `INSERT INTO shift_nozzle_readings
+            (id, shift_id, nozzle_id, opening_reading, opening_reading_id, opening_source, status, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, 'SIMULATOR', 'PENDING', ?, ?)`,
+          [newId('snr'), openShiftId, nozzle.id, last?.value ?? null, last?.id ?? null, nowIso(), nowIso()],
+        );
+      }
     }
 
     // -------------------------------------------------------- stock receipts
@@ -529,9 +551,11 @@ export async function runSeed(options: { force?: boolean } = {}) {
     }
 
     const deliverySpecs = [
-      { day: 5, supplier: suppliers[0], tank: tankIds[`${stationA.id}:T1`], product: msA, qty: '3000', rate: '102.10' },
-      { day: 3, supplier: suppliers[0], tank: tankIds[`${stationA.id}:T2`], product: hsdA, qty: '4000', rate: '90.40' },
-      { day: 1, supplier: suppliers[1], tank: tankIds[`${stationA.id}:T1`], product: msA, qty: '2500', rate: '102.35' },
+      { day: 5, station: stationA, supplier: suppliers[0], tank: tankIds[`${stationA.id}:T1`], product: msA, qty: '3000', rate: '102.10' },
+      { day: 3, station: stationA, supplier: suppliers[0], tank: tankIds[`${stationA.id}:T2`], product: hsdA, qty: '4000', rate: '90.40' },
+      { day: 3, station: stationB, supplier: suppliers[1], tank: tankIds[`${stationB.id}:T1`], product: msA, qty: '2000', rate: '102.20' },
+      { day: 1, station: stationA, supplier: suppliers[1], tank: tankIds[`${stationA.id}:T1`], product: msA, qty: '2500', rate: '102.35' },
+      { day: 1, station: stationB, supplier: suppliers[0], tank: tankIds[`${stationB.id}:T2`], product: hsdA, qty: '3500', rate: '90.55' },
     ];
     for (const delivery of deliverySpecs) {
       const date = businessDate(delivery.day);
@@ -546,7 +570,7 @@ export async function runSeed(options: { force?: boolean } = {}) {
            received_litres, rate_per_litre, taxable_amount, tax_amount, total_amount, status, received_at,
            vehicle_number, driver_name, notes, is_demo, created_by, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'RECEIVED', ?, ?, 'Demo driver', 'Demo delivery', 1, ?, ?, ?)`,
-        [id, tenantA, stationA.id, delivery.supplier.id, `INV-${date.replace(/-/g, '')}-${delivery.tank.slice(-2)}`,
+        [id, tenantA, delivery.station.id, delivery.supplier.id, `INV-${date.replace(/-/g, '')}-${delivery.tank.slice(-2)}`,
           date, delivery.product, delivery.tank, fmtLitres(qty), fmtLitres(qty), fmtRate(rate), money(taxable),
           money(tax), money(taxable.plus(tax)), isoAt(date, 7), `MH12AB${Math.floor(randBetween(1000, 9999))}`,
           ownerA, nowIso(), nowIso()],
@@ -556,7 +580,7 @@ export async function runSeed(options: { force?: boolean } = {}) {
           (id, tenant_id, station_id, tank_id, product_id, type, quantity_litres, reference_type, reference_id,
            occurred_at, note, is_demo, created_at)
          VALUES (?, ?, ?, ?, ?, 'DELIVERY', ?, 'DELIVERY', ?, ?, 'Tank truck delivery (demo)', 1, ?)`,
-        [newId('mov'), tenantA, stationA.id, delivery.tank, delivery.product, fmtLitres(qty), id, isoAt(date, 7), nowIso()],
+        [newId('mov'), tenantA, delivery.station.id, delivery.tank, delivery.product, fmtLitres(qty), id, isoAt(date, 7), nowIso()],
       );
     }
 
@@ -581,11 +605,12 @@ export async function runSeed(options: { force?: boolean } = {}) {
     }
 
     const creditSales = [
-      { day: 4, customer: 'CUST-001', product: msA, qty: '120', mode: 'CREDIT' },
-      { day: 3, customer: 'CUST-002', product: msA, qty: '45', mode: 'CREDIT' },
-      { day: 2, customer: 'CUST-003', product: hsdA, qty: '310', mode: 'CREDIT' },
-      { day: 1, customer: 'CUST-001', product: hsdA, qty: '260', mode: 'CREDIT' },
-      { day: 0, customer: 'CUST-002', product: msA, qty: '38', mode: 'UPI' },
+      { day: 4, station: stationA, customer: 'CUST-001', product: msA, qty: '120', mode: 'CREDIT' },
+      { day: 3, station: stationB, customer: 'CUST-002', product: msA, qty: '45', mode: 'CREDIT' },
+      { day: 3, station: stationB, customer: 'CUST-001', product: hsdA, qty: '180', mode: 'CASH' },
+      { day: 2, station: stationA, customer: 'CUST-003', product: hsdA, qty: '310', mode: 'CREDIT' },
+      { day: 1, station: stationA, customer: 'CUST-001', product: hsdA, qty: '260', mode: 'CREDIT' },
+      { day: 0, station: stationB, customer: 'CUST-002', product: msA, qty: '38', mode: 'UPI' },
     ];
     for (const sale of creditSales) {
       const date = businessDate(sale.day);
@@ -600,7 +625,7 @@ export async function runSeed(options: { force?: boolean } = {}) {
           (id, tenant_id, station_id, shift_id, nozzle_id, product_id, quantity_litres, rate, amount, payment_mode,
            customer_id, occurred_at, reference, source, is_estimated, is_demo, created_by, created_at)
          VALUES (?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 'MANUAL', 0, 1, ?, ?)`,
-        [txId, tenantA, stationA.id, sale.product, fmtLitres(qty), fmtRate(rate), money(amount), sale.mode,
+        [txId, tenantA, sale.station.id, sale.product, fmtLitres(qty), fmtRate(rate), money(amount), sale.mode,
           customers[sale.customer], at, reference, cashierA, nowIso()],
       );
       if (sale.mode === 'CREDIT') {
@@ -609,7 +634,7 @@ export async function runSeed(options: { force?: boolean } = {}) {
             (id, tenant_id, station_id, customer_id, type, amount, reference, occurred_at, due_date, transaction_id,
              note, status, created_by, created_at)
            VALUES (?, ?, ?, ?, 'CREDIT_SALE', ?, ?, ?, ?, ?, 'Demo credit sale', 'POSTED', ?, ?)`,
-          [newId('cle'), tenantA, stationA.id, customers[sale.customer], money(amount), reference, at,
+          [newId('cle'), tenantA, sale.station.id, customers[sale.customer], money(amount), reference, at,
             addDays(date, 15), txId, cashierA, nowIso()],
         );
       }
@@ -669,10 +694,12 @@ export async function runSeed(options: { force?: boolean } = {}) {
       );
     }
     const expenseSpecs = [
-      { day: 4, category: 'Electricity', name: 'MSEDCL commercial bill', amount: '18450.00' },
-      { day: 3, category: 'Maintenance', name: 'Nozzle calibration service', amount: '4200.00' },
-      { day: 2, category: 'Salaries', name: 'Staff salary advance', amount: '25000.00' },
-      { day: 1, category: 'Consumables', name: 'Billing rolls and stationery', amount: '1650.00' },
+      { day: 4, station: stationA, category: 'Electricity', name: 'MSEDCL commercial bill', amount: '18450.00' },
+      { day: 3, station: stationA, category: 'Maintenance', name: 'Nozzle calibration service', amount: '4200.00' },
+      { day: 3, station: stationB, category: 'Electricity', name: 'MSEDCL bill — Hinjewadi', amount: '11200.00' },
+      { day: 2, station: stationA, category: 'Salaries', name: 'Staff salary advance', amount: '25000.00' },
+      { day: 1, station: stationB, category: 'Consumables', name: 'Billing rolls and stationery', amount: '1450.00' },
+      { day: 1, station: stationA, category: 'Consumables', name: 'Billing rolls and stationery', amount: '1650.00' },
     ];
     for (const expense of expenseSpecs) {
       run(
@@ -680,28 +707,33 @@ export async function runSeed(options: { force?: boolean } = {}) {
           (id, tenant_id, station_id, category_id, category_name, description, amount, occurred_at, paid_via,
            reference, note, created_by, is_demo, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'BANK', ?, 'Demo expense', ?, 1, ?)`,
-        [newId('exp'), tenantA, stationA.id, categoryIds[expenseCategories.indexOf(expense.category)],
+        [newId('exp'), tenantA, expense.station.id, categoryIds[expenseCategories.indexOf(expense.category)],
           expense.category, expense.name, expense.amount, isoAt(businessDate(expense.day), 14),
           `EXP-DEMO-${expense.day}`, ownerA, nowIso()],
       );
     }
 
     // ------------------------------------------------------ reconciliations --
-    run(
-      `INSERT INTO reconciliations
-        (id, tenant_id, station_id, business_date, type, cash_expected, cash_counted, digital_expected, digital_settled,
-         variance, status, notes, created_by, approved_by, approved_at, created_at)
-       VALUES (?, ?, ?, ?, 'CASH', '0.00', '0.00', '0.00', '0.00', '0.00', 'OPEN',
-               'Demo reconciliation — computed figures are shown on the reconciliation screen', ?, NULL, NULL, ?)`,
-      [newId('rec'), tenantA, stationA.id, businessDate(1), cashierA, nowIso()],
-    );
+    for (const stationRow of [stationA, stationB]) {
+      run(
+        `INSERT INTO reconciliations
+          (id, tenant_id, station_id, business_date, type, cash_expected, cash_counted, digital_expected, digital_settled,
+           variance, status, notes, created_by, approved_by, approved_at, created_at)
+         VALUES (?, ?, ?, ?, 'CASH', '0.00', '0.00', '0.00', '0.00', '0.00', 'OPEN',
+                 'Demo reconciliation — computed figures are shown on the reconciliation screen', ?, NULL, NULL, ?)`,
+        [newId('rec'), tenantA, stationRow.id, businessDate(1), cashierA, nowIso()],
+      );
+    }
 
     // ---------------------------------------------------------- tank dips ---
     const dipVarianceByTank: Record<string, string> = {
       [`${stationA.id}:T1`]: '-14.500',
       [`${stationA.id}:T2`]: '9.000',
       [`${stationA.id}:T3`]: '-3.250',
+      [`${stationB.id}:T1`]: '-6.750',
+      [`${stationB.id}:T2`]: '4.250',
     };
+    const tankStation = (tankKey: string) => (tankKey.startsWith(stationB.id) ? stationB : stationA);
     for (const tankKey of Object.keys(dipVarianceByTank)) {
       const tankId = tankIds[tankKey];
       const book = all<{ type: string; quantity_litres: string }>(
@@ -717,7 +749,7 @@ export async function runSeed(options: { force?: boolean } = {}) {
           (id, tenant_id, station_id, tank_id, measured_at, measured_litres, book_stock_litres, variance_litres,
            method, source, entered_by, note, is_demo, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'MANUAL', 'MANUAL', ?, 'Demo physical dip', 1, ?)`,
-        [newId('tms'), tenantA, stationA.id, tankId, isoAt(businessDate(0), 8), fmtLitres(measured), fmtLitres(book),
+        [newId('tms'), tenantA, tankStation(tankKey).id, tankId, isoAt(businessDate(0), 8), fmtLitres(measured), fmtLitres(book),
           dipVarianceByTank[tankKey], managerA, nowIso()],
       );
     }
@@ -762,6 +794,7 @@ export async function runSeed(options: { force?: boolean } = {}) {
       { action: 'FUEL_PRICE_UPDATED', entity: 'FuelPrice', entityId: null, summary: 'Petrol price revised to ₹106.31/L', tenant: tenantA },
       { action: 'SHIFT_CLOSED', entity: 'Shift', entityId: null, summary: 'Shift #1 closed with aggregate totalizer capture', tenant: tenantA },
       { action: 'DEVICE_REGISTERED', entity: 'HardwareDevice', entityId: deviceIds[stationA.id], summary: 'Baner Gateway 01 registered', tenant: tenantA },
+      { action: 'DELIVERY_RECEIVED', entity: 'Delivery', entityId: null, summary: 'Fuel delivery received at Hinjewadi outlet', tenant: tenantA },
       { action: 'CUSTOMER_PAYMENT_RECEIVED', entity: 'Payment', entityId: receiptId, summary: 'Customer receipt ₹6,000.00 via UPI', tenant: tenantA },
     ];
     auditSeeds.forEach((entry, index) => {
@@ -770,7 +803,7 @@ export async function runSeed(options: { force?: boolean } = {}) {
           (id, tenant_id, station_id, actor_id, actor_email, actor_role, action, entity, entity_id, summary,
            ip, is_demo, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '127.0.0.1', 1, ?)`,
-        [newId('aud'), entry.tenant, stationA.id, ownerA, 'owner@sunrisefuels.in', 'OWNER', entry.action,
+        [newId('aud'), entry.tenant, (index % 3 === 1 ? stationB : stationA).id, ownerA, 'owner@sunrisefuels.in', 'OWNER', entry.action,
           entry.entity, entry.entityId, entry.summary, isoAt(businessDate(index), 12)],
       );
     });

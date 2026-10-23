@@ -17,6 +17,14 @@
       radial-gradient(1000px 600px at 100% -10%, rgba(56, 189, 248, 0.07), transparent 60%),
       radial-gradient(800px 500px at -10% 110%, rgba(45, 212, 191, 0.05), transparent 55%);
     background-attachment: fixed;
+    /* Clip (not hidden) so sticky headers keep working; wide tables own their scroll. */
+    overflow-x: clip;
+  }
+  button,
+  a,
+  select,
+  summary {
+    touch-action: manipulation;
   }
   * {
     @apply border-navy-700/60;
@@ -46,7 +54,7 @@
 
 @layer components {
   .card {
-    @apply rounded-xl border border-navy-700/70 bg-navy-850/80 shadow-card backdrop-blur-sm;
+    @apply min-w-0 rounded-xl border border-navy-700/70 bg-navy-850/80 shadow-card backdrop-blur-sm;
   }
   .card-hover {
     @apply transition-colors hover:border-navy-600/80;
@@ -60,10 +68,22 @@
       disabled:cursor-not-allowed disabled:opacity-60;
   }
   .table-wrap {
-    @apply w-full overflow-x-auto;
+    @apply w-full max-w-full overflow-x-auto overscroll-x-contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
   }
+  /* Tables size to their content: narrow tables fit a phone, wide ones scroll
+     inside their own wrapper (headers never wrap, so columns stay readable). */
   .data-table {
-    @apply w-full min-w-[640px] border-collapse text-sm;
+    @apply w-full border-collapse text-sm;
+  }
+  @media (max-width: 639px) {
+    .data-table thead th {
+      @apply px-3 py-2;
+    }
+    .data-table tbody td {
+      @apply px-3 py-2.5;
+    }
   }
   .data-table thead th {
     @apply sticky top-0 z-[1] whitespace-nowrap border-b border-navy-700 bg-navy-850/95 px-4 py-2.5 text-left
@@ -93,5 +113,30 @@
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
+  }
+}
+
+
+/* ---------------------------------------------------------- touch & mobile */
+/* Unlayered so it wins over Tailwind's component classes. */
+@media (max-width: 767px) {
+  /* iOS Safari zooms the whole page when a focused field is under 16px. */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+    line-height: 1.5rem;
+  }
+  /* Comfortable tap targets without changing desktop density. */
+  .btn-touch {
+    min-height: 2.5rem;
+  }
+}
+
+@media (pointer: coarse) {
+  button,
+  [role='tab'],
+  a.link {
+    -webkit-tap-highlight-color: transparent;
   }
 }

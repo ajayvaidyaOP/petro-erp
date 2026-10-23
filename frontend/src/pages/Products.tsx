@@ -170,7 +170,7 @@ export default function Products() {
           <CardHeader
             title="Fuel products"
             subtitle="Products are shared across your stations; price records can be station-specific."
-            action={<SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="Search code or name" className="w-56" />}
+            action={<SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="Search code or name" className="w-full sm:w-56" />}
           />
           {products.isLoading ? (
             <LoadingBlock />
@@ -276,7 +276,7 @@ export default function Products() {
           ) : (prices.data ?? []).length === 0 ? (
             <EmptyState title="No price records" description="Record the first price for the selected station." />
           ) : (
-            <div className="max-h-[540px] overflow-y-auto">
+            <div className="max-h-[540px] overflow-y-auto overflow-x-auto">
               <table className="data-table">
                 <thead>
                   <tr>

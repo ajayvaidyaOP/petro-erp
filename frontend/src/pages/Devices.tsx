@@ -345,7 +345,7 @@ export default function Devices() {
           {(diagnostics.data?.recentErrors ?? []).length === 0 ? (
             <EmptyState title="No device errors" description="The last batch of events was processed cleanly." />
           ) : (
-            <div className="max-h-72 overflow-y-auto">
+            <div className="max-h-72 overflow-y-auto overflow-x-auto">
               <table className="data-table">
                 <thead>
                   <tr>
@@ -456,7 +456,7 @@ export default function Devices() {
           <EmptyState title="No events" description="This gateway has not delivered any events yet." />
         ) : (
           <>
-            <div className="max-h-[420px] overflow-y-auto">
+            <div className="max-h-[420px] overflow-y-auto overflow-x-auto">
               <table className="data-table">
                 <thead>
                   <tr>

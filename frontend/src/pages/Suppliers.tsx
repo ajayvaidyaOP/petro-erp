@@ -6,6 +6,7 @@ import { useAuth, useStations } from '../lib/auth';
 import { formatDate, formatDateTime, formatINR, todayIst } from '../lib/format';
 import {
   Badge,
+  TableScrollHint,
   Button,
   Card,
   CardHeader,
@@ -155,7 +156,7 @@ export default function Suppliers() {
       <Card className="mt-3">
         <CardHeader
           title="Supplier directory"
-          action={<SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="Search suppliers…" className="w-56" />}
+          action={<SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="Search suppliers…" className="w-full sm:w-56" />}
         />
         {list.isLoading ? (
           <LoadingBlock rows={4} />
@@ -270,7 +271,8 @@ export default function Suppliers() {
           <ErrorState error={ledger.error} onRetry={() => void ledger.refetch()} />
         ) : ledger.data ? (
           <div className="space-y-3">
-            <div className="table-wrap rounded-lg border border-navy-700/60">
+            <TableScrollHint className="rounded-t-lg border border-b-0 border-navy-700/60" />
+            <div className="table-wrap rounded-b-lg border border-t-0 border-navy-700/60">
               <table className="data-table min-w-[760px]">
                 <thead>
                   <tr><th>Date</th><th>Type</th><th>Description</th><th className="text-right">Purchase</th><th className="text-right">Payment</th><th className="text-right">Balance</th></tr>
