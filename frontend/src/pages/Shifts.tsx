@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarDays, CheckCircle2, Clock, Download, Plus, RefreshCw, SlidersHorizontal, Undo2 } from 'lucide-react';
 import { apiGet, apiList, apiPatch, apiPost, type ListMeta } from '../lib/api';
 import { useAuth, useStations } from '../lib/auth';
+import { unclosedShiftMessage, type ShiftAlertsResponse } from '../lib/shifts';
 import { formatDateTime, formatINR, formatLitres, formatNumber, todayIst } from '../lib/format';
 import { downloadCsv } from '../lib/utils';
 import {
@@ -76,8 +77,14 @@ interface ShiftDetail extends Omit<ShiftRow, 'nozzleCount'> {
   closeNotes: string | null;
   notes: string | null;
   nozzles: ShiftNozzle[];
-  alerts: { level: string; nozzleId?: string; message: string }[];
-  totals: { litres: string; value: string; estimated: boolean };
+  warnings?: string[];
+  totals: { litres: string; value: string; nozzleCount: number; flaggedNozzles: number };
+}
+
+interface CapturePreview {
+  shiftId: string;
+  preview: { nozzleId: string; nozzle: string; closing: string | null; litres: string | null; status: string; note: string | null }[];
+  note: string;
 }
 
 interface Employee {
@@ -103,6 +110,7 @@ export default function Shifts() {
   const [closeModal, setCloseModal] = useState(false);
   const [reverseModal, setReverseModal] = useState(false);
   const [editNozzle, setEditNozzle] = useState<ShiftNozzle | null>(null);
+  const [capturePreview, setCapturePreview] = useState<CapturePreview | null>(null);
 
   const list = useQuery({
     queryKey: ['shifts', stationId, status, from, to, page],
@@ -127,7 +135,7 @@ export default function Shifts() {
 
   const alertsQuery = useQuery({
     queryKey: ['shift-alerts', stationId],
-    queryFn: () => apiGet<{ type: string; severity: string; message: string }[]>(`/shifts/alerts?stationId=${stationId}`),
+    queryFn: () => apiGet<ShiftAlertsResponse>(`/shifts/alerts?stationId=${stationId}`),
     enabled: Boolean(stationId),
   });
 
@@ -142,8 +150,8 @@ export default function Shifts() {
     mutationFn: (payload: Record<string, unknown>) => apiPost<ShiftDetail>('/shifts', payload),
     onSuccess: (shift) => {
       toast('Shift opened', { description: `Shift #${shift.shiftNumber} started at ${shift.stationName}.` });
-      if (shift.alerts?.length) {
-        toast('Opening warnings', { tone: 'warning', description: shift.alerts[0].message });
+      if (shift.warnings?.length) {
+        toast('Opening warnings', { tone: 'warning', description: shift.warnings[0] });
       }
       setOpenModal(false);
       setSelectedId(shift.id);
@@ -153,13 +161,12 @@ export default function Shifts() {
   });
 
   const captureMutation = useMutation({
-    mutationFn: ({ id, phase }: { id: string; phase: 'OPENING' | 'CLOSING' }) =>
-      apiPost<ShiftDetail & { updatedNozzles: string[] }>(`/shifts/${id}/capture`, { phase, fromDevice: true }),
-    onSuccess: (shift) => {
-      toast('Readings captured', { description: `${shift.updatedNozzles.length} nozzle reading(s) refreshed from the latest valid device snapshot.` });
-      invalidate(shift.id);
+    mutationFn: (id: string) => apiPost<CapturePreview>(`/shifts/${id}/capture`),
+    onSuccess: (preview) => {
+      setCapturePreview(preview);
+      toast('Closing preview ready', { description: preview.note });
     },
-    onError: (error) => toast('Capture failed', { tone: 'danger', description: (error as Error).message }),
+    onError: (error) => toast('Preview failed', { tone: 'danger', description: (error as Error).message }),
   });
 
   const closeMutation = useMutation({
@@ -205,6 +212,7 @@ export default function Shifts() {
     onSuccess: (shift) => {
       toast('Nozzle reading updated', { description: 'The change was written to the audit trail.' });
       setEditNozzle(null);
+      setCapturePreview(null);
       invalidate(shift.id);
     },
     onError: (error) => toast('Update failed', { tone: 'danger', description: (error as Error).message }),
@@ -261,11 +269,11 @@ export default function Shifts() {
       />
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <StatCard label="Open shifts" value={rows.filter((r) => r.status === 'OPEN').length} hint="Currently accepting readings" icon={<Clock className="h-4 w-4" />} />
+        <StatCard label="Open shifts" value={rows.filter((r) => r.status === 'OPEN').length} hint="On this page, currently accepting readings" icon={<Clock className="h-4 w-4" />} />
         <StatCard
           label="Flagged shifts"
-          value={(alertsQuery.data ?? []).filter((a) => a.type === 'SHIFT_FLAGGED').length}
-          hint="Awaiting variance approval"
+          value={rows.filter((r) => r.status === 'FLAGGED').length}
+          hint="On this page, awaiting variance approval"
           icon={<SlidersHorizontal className="h-4 w-4" />}
           tone="warning"
         />
@@ -277,12 +285,12 @@ export default function Shifts() {
         />
       </div>
 
-      {(alertsQuery.data ?? []).length > 0 && (
+      {(alertsQuery.data?.alerts ?? []).length > 0 && (
         <div className="mt-3 space-y-2">
-          {(alertsQuery.data ?? []).slice(0, 3).map((alert, index) => (
-            <div key={index} className="flex items-center gap-2 rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs text-warn/90">
+          {(alertsQuery.data?.alerts ?? []).slice(0, 3).map((alert) => (
+            <div key={alert.id} className="flex items-center gap-2 rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs text-warn/90">
               <CalendarDays className="h-3.5 w-3.5 shrink-0" />
-              {alert.message}
+              {unclosedShiftMessage(alert)}
             </div>
           ))}
         </div>
@@ -348,7 +356,7 @@ export default function Shifts() {
                       <td className="text-xs text-ink-500">{formatDateTime(row.openedAt)}</td>
                       <td className="text-xs text-ink-500">{row.closedAt ? formatDateTime(row.closedAt) : '—'}</td>
                       <td className="text-right">
-                        <Button size="sm" variant="ghost" onClick={() => setSelectedId(row.id)}>View</Button>
+                        <Button size="sm" variant="ghost" onClick={() => { setCapturePreview(null); setSelectedId(row.id); }}>View</Button>
                       </td>
                     </tr>
                   ))}
@@ -373,13 +381,13 @@ export default function Shifts() {
               <div className="flex flex-wrap gap-2">
                 {shift.status === 'OPEN' && can('shifts.close') && (
                   <>
-                    <Button size="sm" variant="secondary" onClick={() => captureMutation.mutate({ id: shift.id, phase: 'CLOSING' })} loading={captureMutation.isPending}>
-                      Capture closing readings
+                    <Button size="sm" variant="secondary" onClick={() => captureMutation.mutate(shift.id)} loading={captureMutation.isPending}>
+                      Preview closing readings
                     </Button>
                     <Button size="sm" variant="primary" onClick={() => setCloseModal(true)}>Close shift</Button>
                   </>
                 )}
-                {(shift.status === 'CLOSED' || shift.status === 'FLAGGED') && can('shifts.approve') && (
+                {(shift.status === 'CLOSED' || shift.status === 'FLAGGED') && !shift.approvedAt && can('shifts.approve') && (
                   <Button size="sm" variant="success" onClick={() => approveMutation.mutate({ id: shift.id, note: 'Reviewed and approved' })} loading={approveMutation.isPending}>
                     Approve shift
                   </Button>
@@ -409,10 +417,23 @@ export default function Shifts() {
               {shift.closedAt && <Badge tone="muted">Closed {formatDateTime(shift.closedAt)}</Badge>}
             </div>
 
-            {shift.alerts.length > 0 && (
+            {shift.nozzles.some((nozzle) => nozzle.note && (nozzle.status === 'FLAGGED' || !nozzle.openingReading)) && (
               <div className="space-y-1.5 rounded-lg border border-amber-400/20 bg-amber-400/5 p-3">
-                {shift.alerts.map((alert, index) => (
-                  <p key={index} className="text-xs text-warn/90">• {alert.message}</p>
+                {shift.nozzles.filter((nozzle) => nozzle.note && (nozzle.status === 'FLAGGED' || !nozzle.openingReading)).map((nozzle) => (
+                  <p key={nozzle.id} className="text-xs text-warn/90">• {nozzle.nozzleLabel}: {nozzle.note}</p>
+                ))}
+              </div>
+            )}
+
+            {capturePreview?.shiftId === shift.id && (
+              <div className="space-y-1.5 rounded-lg border border-navy-700/60 bg-navy-800/30 p-3">
+                <p className="text-xs font-medium text-ink-200">Closing preview</p>
+                <p className="text-[11px] text-ink-500">{capturePreview.note}</p>
+                {capturePreview.preview.map((item) => (
+                  <p key={item.nozzleId} className="text-xs text-ink-300">
+                    {item.nozzle}: closing {item.closing ?? 'missing'} · {item.litres === null ? 'no volume' : `${item.litres} L`} · {item.status}
+                    {item.note ? ` — ${item.note}` : ''}
+                  </p>
                 ))}
               </div>
             )}
@@ -474,7 +495,7 @@ export default function Shifts() {
                       </td>
                       <td><StatusBadge status={nozzle.status} /></td>
                       <td className="text-right">
-                        {can('shifts.close') && shift.status !== 'REVERSED' && (
+                        {can('shifts.close') && shift.status === 'OPEN' && (
                           <Button size="sm" variant="ghost" onClick={() => setEditNozzle(nozzle)}>Edit</Button>
                         )}
                       </td>
@@ -645,7 +666,7 @@ function CloseShiftModal({
       open={open}
       onClose={onClose}
       title={`Close shift #${shift.shiftNumber}`}
-      description="Closing readings are taken from the latest countable device snapshots. You can edit nozzle readings first."
+      description="Saved manual closing readings take priority; otherwise the latest countable device snapshots are used."
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
@@ -747,8 +768,8 @@ function EditNozzleModal({
             loading={loading}
             onClick={() =>
               onSubmit({
-                openingReading: shift.status === 'OPEN' ? opening : undefined,
-                closingReading: closing,
+                openingReading: shift.status === 'OPEN' && opening.trim() && opening !== (nozzle.openingReading ?? '') ? opening : undefined,
+                closingReading: closing.trim() && closing !== (nozzle.closingReading ?? '') ? closing : undefined,
                 adjustmentLitres: adjustment || '0',
                 adjustmentReason: reason || undefined,
               })

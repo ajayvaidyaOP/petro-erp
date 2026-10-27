@@ -9,12 +9,12 @@ import { Button, Input } from '../components/ui';
 interface DemoAccount {
   email: string;
   name: string;
-  role_key: string;
-  tenant_name: string | null;
+  roleKey: string;
+  tenantName: string | null;
 }
 
 interface DemoAccounts {
-  note: string;
+  warning: string;
   password: string;
   accounts: DemoAccount[];
 }
@@ -180,6 +180,14 @@ export default function Login() {
               </Button>
             </form>
 
+            {window.self !== window.top && (
+              <p className="mt-3 text-center text-xs text-ink-400">
+                Browser blocking the session?{' '}
+                <a className="text-accent underline" href="/login" target="_blank" rel="noopener noreferrer">
+                  Open preview in a new tab
+                </a>
+              </p>
+            )}
             <p className="mt-4 text-center text-[11px] text-ink-600">
               Organization owners are onboarded by the platform administrator. Public staff registration is disabled.
             </p>
@@ -191,7 +199,7 @@ export default function Login() {
                 <p className="text-xs font-semibold uppercase tracking-wider text-warn/90">Demo accounts</p>
                 <span className="text-[10px] text-ink-500">password: {demo.data.password}</span>
               </div>
-              <p className="mt-1 text-[11px] text-ink-500">{demo.data.note}</p>
+              <p className="mt-1 text-[11px] text-ink-500">{demo.data.warning}</p>
               <p className="mt-0.5 text-[11px] text-accent">Click any account to sign in instantly.</p>
               <div className="mt-3 grid gap-1.5">
                 {demo.data.accounts.map((account) => (
@@ -204,10 +212,10 @@ export default function Login() {
                   >
                     <span className="min-w-0">
                       <span className="block truncate text-xs font-medium text-ink-200">
-                        {account.name} · <span className="text-ink-500">{account.role_key.replace(/_/g, ' ')}</span>
+                        {account.name} · <span className="text-ink-500">{account.roleKey.replace(/_/g, ' ')}</span>
                       </span>
                       <span className="block truncate text-[10px] text-ink-500">
-                        {account.tenant_name ?? 'Platform'} — {account.email}
+                        {account.tenantName ?? 'Platform'} — {account.email}
                       </span>
                     </span>
                     {signingInAs === account.email ? (

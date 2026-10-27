@@ -98,14 +98,28 @@ npm run dev                 # frontend + backend
 npm run dev:frontend        # Vite only
 npm run dev:backend         # Express API only
 npm run dev:gateway         # requires a registered device key in .env
-npm test                    # API and meter tests
+npm test                    # API, authorization, and meter tests
+npm run test:e2e            # browser workflows (install Chromium first; see below)
 npm run typecheck           # shared, backend, frontend, and gateway
 npm run build               # frontend production assets + backend type/build check
 npm run db:seed             # seed demo records if the database is empty
 npm run db:reset            # DESTRUCTIVE: delete the local SQLite DB and re-seed it
 ```
 
+### Automated checks
+
 `npm test` uses the separate ignored `db/test-petroflow.db`; it does not reset `db/petroflow.db`. Do not run `npm run db:reset` if you need to keep your local data.
+
+For browser checks, install Playwright's Chromium once, then run:
+
+```powershell
+npx playwright install chromium
+npm run test:e2e
+```
+
+The browser suite starts its own API and Vite servers on ports **4101** and **5174** and resets only the dedicated ignored `db/e2e-petroflow.db`. It covers login/logout (including an embedded HTTPS preview with third-party cookies blocked), role-based screen navigation, station switching, pagination, customer and expense entry, simulated device events, gateway registration, and shift preview/edit/close. These are automated checks against demo data, not a substitute for production acceptance testing or commissioning real forecourt hardware. In restricted environments, `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` can point to an existing compatible Chromium binary.
+
+Development HTTPS previews use secure, partitioned session cookies so login works inside an embedded preview without enabling ordinary third-party cookies. Localhost and production sessions retain `SameSite=Lax`. If a browser does not support embedded session cookies, use **Open preview in a new tab** on the sign-in screen.
 
 ## Single-server local run
 
@@ -127,7 +141,7 @@ This repository does not deploy itself. A real production deployment needs an in
 - Set `NODE_ENV=production`, `COOKIE_SECURE=true`, an explicit `SESSION_COOKIE_NAME`, the public HTTPS `APP_ORIGIN`, and exact `ALLOWED_ORIGINS`. Set `ENABLE_DEMO_TOOLS=false`; do not use demo accounts/passwords or run the demo seed against production data. Production startup fails fast if required security settings are missing.
 - Put `DATABASE_FILE` on a durable, writable, backed-up disk. SQLite is the database adapter implemented here; run one application instance against that file. Do not use ephemeral storage or horizontally scale multiple writers against a local SQLite file. The commented MySQL variables in `.env.example` do not enable a MySQL adapter.
 - If TLS is terminated by a trusted reverse proxy, configure `TRUST_PROXY=true` only for that deployment topology. Restrict public origins and network access to the API and database volume.
-- Run `npm audit` and resolve the findings before go-live. The current lockfile reports 15 findings overall, including two moderate production-dependency findings; this refactor does not upgrade dependencies across major versions.
+- Run `npm audit` and resolve any findings before go-live. The lockfile reported zero vulnerabilities when last checked; advisories can change, so repeat the audit as part of deployment.
 - Development-only Vite host allowances and iframe relaxation are not part of production serving. The production Express app retains `X-Frame-Options: SAMEORIGIN`; do not weaken it to make a public site embeddable.
 
 For multi-instance/high-availability production, a supported shared database adapter and deployment-specific migration/backup plan are required first. Do not treat `npm run dev`, `vite preview`, or the local single-server command above as a public launch.

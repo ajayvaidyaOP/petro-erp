@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import { z } from 'zod';
 import { env } from '../env.js';
 import { all, get, run, shape, shapeAll } from '../db/index.js';
@@ -16,6 +16,7 @@ import {
 import { assertPasswordStrength, hashPassword, verifyPassword } from '../lib/security.js';
 import { audit } from '../lib/audit.js';
 import { nowIso } from '../lib/time.js';
+import { isDevelopmentPreviewRequest } from '../lib/preview.js';
 
 export const authRouter = Router();
 
@@ -24,14 +25,23 @@ const loginSchema = z.object({
   password: z.string().min(1).max(200),
 });
 
-function cookieOptions(expiresAt: string) {
+function cookieScope(req: Request) {
+  // Arena's HTTPS preview runs inside a cross-site iframe. Lax cookies are not
+  // sent there, so a successful login would immediately lose its session. CHIPS
+  // keeps the preview cookie isolated to its embedding site even when browsers
+  // block ordinary third-party cookies. Production/local cookies remain Lax.
+  const isPreview = isDevelopmentPreviewRequest(req);
   return {
     httpOnly: true,
-    sameSite: 'lax' as const,
-    secure: env.COOKIE_SECURE,
+    sameSite: isPreview ? 'none' as const : 'lax' as const,
+    secure: isPreview || env.COOKIE_SECURE,
+    partitioned: isPreview,
     path: '/',
-    expires: new Date(expiresAt),
   };
+}
+
+function cookieOptions(req: Request, expiresAt: string) {
+  return { ...cookieScope(req), expires: new Date(expiresAt) };
 }
 
 authRouter.post(
@@ -55,7 +65,7 @@ authRouter.post(
       }
     }
     const session = createSession(String(row.id), { ip: req.ip, userAgent: req.header('user-agent') });
-    res.cookie(env.SESSION_COOKIE_NAME, session.token, cookieOptions(session.expiresAt));
+    res.cookie(env.SESSION_COOKIE_NAME, session.token, cookieOptions(req, session.expiresAt));
     run('UPDATE users SET last_login_at = ? WHERE id = ?', [nowIso(), String(row.id)]);
     audit(req, {
       action: 'AUTH_LOGIN', entity: 'User', entityId: String(row.id),
@@ -75,7 +85,7 @@ authRouter.post(
       revokeSession(req.auth.sessionId);
       audit(req, { action: 'AUTH_LOGOUT', entity: 'User', entityId: req.auth.user.id });
     }
-    res.clearCookie(env.SESSION_COOKIE_NAME, { path: '/' });
+    res.clearCookie(env.SESSION_COOKIE_NAME, cookieScope(req));
     return ok(res, { loggedOut: true });
   }),
 );

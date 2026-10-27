@@ -180,12 +180,11 @@ export function tanksForProduct(stationId: string, productId: string) {
 }
 
 /**
- * Split a dispensed (or reversed) volume across every active tank holding the
- * product. Pumps commonly run two tanks of the same grade, so posting the whole
- * volume to the first tank would overdraw it and leave the second untouched.
- * The split follows current book stock; with no stock on record it falls back to
- * an equal split. Rounding remainder is assigned to the last tank so the sum
- * always equals the requested litres.
+ * Split a dispensed volume across every active tank holding the product. The
+ * split follows current book stock; with no stock it falls back to equal shares.
+ * Shares are rounded to ledger precision as they are assigned, and the final
+ * tank receives the remainder so the posted total equals the requested litres.
+ * Reversals must instead use the original recorded movements.
  */
 export function allocateAcrossTanks(stationId: string, productId: string, litres: Decimal) {
   const tanks = tanksForProduct(stationId, productId);
@@ -193,17 +192,16 @@ export function allocateAcrossTanks(stationId: string, productId: string, litres
   if (tanks.length === 1) return [{ tankId: tanks[0]!.id, litres }];
   const stocks = tanks.map((tank) => ({
     tankId: tank.id,
-    book: Math.max(0, Number(tankBookStock(tank.id))),
+    book: Decimal.max(0, tankBookStock(tank.id)),
   }));
-  const totalBook = stocks.reduce((sum, entry) => sum + entry.book, 0);
-  let remaining = litres;
+  const totalBook = stocks.reduce((sum, entry) => sum.plus(entry.book), D(0));
+  let remaining = litres.toDecimalPlaces(3);
   return stocks.map((entry, index) => {
     const isLast = index === stocks.length - 1;
-    const share = isLast
-      ? remaining
-      : totalBook > 0
-        ? litres.mul(entry.book).div(totalBook)
-        : litres.div(stocks.length);
+    const proposed = totalBook.gt(0)
+      ? litres.mul(entry.book).div(totalBook)
+      : litres.div(stocks.length);
+    const share = isLast ? remaining : Decimal.min(remaining, proposed.toDecimalPlaces(3));
     remaining = remaining.minus(share);
     return { tankId: entry.tankId, litres: share };
   });

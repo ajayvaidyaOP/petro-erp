@@ -4,7 +4,7 @@ import { asyncHandler, ok } from '../lib/http.js';
 import { badRequest, forbidden, notFound, unprocessable } from '../lib/errors.js';
 import { can, requireAuth, type AuthContext } from '../lib/auth.js';
 import { accessibleStationIds, getStationOrThrow, tenantIdOf } from '../lib/tenant.js';
-import { istDayEnd, istDayStart, isIsoDate, todayIst } from '../lib/time.js';
+import { addDays, istDayEnd, istDayStart, isIsoDate, todayIst } from '../lib/time.js';
 import { D, money } from '../lib/decimal.js';
 import { tankSummary, signedLitres, tankBookStock } from '../lib/stock.js';
 import { ACCOUNTING_DISCLAIMER, HARDWARE_DISCLAIMER, STOCK_VARIANCE_TOLERANCE_LITRES } from '@petroflow/shared';
@@ -110,7 +110,7 @@ reportsRouter.get(
 
     const trend: { date: string; litres: string; value: string; transactionsValue: string }[] = [];
     for (let i = 13; i >= 0; i -= 1) {
-      const day = new Date(Date.now() - i * 86_400_000).toISOString().slice(0, 10);
+      const day = addDays(date, -i);
       const dayStart = istDayStart(day);
       const dayEnd = istDayEnd(day);
       const shiftRow = get<{ litres: string; value: string }>(
@@ -268,7 +268,7 @@ reportsRouter.get(
     const days = Math.min(90, Math.max(7, Number(req.query.days ?? 30)));
     const points: Record<string, string>[] = [];
     for (let i = days - 1; i >= 0; i -= 1) {
-      const day = new Date(Date.now() - i * 86_400_000).toISOString().slice(0, 10);
+      const day = addDays(todayIst(), -i);
       const row = get<{ litres: string; value: string }>(
         `SELECT COALESCE(SUM(CAST(total_litres AS REAL)), 0) AS litres,
                 COALESCE(SUM(CAST(total_value AS REAL)), 0) AS value

@@ -7,7 +7,7 @@ import { can, requireAuth, type AuthContext } from '../lib/auth.js';
 import { getStationOrThrow, tenantIdOf } from '../lib/tenant.js';
 import { audit } from '../lib/audit.js';
 import { newId } from '../lib/ids.js';
-import { nowIso, todayIst } from '../lib/time.js';
+import { isIsoDate, nowIso, todayIst } from '../lib/time.js';
 import { D, Decimal, money, rate as fmtRate } from '../lib/decimal.js';
 import { evaluateReading, latestCountableReading, lastReading } from '../lib/meter.js';
 import { priceAt } from '../lib/pricing.js';
@@ -91,8 +91,11 @@ function shiftDetail(shift: ShiftRow) {
       WHERE snr.shift_id = ? ORDER BY d.code, n.number`,
     [shift.id],
   );
+  const station = get<{ name: string; code: string }>('SELECT name, code FROM stations WHERE id = ?', [shift.station_id]);
   return {
     ...(shape(shift as unknown as Row) as Record<string, unknown>),
+    stationName: station?.name ?? null,
+    stationCode: station?.code ?? null,
     operatorName: operatorName(shift.operator_id),
     openedByName: operatorName(shift.opened_by),
     closedByName: operatorName(shift.closed_by),
@@ -154,14 +157,16 @@ shiftRouter.get(
     const auth = req.auth as AuthContext;
     if (!can(auth, 'shifts.read')) throw forbidden();
     const tenantId = tenantIdOf(auth);
-    const hours = settingsValue('shifts.unclosedAlertHours', tenantId, null, 14);
+    const stationId = typeof req.query.stationId === 'string' && req.query.stationId ? req.query.stationId : null;
+    if (stationId) getStationOrThrow(auth, stationId);
+    const hours = settingsValue('shifts.unclosedAlertHours', tenantId, stationId, 14);
     const rows = all<Record<string, unknown>>(
       `SELECT s.*, st.name AS station_name, u.name AS operator_name
          FROM shifts s JOIN stations st ON st.id = s.station_id
          LEFT JOIN users u ON u.id = s.operator_id
-        WHERE s.tenant_id = ? AND s.status = 'OPEN'
+        WHERE s.tenant_id = ? AND s.status = 'OPEN' ${stationId ? 'AND s.station_id = ?' : ''}
         ORDER BY s.opened_at ASC`,
-      [tenantId],
+      stationId ? [tenantId, stationId] : [tenantId],
     );
     const now = Date.now();
     const alerts = rows
@@ -193,9 +198,18 @@ shiftRouter.get(
 
 // -------------------------------------------------------------------- open
 
+const nonNegativeDecimal = z.union([
+  z.string().trim().max(40).regex(/^(?:\d+(?:\.\d+)?|\.\d+)$/, 'Enter a non-negative number'),
+  z.number().finite().nonnegative(),
+]).transform(String);
+const signedDecimal = z.union([
+  z.string().trim().max(40).regex(/^-?(?:\d+(?:\.\d+)?|\.\d+)$/, 'Enter a valid number'),
+  z.number().finite(),
+]).transform(String);
+
 const openingReadingSchema = z.object({
   nozzleId: z.string().min(3),
-  reading: z.union([z.string(), z.number()]).transform(String),
+  reading: nonNegativeDecimal,
   readingAt: z.string().datetime().optional(),
 });
 
@@ -209,8 +223,8 @@ shiftRouter.post(
         stationId: z.string().min(3),
         operatorId: z.string().min(3).optional().nullable(),
         shiftNumber: z.coerce.number().int().min(1).max(20).optional(),
-        businessDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-        openingCash: z.union([z.string(), z.number()]).transform(String).optional(),
+        businessDate: z.string().refine(isIsoDate, 'Enter a valid YYYY-MM-DD date').optional(),
+        openingCash: nonNegativeDecimal.optional(),
         notes: z.string().max(500).optional().nullable(),
         captureReadings: z.boolean().optional(),
         openingReadings: z.array(openingReadingSchema).max(50).optional(),
@@ -280,7 +294,7 @@ shiftRouter.post(
                sequence, delta_litres, previous_reading_id, is_countable, is_simulated, note, created_by, created_at)
              VALUES (?, ?, ?, ?, ?, 'L', ?, 'MANUAL', ?, 0, ?, ?, ?, 0, ?, ?, ?)`,
             [openingReadingId, station.tenant_id, station.id, nozzle.id, fmtRate(D(manual.reading)),
-              evaluation.quality, manual.readingAt ?? nowIso(), evaluation.delta, previous?.id ?? null,
+              evaluation.quality, manual.readingAt ?? nowIso(), evaluation.delta?.toFixed(3) ?? null, previous?.id ?? null,
               evaluation.countable ? 1 : 0, 'Shift opening reading captured manually', auth.user.id, nowIso()],
           );
           openingReading = fmtRate(D(manual.reading));
@@ -339,14 +353,23 @@ shiftRouter.patch(
     if (!row) throw notFound('Nozzle reading not found for this shift');
     const body = parse(
       z.object({
-        openingReading: z.union([z.string(), z.number()]).transform(String).optional(),
-        closingReading: z.union([z.string(), z.number()]).transform(String).optional(),
-        adjustmentLitres: z.union([z.string(), z.number()]).transform(String).optional(),
+        openingReading: nonNegativeDecimal.optional(),
+        closingReading: nonNegativeDecimal.optional(),
+        adjustmentLitres: signedDecimal.optional(),
         adjustmentReason: z.string().max(300).optional().nullable(),
         note: z.string().max(300).optional().nullable(),
       }),
       req.body,
     );
+    if ((body.openingReading !== undefined || body.closingReading !== undefined)
+      && !settingsValue('hardware.allowManualFallback', shift.tenant_id, shift.station_id, 1)) {
+      throw forbidden('Manual reading entry is disabled in station settings');
+    }
+    const adjustment = body.adjustmentLitres ?? String(row.adjustment_litres ?? '0');
+    const reason = body.adjustmentReason ?? row.adjustment_reason;
+    if (!D(adjustment).isZero() && (typeof reason !== 'string' || !reason.trim())) {
+      throw unprocessable('An adjustment reason is required when adjusting litres');
+    }
     const sets: string[] = [];
     const params: (string | number | null)[] = [];
     if (body.openingReading !== undefined) {
@@ -421,6 +444,10 @@ function captureClosings(
       WHERE snr.shift_id = ? ORDER BY snr.nozzle_id`,
     [shift.id],
   );
+  const nozzleIds = new Set(rows.map((row) => String(row.nozzle_id)));
+  for (const nozzleId of supplied.keys()) {
+    if (!nozzleIds.has(nozzleId)) throw unprocessable('Closing reading references a nozzle outside this shift');
+  }
   const maxJump = settingsValue('hardware.maxJumpLitres', shift.tenant_id, shift.station_id, 10000);
   const allowManual = settingsValue('hardware.allowManualFallback', shift.tenant_id, shift.station_id, 1);
   const operations: {
@@ -443,7 +470,13 @@ function captureClosings(
 
   for (const row of rows) {
     const nozzleId = String(row.nozzle_id);
-    const manual = supplied.get(nozzleId);
+    // The shift editor saves manual closings before the user presses Close.
+    // Reuse those values unless the close request supplies a newer override;
+    // otherwise closing silently replaced them with device readings.
+    const savedManual: { reading: string; readingAt?: string } | undefined = row.closing_source === 'MANUAL' && row.closing_reading != null
+      ? { reading: String(row.closing_reading) }
+      : undefined;
+    const manual = supplied.get(nozzleId) ?? savedManual;
     if (manual && !allowManual) {
       throw forbidden('Manual closing capture is disabled in station settings');
     }
@@ -477,7 +510,7 @@ function captureClosings(
              delta_litres, previous_reading_id, is_countable, is_simulated, note, created_by, created_at)
            VALUES (?, ?, ?, ?, ?, 'L', ?, 'MANUAL', ?, 0, ?, ?, ?, 0, ?, ?, ?)`,
           [closingReadingId, shift.tenant_id, shift.station_id, nozzleId, closing, evaluation.quality,
-            manual.readingAt ?? nowIso(), evaluation.delta, previous?.id ?? null,
+            manual.readingAt ?? nowIso(), evaluation.delta?.toFixed(3) ?? null, previous?.id ?? null,
             evaluation.countable ? 1 : 0, 'Shift closing capture', auth.user.id, nowIso()],
         );
       }
@@ -503,10 +536,12 @@ function captureClosings(
     } else {
       const raw = D(closing).minus(D(opening));
       const adjusted = raw.plus(D(adjustment));
-      if (raw.lt(0)) {
+      if (raw.lt(0) || adjusted.lt(0)) {
         status = 'FLAGGED';
-        variance = raw.toFixed(3);
-        note = note ?? 'Closing totalizer is lower than the opening value — reading reset or meter replacement suspected';
+        variance = (raw.lt(0) ? raw : adjusted).toFixed(3);
+        note = note ?? (raw.lt(0)
+          ? 'Closing totalizer is lower than the opening value — reading reset or meter replacement suspected'
+          : 'The adjustment would make net litres negative');
       } else {
         litres = adjusted.toFixed(3);
       }
@@ -545,7 +580,7 @@ shiftRouter.post(
     const body = parse(
       z.object({
         readings: z
-          .array(z.object({ nozzleId: z.string().min(3), reading: z.union([z.string(), z.number()]).transform(String) }))
+          .array(z.object({ nozzleId: z.string().min(3), reading: nonNegativeDecimal }))
           .max(50)
           .optional(),
       }),
@@ -588,13 +623,13 @@ shiftRouter.post(
     if (shift.status !== 'OPEN') throw conflict('This shift is not open');
     const body = parse(
       z.object({
-        closingCash: z.union([z.string(), z.number()]).transform(String).optional(),
+        closingCash: nonNegativeDecimal.optional(),
         notes: z.string().max(1000).optional().nullable(),
         readings: z
           .array(
             z.object({
               nozzleId: z.string().min(3),
-              reading: z.union([z.string(), z.number()]).transform(String),
+              reading: nonNegativeDecimal,
               readingAt: z.string().datetime().optional(),
             }),
           )
@@ -614,7 +649,11 @@ shiftRouter.post(
       const productTotals = new Map<string, { litres: Decimal; label: string }>();
 
       for (const op of operations) {
-        if (op.status === 'FLAGGED' || D(op.variance).abs().gt(tolerance)) flagged = true;
+        if (D(op.variance).abs().gt(tolerance)) {
+          op.status = 'FLAGGED';
+          op.note = op.note ?? 'Variance exceeds the configured tolerance';
+        }
+        if (op.status === 'FLAGGED') flagged = true;
         if (op.litres) {
           totalLitres = totalLitres.plus(D(op.litres));
           totalValue = totalValue.plus(D(op.value));
@@ -680,7 +719,7 @@ shiftRouter.post(
       ...detail,
       warnings: detail.nozzleReadings
         .filter((row) => String(row.status) === 'FLAGGED')
-        .map((row) => `${row.nozzle_label}: ${String(row.note ?? 'needs review')}`),
+        .map((row) => `${row.nozzleLabel}: ${String(row.note ?? 'needs review')}`),
     });
   }),
 );
@@ -728,41 +767,31 @@ shiftRouter.post(
     const shift = loadShift(auth, req.params.id);
     if (!['CLOSED', 'FLAGGED'].includes(shift.status)) throw conflict('Only closed or flagged shifts can be reversed');
     const body = parse(z.object({ reason: z.string().min(10).max(1000) }), req.body);
-    const rows = all<Record<string, unknown>>(
-      `SELECT snr.litres_sold, n.product_id, n.station_id, st.tenant_id
-         FROM shift_nozzle_readings snr
-         JOIN nozzles n ON n.id = snr.nozzle_id
-         JOIN stations st ON st.id = n.station_id
-        WHERE snr.shift_id = ?`,
+    // Reverse the actual posted movements, not a fresh allocation based on
+    // today's tank balances. Tanks may have changed since the shift closed.
+    const movements = all<{ tank_id: string; product_id: string; quantity_litres: string }>(
+      `SELECT tank_id, product_id, quantity_litres FROM stock_movements
+        WHERE reference_type = 'SHIFT' AND reference_id = ? AND type = 'DISPENSED'`,
       [shift.id],
     );
-    const byProduct = new Map<string, Decimal>();
-    for (const row of rows) {
-      if (!row.litres_sold) continue;
-      const key = String(row.product_id);
-      byProduct.set(key, (byProduct.get(key) ?? D(0)).plus(D(String(row.litres_sold))));
-    }
     tx(() => {
-      for (const [productId, litres] of byProduct) {
-        if (litres.lte(0)) continue;
-        // Reverse in the same proportions the original sale was allocated.
-        for (const allocation of allocateAcrossTanks(shift.station_id, productId, litres)) {
-          if (allocation.litres.lte(0)) continue;
-          recordMovement({
-            tenantId: shift.tenant_id,
-            stationId: shift.station_id,
-            tankId: allocation.tankId,
-            productId,
-            type: 'ADJUSTMENT',
-            quantityLitres: allocation.litres.negated().toFixed(3),
-            occurredAt: nowIso(),
-            referenceType: 'SHIFT_REVERSAL',
-            referenceId: shift.id,
-            note: `Reversal of shift #${shift.shift_number}: ${body.reason}`,
-            createdBy: auth.user.id,
-            isDemo: Boolean(shift.is_demo),
-          });
-        }
+      for (const movement of movements) {
+        const litres = D(movement.quantity_litres).abs();
+        if (litres.isZero()) continue;
+        recordMovement({
+          tenantId: shift.tenant_id,
+          stationId: shift.station_id,
+          tankId: movement.tank_id,
+          productId: movement.product_id,
+          type: 'ADJUSTMENT',
+          quantityLitres: litres.negated().toFixed(3),
+          occurredAt: nowIso(),
+          referenceType: 'SHIFT_REVERSAL',
+          referenceId: shift.id,
+          note: `Reversal of shift #${shift.shift_number}: ${body.reason}`,
+          createdBy: auth.user.id,
+          isDemo: Boolean(shift.is_demo),
+        });
       }
       run("UPDATE shifts SET status = 'REVERSED', close_notes = ?, updated_at = ? WHERE id = ?", [
         `${shift.close_notes ? `${shift.close_notes}\n` : ''}REVERSED: ${body.reason}`, nowIso(), shift.id,

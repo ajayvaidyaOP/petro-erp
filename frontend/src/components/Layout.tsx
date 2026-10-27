@@ -71,7 +71,7 @@ function tenantNav(can: (p: string) => boolean): NavGroup[] {
   const groups: NavGroup[] = [
     {
       title: 'Overview',
-      items: [{ to: '/', label: 'Station Dashboard', icon: <LayoutDashboard className="h-4 w-4" />, end: true }],
+      items: [{ to: '/', label: 'Station Dashboard', icon: <LayoutDashboard className="h-4 w-4" />, permission: 'reports.read', end: true }],
     },
     {
       title: 'Operations',
@@ -84,7 +84,7 @@ function tenantNav(can: (p: string) => boolean): NavGroup[] {
     {
       title: 'Inventory',
       items: [
-        { to: '/tanks', label: 'Tanks & Stock', icon: <Database className="h-4 w-4" />, permission: 'tanks.read' },
+        { to: '/tanks', label: 'Tanks & Stock', icon: <Database className="h-4 w-4" />, permission: 'stock.read' },
         { to: '/deliveries', label: 'Deliveries', icon: <Truck className="h-4 w-4" />, permission: 'deliveries.read' },
       ],
     },
@@ -437,7 +437,7 @@ export function Layout() {
                 <span className="hidden text-left leading-tight sm:block">
                   <span className="block text-xs font-medium text-ink-100">{me?.user.name}</span>
                   <span className="block text-[10px] uppercase tracking-wide text-ink-500">
-                    {me?.role.replace(/_/g, ' ')}
+                    {me?.user.roleName ?? me?.user.roleKey.replace(/_/g, ' ')}
                   </span>
                 </span>
                 <ChevronDown className="h-3.5 w-3.5 text-ink-500" />

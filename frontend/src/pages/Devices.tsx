@@ -71,7 +71,7 @@ interface Diagnostics {
 }
 
 export default function Devices() {
-  const { can } = useAuth();
+  const { can, me } = useAuth();
   const { stationId } = useStations();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -92,9 +92,9 @@ export default function Devices() {
   const [eventPage, setEventPage] = useState(1);
   const [confirmDisable, setConfirmDisable] = useState<Device | null>(null);
 
-  const devices = useQuery<{ data: Device[]; meta: ListMeta }>({
+  const devices = useQuery<Device[]>({
     queryKey: ['devices', stationId],
-    queryFn: () => apiList<Device>(`/devices?stationId=${stationId}&pageSize=100`),
+    queryFn: () => apiGet<Device[]>(`/devices?stationId=${stationId}&pageSize=100`),
     enabled: Boolean(stationId),
   });
   const diagnostics = useQuery<Diagnostics>({
@@ -125,7 +125,7 @@ export default function Devices() {
         model: form.model || null,
         serialNumber: form.serialNumber || null,
         protocol: form.protocol || null,
-        simulated: form.simulated,
+        isSimulated: form.simulated,
       }),
     onSuccess: (device) => {
       setCreateOpen(false);
@@ -139,7 +139,7 @@ export default function Devices() {
   const rotate = useMutation({
     mutationFn: (id: string) => apiPost<{ apiKey: string; keyVersion: number; warning: string }>(`/devices/${id}/rotate-key`),
     onSuccess: (data, id) => {
-      const device = (devices.data?.data ?? []).find((d) => d.id === id);
+      const device = (devices.data ?? []).find((d) => d.id === id);
       setIssuedKey({ apiKey: data.apiKey, device: device?.name ?? 'gateway', warning: data.warning });
       invalidate();
     },
@@ -169,7 +169,7 @@ export default function Devices() {
     onError: (error: Error) => toast('Simulation failed', { tone: 'danger', description: error.message }),
   });
 
-  const rows = devices.data?.data ?? [];
+  const rows = devices.data ?? [];
   const online = rows.filter((d) => d.online).length;
   const pending = rows.reduce((acc, d) => acc + d.pendingEvents, 0);
   const simulated = rows.filter((d) => d.isSimulated).length;
@@ -181,7 +181,7 @@ export default function Devices() {
         description="Hardware gateways authenticate with a device key, buffer locally and push idempotent events. This screen shows liveness, credential versions and raw event delivery."
         actions={
           <div className="flex gap-2">
-            {can('devices.write') && simulated > 0 ? (
+            {me?.demoMode && can('devices.write') && simulated > 0 ? (
               <Button variant="outline" loading={simulate.isPending} onClick={() => simulate.mutate()}>
                 <Zap className="h-4 w-4" /> Inject simulated reading
               </Button>
@@ -391,8 +391,7 @@ export default function Devices() {
           <Field label="Device type">
             <Select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
               <option value="GATEWAY">Local gateway</option>
-              <option value="DISPENSER_CONTROLLER">Dispenser controller</option>
-              <option value="SIMULATOR">Simulator</option>
+              <option value="CONTROLLER">Dispenser controller</option>
             </Select>
           </Field>
           <Field label="Vendor">

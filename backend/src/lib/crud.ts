@@ -103,7 +103,11 @@ export function makeCrudRouter(options: CrudOptions): Router {
           const station = getStationOrThrow(auth, stationId);
           clauses.push('station_id = ?');
           params.push(station.id);
-        } else if (!auth.allStations) {
+        } else if (auth.allStations) {
+          // An owner can see all stations in their tenant, not every tenant's stations.
+          clauses.push('station_id IN (SELECT id FROM stations WHERE tenant_id = ?)');
+          params.push(tenantIdOf(auth));
+        } else {
           const ids = [...auth.stationIds];
           clauses.push(`station_id IN (${ids.length ? ids.map(() => '?').join(',') : "''"})`);
           params.push(...ids);
@@ -152,7 +156,8 @@ export function makeCrudRouter(options: CrudOptions): Router {
         const stationId = String(data.stationId ?? req.body.stationId ?? '');
         const station = getStationOrThrow(auth, stationId);
         data.stationId = station.id;
-        tenantIdForInsert = station.tenant_id;
+        // Some station-owned tables (tanks, dispensers, nozzles) do not have a tenant_id column.
+        if (options.tenantScoped) tenantIdForInsert = station.tenant_id;
       } else if (options.tenantScoped) {
         tenantIdForInsert = tenantIdOf(auth);
       }

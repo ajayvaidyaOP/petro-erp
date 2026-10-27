@@ -66,6 +66,35 @@ describe('authentication & authorization', () => {
     expect(res.headers['set-cookie']).toBeUndefined();
   });
 
+  it('returns the camelCase demo account contract used by the login screen', async () => {
+    const res = await request(app).get('/api/v1/auth/demo-accounts');
+    expect(res.status).toBe(200);
+    const owner = res.body.data.accounts.find((account: { email: string }) => account.email === 'owner@sunrisefuels.in');
+    expect(owner).toMatchObject({ roleKey: 'OWNER', tenantName: 'Sunrise Fuels Pvt Ltd' });
+    expect(res.body.data.warning).toContain('local evaluation');
+  });
+
+  it('rate-limits credential attempts without locking out session reads or logout', async () => {
+    const { createApp } = await import('../src/app.js');
+    const { env } = await import('../src/env.js');
+    const isolatedApp = createApp();
+    const agent = request.agent(isolatedApp);
+    expect((await agent.post('/api/v1/auth/login').send({ email: 'owner@sunrisefuels.in', password: PASSWORD })).status).toBe(200);
+    for (let i = 0; i < 3; i += 1) {
+      expect((await agent.post('/api/v1/auth/login').send({ email: 'owner@sunrisefuels.in', password: PASSWORD })).status).toBe(200);
+    }
+    for (let i = 0; i < env.LOGIN_RATE_LIMIT_MAX; i += 1) {
+      expect((await agent.post('/api/v1/auth/login').send({})).status).toBe(422);
+    }
+    expect((await agent.post('/api/v1/auth/login').send({})).status).toBe(429);
+    expect((await agent.get('/api/v1/auth/demo-accounts')).status).toBe(200);
+    for (let i = 0; i < 25; i += 1) {
+      expect((await agent.get('/api/v1/auth/me')).status).toBe(200);
+    }
+    expect((await agent.post('/api/v1/auth/logout').send({})).status).toBe(200);
+    expect((await agent.get('/api/v1/auth/me')).status).toBe(401);
+  });
+
   it('returns the authenticated profile with permissions', async () => {
     const res = await ownerAgent.get('/api/v1/auth/me');
     expect(res.status).toBe(200);
@@ -121,6 +150,35 @@ describe('tenant isolation', () => {
     expect(ids).toContain((await ownerBAgent.get('/api/v1/auth/me')).body.data.stations[0].id);
   });
 
+  it('keeps unfiltered station-owned catalog lists within the owner’s tenant', async () => {
+    for (const resource of ['tanks', 'dispensers', 'nozzles']) {
+      const own = await ownerAgent.get(`/api/v1/catalog/${resource}`);
+      const other = await ownerBAgent.get(`/api/v1/catalog/${resource}`);
+      expect(own.status).toBe(200);
+      expect(other.status).toBe(200);
+      expect(other.body.data.length).toBeGreaterThan(0);
+      const ownIds = new Set(own.body.data.map((row: { id: string }) => row.id));
+      for (const row of other.body.data) expect(ownIds.has(row.id)).toBe(false);
+    }
+  });
+
+  it('creates station-owned tanks, dispensers and nozzles without a tenant_id column', async () => {
+    const products = await ownerAgent.get('/api/v1/catalog/products');
+    const productId = products.body.data[0].id as string;
+    const tank = await ownerAgent.post('/api/v1/catalog/tanks').send({
+      stationId: stationBId, code: 'T-REG', name: 'Regression tank', productId, capacityLitres: '1000',
+    });
+    expect(tank.status, JSON.stringify(tank.body)).toBe(201);
+    const dispenser = await ownerAgent.post('/api/v1/catalog/dispensers').send({
+      stationId: stationBId, code: 'D-REG', name: 'Regression dispenser', serialNumber: 'SER-REG',
+    });
+    expect(dispenser.status, JSON.stringify(dispenser.body)).toBe(201);
+    const nozzle = await ownerAgent.post('/api/v1/catalog/nozzles').send({
+      stationId: stationBId, dispenserId: dispenser.body.data.id, productId, number: 1, label: 'Regression nozzle',
+    });
+    expect(nozzle.status, JSON.stringify(nozzle.body)).toBe(201);
+  });
+
   it('blocks cross-tenant meter reading access', async () => {
     const res = await ownerBAgent.get(`/api/v1/readings?stationId=${stationAId}`);
     expect([403, 404]).toContain(res.status);
@@ -130,9 +188,58 @@ describe('tenant isolation', () => {
     const res = await cashierAgent.post('/api/v1/shifts').send({ stationId: stationBId });
     expect(res.status).toBe(403);
   });
+
+  it('scopes overdue shift alerts to the selected and authorized station', async () => {
+    const { all, run } = await import('../src/db/index.js');
+    const open = all<{ id: string; opened_at: string }>(
+      "SELECT id, opened_at FROM shifts WHERE station_id IN (?, ?) AND status = 'OPEN'", [stationAId, stationBId],
+    );
+    try {
+      for (const shift of open) run('UPDATE shifts SET opened_at = ? WHERE id = ?', ['2020-01-01T00:00:00.000Z', shift.id]);
+      for (const id of [stationAId, stationBId]) {
+        const res = await ownerAgent.get(`/api/v1/shifts/alerts?stationId=${id}`);
+        expect(res.status).toBe(200);
+        expect(res.body.data.count).toBeGreaterThan(0);
+        expect(res.body.data.alerts.every((row: { stationId: string }) => row.stationId === id)).toBe(true);
+      }
+      expect((await cashierAgent.get(`/api/v1/shifts/alerts?stationId=${stationBId}`)).status).toBe(403);
+    } finally {
+      for (const shift of open) run('UPDATE shifts SET opened_at = ? WHERE id = ?', [shift.opened_at, shift.id]);
+    }
+  });
+
+  it('does not include other stations in unfiltered hardware diagnostics', async () => {
+    const manager = await login('manager@sunrisefuels.in');
+    const allAccessible = await manager.get('/api/v1/hardware/diagnostics');
+    const selected = await manager.get(`/api/v1/hardware/diagnostics?stationId=${stationAId}`);
+    expect(allAccessible.status).toBe(200);
+    expect(allAccessible.body.data.devices.every((device: { stationId: string }) => device.stationId === stationAId)).toBe(true);
+    expect(allAccessible.body.data.eventCounts).toEqual(selected.body.data.eventCounts);
+    expect(allAccessible.body.data.qualityCounts).toEqual(selected.body.data.qualityCounts);
+    expect((await manager.get(`/api/v1/hardware/diagnostics?stationId=${stationBId}`)).status).toBe(403);
+  });
 });
 
 describe('hardware ingestion & idempotency', () => {
+  it('preserves device mode and never treats a disabled gateway as online', async () => {
+    const created = await ownerAgent.post('/api/v1/devices').send({
+      stationId: stationAId, code: 'GW-REAL-TEST', name: 'Unverified real controller', type: 'CONTROLLER', isSimulated: false,
+    });
+    expect(created.status).toBe(201);
+    expect(created.body.data.type).toBe('CONTROLLER');
+    expect(created.body.data.isSimulated).toBe(0);
+    expect(created.body.data.apiKeyHash).toBeUndefined();
+    const id = created.body.data.id as string;
+    const simulate = await ownerAgent.post('/api/v1/demo/simulate').send({ stationId: stationAId, deviceId: id });
+    expect(simulate.status).toBe(422);
+
+    const { run } = await import('../src/db/index.js');
+    run('UPDATE hardware_devices SET last_heartbeat_at = ? WHERE id = ?', [new Date().toISOString(), id]);
+    const disabled = await ownerAgent.patch(`/api/v1/devices/${id}`).send({ status: 'DISABLED' });
+    expect(disabled.status).toBe(200);
+    expect(disabled.body.data.online).toBe(false);
+  });
+
   it('authenticates gateways with device keys and deduplicates events', async () => {
     const created = await ownerAgent.post('/api/v1/devices').send({
       stationId: stationAId, code: 'GW-TEST-IDEMP', name: 'Idempotency Gateway', isSimulated: true,
@@ -242,6 +349,98 @@ describe('shift operations', () => {
     const audit = await ownerAgent.get(`/api/v1/audit?stationId=${stationBId}&search=SHIFT_NOZZLE`);
     expect(audit.status).toBe(200);
     expect(audit.body.data.length).toBeGreaterThan(0);
+
+    const preview = await ownerAgent.post(`/api/v1/shifts/${newShiftId}/capture`).send({});
+    expect(preview.status).toBe(200);
+    const previewNozzle = preview.body.data.preview.find((row: { nozzleId: string }) => row.nozzleId === nozzleId);
+    expect(previewNozzle.closing).toBe('1150.500');
+    expect(previewNozzle.litres).toBe('150.500');
+    expect((await ownerAgent.get(`/api/v1/shifts/${newShiftId}`)).body.data.status).toBe('OPEN');
+
+    const invalid = await ownerAgent.patch(`/api/v1/shifts/${newShiftId}/nozzles/${nozzleId}`)
+      .send({ closingReading: '-1' });
+    expect(invalid.status).toBe(422);
+    const badAdjustment = await ownerAgent.patch(`/api/v1/shifts/${newShiftId}/nozzles/${nozzleId}`)
+      .send({ adjustmentLitres: '-2' });
+    expect(badAdjustment.status).toBe(422);
+    const unknown = await ownerAgent.post(`/api/v1/shifts/${newShiftId}/close`)
+      .send({ readings: [{ nozzleId: 'unknown-nozzle', reading: '123' }] });
+    expect(unknown.status).toBe(422);
+
+    const secondNozzleId = opened.body.data.nozzles[1].nozzleId as string;
+    const adjusted = await ownerAgent.patch(`/api/v1/shifts/${newShiftId}/nozzles/${secondNozzleId}`)
+      .send({ openingReading: '1000', closingReading: '1010', adjustmentLitres: '-100', adjustmentReason: 'Test correction' });
+    expect(adjusted.status).toBe(200);
+    const negativePreview = await ownerAgent.post(`/api/v1/shifts/${newShiftId}/capture`).send({});
+    const flagged = negativePreview.body.data.preview.find((row: { nozzleId: string }) => row.nozzleId === secondNozzleId);
+    expect(flagged.status).toBe('FLAGGED');
+    expect(flagged.litres).toBeNull();
+
+    const closed = await ownerAgent.post(`/api/v1/shifts/${newShiftId}/close`).send({});
+    expect(closed.status, JSON.stringify(closed.body)).toBe(200);
+    const savedNozzle = closed.body.data.nozzles.find((row: { nozzleId: string }) => row.nozzleId === nozzleId);
+    expect(savedNozzle.closingReading).toBe('1150.500');
+    expect(savedNozzle.closingSource).toBe('MANUAL');
+    expect(savedNozzle.litresSold).toBe('150.500');
+    const savedFlagged = closed.body.data.nozzles.find((row: { nozzleId: string }) => row.nozzleId === secondNozzleId);
+    expect(savedFlagged.status).toBe('FLAGGED');
+    expect(savedFlagged.litresSold).toBeNull();
+  });
+});
+
+describe('shift reversal and stock allocation', () => {
+  it('reverses the original tank movements even when the tank configuration changes', async () => {
+    const { all } = await import('../src/db/index.js');
+    const closed = await ownerAgent.get(`/api/v1/shifts?stationId=${stationAId}&status=CLOSED`);
+    const id = closed.body.data[0].id as string;
+    const original = all<{ tank_id: string; product_id: string; quantity_litres: string }>(
+      "SELECT tank_id, product_id, quantity_litres FROM stock_movements WHERE reference_type = 'SHIFT' AND reference_id = ? AND type = 'DISPENSED'",
+      [id],
+    );
+    expect(original.length).toBeGreaterThan(0);
+    const extraTank = await ownerAgent.post('/api/v1/catalog/tanks').send({
+      stationId: stationAId, code: 'T-REVERSAL', name: 'Added after close', productId: original[0]!.product_id, capacityLitres: '500000',
+    });
+    expect(extraTank.status).toBe(201);
+    const opening = await ownerAgent.post('/api/v1/inventory/opening-stock').send({
+      tankId: extraTank.body.data.id, litres: '100000',
+    });
+    expect(opening.status).toBe(201);
+
+    const reversed = await ownerAgent.post(`/api/v1/shifts/${id}/reverse`).send({ reason: 'Reversal regression test' });
+    expect(reversed.status).toBe(200);
+    const offsets = all<{ tank_id: string; product_id: string; quantity_litres: string }>(
+      "SELECT tank_id, product_id, quantity_litres FROM stock_movements WHERE reference_type = 'SHIFT_REVERSAL' AND reference_id = ?",
+      [id],
+    );
+    expect(offsets.length).toBe(original.length);
+    for (const movement of original) {
+      expect(offsets).toContainEqual({
+        tank_id: movement.tank_id,
+        product_id: movement.product_id,
+        quantity_litres: (-Number(movement.quantity_litres)).toFixed(3),
+      });
+    }
+    expect(offsets.some((movement) => movement.tank_id === extraTank.body.data.id)).toBe(false);
+    expect((await ownerAgent.post(`/api/v1/shifts/${id}/reverse`).send({ reason: 'Second reversal attempt' })).status).toBe(409);
+  });
+
+  it('allocates tiny multi-tank volumes exactly to ledger precision', async () => {
+    const { allocateAcrossTanks } = await import('../src/lib/stock.js');
+    const { D } = await import('../src/lib/decimal.js');
+    const product = await ownerAgent.post('/api/v1/catalog/products').send({ code: 'ROUND', name: 'Rounding test fuel' });
+    expect(product.status).toBe(201);
+    for (let i = 0; i < 4; i += 1) {
+      const tank = await ownerAgent.post('/api/v1/catalog/tanks').send({
+        stationId: stationBId, code: `ROUND-${i}`, name: `Rounding tank ${i}`, productId: product.body.data.id, capacityLitres: '1000',
+      });
+      expect(tank.status).toBe(201);
+    }
+    const allocations = allocateAcrossTanks(stationBId, product.body.data.id, D('0.002'));
+    expect(allocations).toHaveLength(4);
+    expect(allocations.every((allocation) => allocation.litres.gte(0))).toBe(true);
+    const postedTotal = allocations.reduce((sum, allocation) => sum.plus(D(allocation.litres.toFixed(3))), D(0));
+    expect(postedTotal.toFixed(3)).toBe('0.002');
   });
 });
 
@@ -305,6 +504,7 @@ describe('query parameter validation', () => {
       `/api/v1/finance/payments?stationId=${stationAId}&from=garbage&to=nonsense`,
       '/api/v1/audit?from=garbage&to=nonsense',
       `/api/v1/finance/expenses?stationId=${stationAId}&from=2026-99-99&to=2026-10-27`,
+      `/api/v1/finance/expenses?stationId=${stationAId}&from=2026-02-30`,
     ];
     for (const path of cases) {
       const res = await ownerAgent.get(path);
@@ -324,5 +524,14 @@ describe('query parameter validation', () => {
   it('treats blank date filters as "no filter"', async () => {
     const res = await ownerAgent.get(`/api/v1/finance/expenses?stationId=${stationAId}&from=&to=`);
     expect(res.status).toBe(200);
+  });
+
+  it('ends the 14-day dashboard trend on the selected business date', async () => {
+    const res = await ownerAgent.get(`/api/v1/reports/owner-dashboard?stationId=${stationAId}&date=2026-02-28`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.trend).toHaveLength(14);
+    expect(res.body.data.trend[0].date).toBe('02-15');
+    expect(res.body.data.trend[13].date).toBe('02-28');
+    expect((await ownerAgent.get(`/api/v1/reports/owner-dashboard?stationId=${stationAId}&date=2026-02-30`)).status).toBe(400);
   });
 });

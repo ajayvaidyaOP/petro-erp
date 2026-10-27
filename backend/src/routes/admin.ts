@@ -783,7 +783,7 @@ adminRouter.get(
     return ok(res, {
       devices: rows.map((row) => ({
         ...shape(row),
-        online: row.last_heartbeat_at != null && Date.now() - new Date(String(row.last_heartbeat_at)).getTime() < 5 * 60_000,
+        online: row.status !== 'DISABLED' && row.last_heartbeat_at != null && Date.now() - new Date(String(row.last_heartbeat_at)).getTime() < 5 * 60_000,
       })),
       onlineWindowMinutes: 5,
       realHardwareVerified: false,

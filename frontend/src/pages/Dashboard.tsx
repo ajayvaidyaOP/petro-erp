@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { apiGet } from '../lib/api';
 import { useAuth, useStations } from '../lib/auth';
+import { unclosedShiftMessage, type ShiftAlertsResponse } from '../lib/shifts';
 import { useChartPalette } from '../lib/theme';
 import { formatDateTime, formatINR, formatLitres, formatNumber, timeAgo, todayIst } from '../lib/format';
 import {
@@ -65,13 +66,13 @@ interface DashboardData {
     id: string; code: string; productName: string; productColor: string; bookStockLitres: string;
     capacityLitres: string; fillPct: string; lastVarianceLitres: string | null;
   }[];
-  productSplit: { id: string; name: string; code: string; color: string; shift_litres: number; shift_value: number }[];
+  productSplit: { id: string; name: string; code: string; color: string; shiftLitres: number; shiftValue: number }[];
   devices: { total: number; online: number };
   receivables: string;
   payables: string;
   trend: { date: string; litres: string; value: string; transactionsValue: string }[];
   alerts: { level: 'info' | 'warning' | 'error'; message: string }[];
-  recentActivity: { action: string; summary: string; created_at: string; actor_email: string }[];
+  recentActivity: { action: string; summary: string; createdAt: string; actorEmail: string | null }[];
   disclaimer: string;
 }
 
@@ -91,14 +92,6 @@ interface StationSummaryRow {
   lowStockTanks: number;
   devicesTotal: number;
   devicesOnline: number;
-}
-
-interface ShiftAlert {
-  type: string;
-  severity: string;
-  message: string;
-  shiftId?: string;
-  stationId?: string;
 }
 
 export default function Dashboard() {
@@ -124,7 +117,7 @@ export default function Dashboard() {
 
   const alertsQuery = useQuery({
     queryKey: ['shift-alerts', stationId],
-    queryFn: () => apiGet<ShiftAlert[]>(`/shifts/alerts?stationId=${stationId}`),
+    queryFn: () => apiGet<ShiftAlertsResponse>(`/shifts/alerts?stationId=${stationId}`),
     enabled: Boolean(stationId) && can('shifts.read'),
     refetchInterval: 60_000,
   });
@@ -132,7 +125,7 @@ export default function Dashboard() {
   const chartData = useMemo(
     () =>
       (dashboard.data?.trend ?? []).map((row) => ({
-        date: row.date.slice(5),
+        date: row.date.length > 5 ? row.date.slice(5) : row.date,
         shiftValue: Number(row.value),
         transactionValue: Number(row.transactionsValue),
       })),
@@ -142,8 +135,8 @@ export default function Dashboard() {
   const pieData = useMemo(
     () =>
       (dashboard.data?.productSplit ?? [])
-        .filter((p) => Number(p.shift_litres) > 0)
-        .map((p) => ({ name: p.name, value: Number(p.shift_litres), color: p.color })),
+        .filter((p) => Number(p.shiftLitres) > 0)
+        .map((p) => ({ name: p.name, value: Number(p.shiftLitres), color: p.color })),
     [dashboard.data],
   );
 
@@ -186,7 +179,10 @@ export default function Dashboard() {
   const data = dashboard.data!;
   const d = data.sales;
   const openShift = data.openShifts[0] as Record<string, unknown> | undefined;
-  const alerts = [...data.alerts, ...(alertsQuery.data ?? []).map((a) => ({ level: (a.severity as 'warning') ?? 'warning', message: a.message }))];
+  const alerts = [
+    ...data.alerts,
+    ...(alertsQuery.data?.alerts ?? []).map((alert) => ({ level: 'warning' as const, message: unclosedShiftMessage(alert) })),
+  ];
 
   return (
     <>
@@ -540,7 +536,7 @@ export default function Dashboard() {
                   <div className="min-w-0">
                     <p className="truncate text-xs text-ink-300">{entry.summary}</p>
                     <p className="mt-0.5 text-[10px] text-ink-600">
-                      {entry.actor_email ?? 'system'} · {timeAgo(entry.created_at)}
+                      {entry.actorEmail ?? 'system'} · {timeAgo(entry.createdAt)}
                     </p>
                   </div>
                 </div>

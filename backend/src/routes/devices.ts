@@ -6,7 +6,7 @@ import { all, get, run, shape, shapeAll, tx, type Row } from '../db/index.js';
 import { asyncHandler, created, ok, pageMeta, paging, parse, sortClause } from '../lib/http.js';
 import { badRequest, forbidden, notFound, unauthorized, unprocessable } from '../lib/errors.js';
 import { can, requireAuth, type AuthContext } from '../lib/auth.js';
-import { getStationOrThrow, tenantIdOf } from '../lib/tenant.js';
+import { getStationOrThrow, resolveStationScope, tenantIdOf } from '../lib/tenant.js';
 import { audit } from '../lib/audit.js';
 import { newId } from '../lib/ids.js';
 import { nowIso } from '../lib/time.js';
@@ -56,9 +56,11 @@ function deviceView(row: DeviceRow) {
     "SELECT COUNT(*) AS count FROM device_events WHERE device_id = ? AND status IN ('RECEIVED','ERROR')",
     [row.id],
   );
+  const publicDevice = shape(row as unknown as Row) as Record<string, unknown>;
+  delete publicDevice.apiKeyHash;
   return {
-    ...(shape(row as unknown as Row) as Record<string, unknown>),
-    online: isOnline(row.last_heartbeat_at),
+    ...publicDevice,
+    online: row.status !== 'DISABLED' && isOnline(row.last_heartbeat_at),
     lastEventAt: lastEvent?.received_at ?? null,
     pendingEvents: pending?.count ?? 0,
   };
@@ -174,6 +176,7 @@ hardwareRouter.post(
         code: z.string().min(2).max(40),
         name: z.string().min(2).max(100),
         type: z.enum(['GATEWAY', 'CONTROLLER']).optional(),
+        isSimulated: z.boolean().optional(),
         vendor: z.string().max(80).optional().nullable(),
         model: z.string().max(80).optional().nullable(),
         serialNumber: z.string().max(80).optional().nullable(),
@@ -193,10 +196,10 @@ hardwareRouter.post(
         `INSERT INTO hardware_devices
           (id, tenant_id, station_id, code, name, type, vendor, model, serial_number, protocol, status,
            api_key_hash, api_key_prefix, key_version, is_simulated, notes, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OFFLINE', ?, ?, 1, 1, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OFFLINE', ?, ?, 1, ?, ?, ?, ?)`,
         [id, station.tenant_id, station.id, body.code, body.name, body.type ?? 'GATEWAY',
           body.vendor ?? null, body.model ?? null, body.serialNumber ?? null, body.protocol ?? null,
-          key.secretHash, key.prefix, body.notes ?? null, nowIso(), nowIso()],
+          key.secretHash, key.prefix, body.isSimulated ? 1 : 0, body.notes ?? null, nowIso(), nowIso()],
       );
       run(
         `INSERT INTO device_credentials (id, device_id, key_prefix, secret_hash, version, status, created_by, created_at)
@@ -348,25 +351,28 @@ hardwareRouter.get(
     if (!can(auth, 'devices.read')) throw forbidden();
     const stationId = typeof req.query.stationId === 'string' ? req.query.stationId : null;
     const tenantId = tenantIdOf(auth);
-    if (stationId) getStationOrThrow(auth, stationId);
-    const stationClause = stationId ? 'AND station_id = ?' : '';
-    const params = stationId ? [tenantId, stationId] : [tenantId];
+    const scope = resolveStationScope(auth, stationId);
+    const params = [tenantId, ...scope.params];
 
     const devices = all<DeviceRow>(
-      `SELECT * FROM hardware_devices WHERE tenant_id = ? ${stationClause} ORDER BY name`,
+      `SELECT * FROM hardware_devices WHERE tenant_id = ? ${scope.clause} ORDER BY name`,
       params,
     );
     const eventCounts = all<{ status: string; count: number }>(
-      `SELECT status, COUNT(*) AS count FROM device_events WHERE tenant_id = ? ${stationClause} GROUP BY status`,
+      `SELECT status, COUNT(*) AS count FROM device_events WHERE tenant_id = ? ${scope.clause} GROUP BY status`,
+      params,
+    );
+    const qualityCounts = all<{ quality: string; count: number }>(
+      `SELECT quality, COUNT(*) AS count FROM meter_readings WHERE tenant_id = ? ${scope.clause} GROUP BY quality`,
       params,
     );
     const errors = all(
-      `SELECT * FROM device_error_logs WHERE station_id IN (SELECT id FROM stations WHERE tenant_id = ? ${stationId ? 'AND id = ?' : ''})
+      `SELECT * FROM device_error_logs WHERE station_id IN (SELECT id FROM stations WHERE tenant_id = ?) ${scope.clause}
         ORDER BY created_at DESC LIMIT 25`,
       params,
     );
     const lastEvent = get<{ received_at: string }>(
-      `SELECT received_at FROM device_events WHERE tenant_id = ? ${stationClause} ORDER BY received_at DESC LIMIT 1`,
+      `SELECT received_at FROM device_events WHERE tenant_id = ? ${scope.clause} ORDER BY received_at DESC LIMIT 1`,
       params,
     );
     return ok(res, {
@@ -374,6 +380,7 @@ hardwareRouter.get(
       onlineWindowMinutes: DEVICE_ONLINE_WINDOW_MINUTES,
       devices: devices.map(deviceView),
       eventCounts: Object.fromEntries(eventCounts.map((r) => [r.status, r.count])),
+      qualityCounts: Object.fromEntries(qualityCounts.map((r) => [r.quality, r.count])),
       recentErrors: shapeAll(errors),
       lastEventAt: lastEvent?.received_at ?? null,
       adapterContract: {
@@ -520,7 +527,7 @@ const eventSchema = z
     type: z.enum(['TOTALIZER_SNAPSHOT', 'TRANSACTION']),
     occurredAt: z.string().datetime().optional(),
     sequence: z.coerce.number().int().min(0).optional(),
-    payload: z.record(z.unknown()).optional(),
+    payload: z.record(z.string(), z.unknown()).optional(),
   })
   .passthrough();
 
