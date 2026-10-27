@@ -180,7 +180,7 @@ export default function Sales() {
                           <td className="num text-right font-medium text-ink-100">{row.litresSold ? formatNumber(row.litresSold, 3) : '—'}</td>
                           <td className="num text-right text-ink-400">{row.rate ? formatINR(row.rate) : '—'}</td>
                           <td className="num text-right">{row.salesValue ? formatINR(row.salesValue) : '—'}</td>
-                          <td className={`num text-right ${row.varianceLitres && Math.abs(Number(row.varianceLitres)) > 1 ? 'text-amber-300' : 'text-ink-500'}`}>
+                          <td className={`num text-right ${row.varianceLitres && Math.abs(Number(row.varianceLitres)) > 1 ? 'text-warn' : 'text-ink-500'}`}>
                             {row.varianceLitres ? `${formatNumber(row.varianceLitres, 3)} L` : '—'}
                           </td>
                           <td><StatusBadge status={row.status} /></td>

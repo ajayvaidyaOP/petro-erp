@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { all, get, run, shape, shapeAll, tx } from '../db/index.js';
-import { asyncHandler, created, ok, pageMeta, paging, parse, sortClause } from '../lib/http.js';
+import { asyncHandler, created, dayParam, ok, pageMeta, paging, parse, sortClause } from '../lib/http.js';
 import { conflict, forbidden, notFound, unprocessable } from '../lib/errors.js';
 import { can, requireAuth, type AuthContext } from '../lib/auth.js';
 import { getStationOrThrow, tenantIdOf } from '../lib/tenant.js';
@@ -280,8 +280,10 @@ financeRouter.get(
       const value = req.query[key];
       if (typeof value === 'string' && value) { clauses.push(`${column} = ?`); params.push(value); }
     }
-    if (typeof req.query.from === 'string' && req.query.from) { clauses.push('p.occurred_at >= ?'); params.push(istDayStart(req.query.from)); }
-    if (typeof req.query.to === 'string' && req.query.to) { clauses.push('p.occurred_at <= ?'); params.push(istDayEnd(req.query.to)); }
+    const payFrom = dayParam(req.query.from, 'from');
+    const payTo = dayParam(req.query.to, 'to');
+    if (payFrom) { clauses.push('p.occurred_at >= ?'); params.push(istDayStart(payFrom)); }
+    if (payTo) { clauses.push('p.occurred_at <= ?'); params.push(istDayEnd(payTo)); }
     const where = clauses.join(' AND ');
     const order = sortClause(req.query as Record<string, unknown>, { occurredAt: 'p.occurred_at', amount: 'CAST(p.amount AS REAL)' }, 'p.occurred_at DESC');
     const total = get<{ count: number }>(`SELECT COUNT(*) AS count FROM payments p WHERE ${where}`, params)?.count ?? 0;
@@ -471,8 +473,10 @@ financeRouter.get(
       clauses.push(`e.station_id IN (${ids.length ? ids.map(() => '?').join(',') : "''"})`);
       params.push(...ids);
     }
-    if (typeof req.query.from === 'string' && req.query.from) { clauses.push('e.occurred_at >= ?'); params.push(istDayStart(req.query.from)); }
-    if (typeof req.query.to === 'string' && req.query.to) { clauses.push('e.occurred_at <= ?'); params.push(istDayEnd(req.query.to)); }
+    const expFrom = dayParam(req.query.from, 'from');
+    const expTo = dayParam(req.query.to, 'to');
+    if (expFrom) { clauses.push('e.occurred_at >= ?'); params.push(istDayStart(expFrom)); }
+    if (expTo) { clauses.push('e.occurred_at <= ?'); params.push(istDayEnd(expTo)); }
     if (typeof req.query.categoryId === 'string' && req.query.categoryId) {
       clauses.push('e.category_id = ?');
       params.push(req.query.categoryId);

@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { apiGet } from '../lib/api';
 import { useAuth, useStations } from '../lib/auth';
+import { useChartPalette } from '../lib/theme';
 import { formatDateTime, formatINR, formatLitres, formatNumber, timeAgo, todayIst } from '../lib/format';
 import {
   Badge,
@@ -104,6 +105,7 @@ export default function Dashboard() {
   const { can } = useAuth();
   const { stations, station, stationId, selectStation } = useStations();
   const [date, setDate] = useState(todayIst());
+  const chart = useChartPalette();
 
   const dashboard = useQuery({
     queryKey: ['dashboard', stationId, date],
@@ -269,7 +271,7 @@ export default function Dashboard() {
                       </td>
                       <td className="text-right text-xs text-ink-300">
                         {row.closedShifts} closed
-                        {row.openShifts > 0 && <span className="block text-emerald-300">{row.openShifts} open</span>}
+                        {row.openShifts > 0 && <span className="block text-ok">{row.openShifts} open</span>}
                       </td>
                       <td>
                         {row.flaggedShifts > 0 || row.lowStockTanks > 0 ? (
@@ -318,31 +320,36 @@ export default function Dashboard() {
               <AreaChart data={chartData} margin={{ top: 8, right: 12, bottom: 0, left: -12 }}>
                 <defs>
                   <linearGradient id="shiftFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#38bdf8" stopOpacity={0.32} />
-                    <stop offset="100%" stopColor="#38bdf8" stopOpacity={0} />
+                    <stop offset="0%" stopColor={chart.accent} stopOpacity={0.32} />
+                    <stop offset="100%" stopColor={chart.accent} stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="txFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#2dd4bf" stopOpacity={0.25} />
-                    <stop offset="100%" stopColor="#2dd4bf" stopOpacity={0} />
+                    <stop offset="0%" stopColor={chart.teal} stopOpacity={0.25} />
+                    <stop offset="100%" stopColor={chart.teal} stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1b2d4d" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} vertical={false} />
                 <XAxis
                   dataKey="date"
-                  tick={{ fontSize: 10, fill: '#6b81a3' }}
+                  tick={{ fontSize: 10, fill: chart.axis }}
                   axisLine={false}
                   tickLine={false}
                   interval="preserveStartEnd"
                   minTickGap={16}
                 />
-                <YAxis tick={{ fontSize: 10, fill: '#6b81a3' }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
+                <YAxis tick={{ fontSize: 10, fill: chart.axis }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
                 <Tooltip
-                  contentStyle={{ background: '#0d1628', border: '1px solid #27405f', borderRadius: 8, fontSize: 12 }}
-                  labelStyle={{ color: '#b3c5df' }}
+                  contentStyle={{
+                    background: chart.tooltipBg,
+                    border: `1px solid ${chart.tooltipBorder}`,
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
+                  labelStyle={{ color: chart.tooltipLabel }}
                   formatter={(value: number, name: string) => [formatINR(value), name === 'shiftValue' ? 'Totalizer estimate' : 'Recorded sales']}
                 />
-                <Area type="monotone" dataKey="shiftValue" stroke="#38bdf8" fill="url(#shiftFill)" strokeWidth={2} />
-                <Area type="monotone" dataKey="transactionValue" stroke="#2dd4bf" fill="url(#txFill)" strokeWidth={1.5} />
+                <Area type="monotone" dataKey="shiftValue" stroke={chart.accent} fill="url(#shiftFill)" strokeWidth={2} />
+                <Area type="monotone" dataKey="transactionValue" stroke={chart.teal} fill="url(#txFill)" strokeWidth={1.5} />
               </AreaChart>
             </ResponsiveContainer>
           </CardBody>
@@ -362,7 +369,12 @@ export default function Dashboard() {
                     ))}
                   </Pie>
                   <Tooltip
-                    contentStyle={{ background: '#0d1628', border: '1px solid #27405f', borderRadius: 8, fontSize: 12 }}
+                    contentStyle={{
+                      background: chart.tooltipBg,
+                      border: `1px solid ${chart.tooltipBorder}`,
+                      borderRadius: 8,
+                      fontSize: 12,
+                    }}
                     formatter={(value: number, name: string) => [formatLitres(value), name]}
                   />
                 </PieChart>
@@ -444,10 +456,10 @@ export default function Dashboard() {
                   <AlertTriangle
                     className={
                       alert.level === 'error'
-                        ? 'mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-400'
+                        ? 'mt-0.5 h-3.5 w-3.5 shrink-0 text-danger'
                         : alert.level === 'warning'
-                          ? 'mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400'
-                          : 'mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-400'
+                          ? 'mt-0.5 h-3.5 w-3.5 shrink-0 text-warn'
+                          : 'mt-0.5 h-3.5 w-3.5 shrink-0 text-info'
                     }
                   />
                   <p className="text-[11px] leading-relaxed text-ink-300">{alert.message}</p>
@@ -502,7 +514,7 @@ export default function Dashboard() {
                     </td>
                     <td>
                       {tank.lastVarianceLitres ? (
-                        <span className={Number(tank.lastVarianceLitres) < -50 ? 'text-rose-300' : 'text-ink-300'}>
+                        <span className={Number(tank.lastVarianceLitres) < -50 ? 'text-danger' : 'text-ink-300'}>
                           {formatNumber(tank.lastVarianceLitres, 1)} L
                         </span>
                       ) : (

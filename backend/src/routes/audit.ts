@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { all, get, shapeAll } from '../db/index.js';
-import { asyncHandler, ok, pageMeta, paging, sortClause } from '../lib/http.js';
+import { asyncHandler, dayParam, ok, pageMeta, paging, sortClause } from '../lib/http.js';
 import { forbidden } from '../lib/errors.js';
 import { can, requireAuth, type AuthContext } from '../lib/auth.js';
 import { tenantIdOf } from '../lib/tenant.js';
@@ -36,8 +36,10 @@ auditRouter.get(
       clauses.push('(summary LIKE ? OR actor_email LIKE ? OR action LIKE ? OR entity_id LIKE ?)');
       params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
     }
-    if (typeof req.query.from === 'string' && req.query.from) { clauses.push('created_at >= ?'); params.push(istDayStart(req.query.from)); }
-    if (typeof req.query.to === 'string' && req.query.to) { clauses.push('created_at <= ?'); params.push(istDayEnd(req.query.to)); }
+    const from = dayParam(req.query.from, 'from');
+    const to = dayParam(req.query.to, 'to');
+    if (from) { clauses.push('created_at >= ?'); params.push(istDayStart(from)); }
+    if (to) { clauses.push('created_at <= ?'); params.push(istDayEnd(to)); }
     const where = clauses.join(' AND ');
     const order = sortClause(req.query as Record<string, unknown>, { createdAt: 'created_at' }, 'created_at DESC');
     const total = get<{ count: number }>(`SELECT COUNT(*) AS count FROM audit_logs WHERE ${where}`, params)?.count ?? 0;

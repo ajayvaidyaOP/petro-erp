@@ -255,7 +255,7 @@ export default function Readings() {
                       <td className="num text-right">
                         {formatNumber(reading.readingValue, 3)} <span className="text-[10px] text-ink-500">{reading.unit}</span>
                       </td>
-                      <td className={`num text-right ${reading.deltaLitres && Number(reading.deltaLitres) < 0 ? 'text-rose-300' : 'text-ink-300'}`}>
+                      <td className={`num text-right ${reading.deltaLitres && Number(reading.deltaLitres) < 0 ? 'text-danger' : 'text-ink-300'}`}>
                         {reading.deltaLitres ? formatLitres(reading.deltaLitres) : '—'}
                       </td>
                       <td>

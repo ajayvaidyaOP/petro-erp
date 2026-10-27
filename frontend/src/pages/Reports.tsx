@@ -224,7 +224,7 @@ export default function Reports() {
                         <td className="num text-right">{formatNumber(String(tank.deliveredToday), 3)}</td>
                         <td className="num text-right">{formatNumber(String(tank.dispensedBook), 3)}</td>
                         <td className="num text-right font-medium">{formatNumber(String(tank.bookClosing), 3)}</td>
-                        <td className={`num text-right ${tank.varianceFlag ? 'text-amber-300' : 'text-ink-400'}`}>
+                        <td className={`num text-right ${tank.varianceFlag ? 'text-warn' : 'text-ink-400'}`}>
                           {tank.measured ? formatNumber(String(tank.measured), 3) : '—'}
                         </td>
                       </tr>
@@ -256,7 +256,7 @@ export default function Reports() {
                           <p className="text-xs text-ink-200">{String(e.categoryName)}</p>
                           <p className="text-[10px] text-ink-500">{String(e.description)}</p>
                         </div>
-                        <span className="num text-xs text-rose-300">{formatINR(String(e.amount))}</span>
+                        <span className="num text-xs text-danger">{formatINR(String(e.amount))}</span>
                       </div>
                     ))}
                   </div>

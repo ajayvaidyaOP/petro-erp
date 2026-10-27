@@ -17,6 +17,32 @@ petro-erp/
 └── README.md
 ```
 
+## Theming
+
+The UI ships with dark (default) and light themes. Every colour resolves through CSS
+custom properties defined in `frontend/src/index.css` and exposed to Tailwind in
+`frontend/tailwind.config.js`, so switching `data-theme` on `<html>` re-tints the whole
+app — components only ever reference semantic tokens:
+
+| Token family | Meaning |
+| --- | --- |
+| `navy-*` | Surfaces (`950` page canvas → `600` strongest border) |
+| `ink-*` | Text (`100` strongest → `600` faintest) |
+| `accent*` | Brand colour |
+| `onaccent` | Foreground on brand-coloured surfaces |
+| `scrim` | Modal/drawer backdrop — always dark in both themes |
+| `inset` | Recessed surface for code blocks and inset panels |
+| `ok` / `warn` / `danger` / `info` | Status colours (invert with the theme to stay legible) |
+
+Users switch from the sun/moon button in the header. The choice is stored in
+`localStorage` under `petroflow.theme`; with no stored choice the OS
+`prefers-color-scheme` is followed. An inline script in `index.html` applies the theme
+before first paint so there is no flash of the wrong palette.
+
+Avoid re-introducing fixed Tailwind shades for text on themed surfaces (for example
+`text-emerald-300`), which read well on dark cards but are unreadable on white — use the
+status tokens instead. The same applies to `navy-*` for anything other than a surface.
+
 ## Requirements
 
 - Windows 10/11 (or another supported Node.js platform).

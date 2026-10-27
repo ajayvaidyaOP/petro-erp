@@ -295,3 +295,34 @@ describe('financial integrity', () => {
     expect(ledger.body.data.closingBookStock).toBe(res.body.data.tanks[0].bookStockLitres);
   });
 });
+
+describe('query parameter validation', () => {
+  // Regression: junk date filters used to reach Date.UTC() and surface as HTTP 500
+  // (plus a platform_errors row) instead of a client error.
+  it('rejects invalid date filters with 422 instead of failing with 500', async () => {
+    const cases = [
+      `/api/v1/finance/expenses?stationId=${stationAId}&from=garbage&to=nonsense`,
+      `/api/v1/finance/payments?stationId=${stationAId}&from=garbage&to=nonsense`,
+      '/api/v1/audit?from=garbage&to=nonsense',
+      `/api/v1/finance/expenses?stationId=${stationAId}&from=2026-99-99&to=2026-10-27`,
+    ];
+    for (const path of cases) {
+      const res = await ownerAgent.get(path);
+      expect(res.status, `${path} should not 500`).toBe(422);
+      expect(res.body.error.code).toBe('UNPROCESSABLE');
+    }
+  });
+
+  it('still accepts valid ISO date filters', async () => {
+    const res = await ownerAgent.get(
+      `/api/v1/finance/expenses?stationId=${stationAId}&from=2026-10-01&to=2026-10-27`,
+    );
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.data.expenses)).toBe(true);
+  });
+
+  it('treats blank date filters as "no filter"', async () => {
+    const res = await ownerAgent.get(`/api/v1/finance/expenses?stationId=${stationAId}&from=&to=`);
+    expect(res.status).toBe(200);
+  });
+});

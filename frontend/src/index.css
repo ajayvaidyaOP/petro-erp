@@ -2,51 +2,153 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ===========================================================================
+   Theme tokens
+   ---------------------------------------------------------------------------
+   Every colour in the app resolves through these custom properties, so the
+   dark and light themes are one palette swap apart. Values are space-separated
+   RGB channels to keep Tailwind's `/opacity` modifiers working.
+
+   navy-*  = surfaces (950 page canvas → 600 strongest border)
+   ink-*   = text     (100 strongest    → 600 faintest)
+   accent* = brand
+   on-accent = foreground used on brand-coloured surfaces
+   =========================================================================== */
 @layer base {
-  :root {
+  :root,
+  [data-theme='dark'] {
     color-scheme: dark;
+
+    --navy-950: 7 12 23;
+    --navy-900: 11 18 32;
+    --navy-850: 16 26 46;
+    --navy-800: 22 35 60;
+    --navy-750: 28 44 72;
+    --navy-700: 36 57 92;
+    --navy-600: 49 80 124;
+
+    --ink-100: 242 246 255;
+    --ink-200: 219 230 248;
+    --ink-300: 188 203 228;
+    --ink-400: 148 168 200;
+    --ink-500: 116 136 168;
+    --ink-600: 90 109 140;
+
+    --accent: 56 189 248;
+    --accent-soft: 14 165 233;
+    --accent-teal: 45 212 191;
+    --on-accent: 7 12 23;
+    --scrim: 2 6 23;
+    --inset: 4 8 16;
+    --ok: 110 231 183;
+    --warn: 252 211 77;
+    --danger: 253 164 175;
+    --info: 125 211 252;
+
+    --shadow-card: 0 1px 2px rgb(2 6 23 / 0.5), 0 8px 24px -16px rgb(2 6 23 / 0.9),
+      inset 0 1px 0 0 rgb(255 255 255 / 0.03);
+    --shadow-focus: 0 0 0 3px rgb(56 189 248 / 0.22);
+    --shadow-pop: 0 10px 40px -12px rgb(2 6 23 / 0.85), 0 2px 8px -2px rgb(2 6 23 / 0.6);
+
+    /* Ambient page glow — subtle depth behind the whole app. */
+    --glow-a: 56 189 248;
+    --glow-b: 45 212 191;
+    --glow-a-strength: 0.1;
+    --glow-b-strength: 0.07;
   }
+
+  [data-theme='light'] {
+    color-scheme: light;
+
+    --navy-950: 244 247 252;
+    --navy-900: 255 255 255;
+    --navy-850: 255 255 255;
+    --navy-800: 241 245 251;
+    --navy-750: 232 238 247;
+    --navy-700: 219 228 240;
+    --navy-600: 194 208 228;
+
+    --ink-100: 11 18 32;
+    --ink-200: 38 55 79;
+    --ink-300: 61 81 112;
+    --ink-400: 85 104 138;
+    --ink-500: 107 125 155;
+    --ink-600: 117 134 159;
+
+    --accent: 2 132 199;
+    --accent-soft: 3 105 161;
+    --accent-teal: 13 148 136;
+    --on-accent: 255 255 255;
+    --scrim: 15 23 42;
+    --inset: 241 245 251;
+    --ok: 4 120 87;
+    --warn: 180 83 9;
+    --danger: 190 18 60;
+    --info: 3 105 161;
+
+    --shadow-card: 0 1px 2px rgb(15 23 42 / 0.06), 0 8px 24px -16px rgb(15 23 42 / 0.2);
+    --shadow-focus: 0 0 0 3px rgb(2 132 199 / 0.18);
+    --shadow-pop: 0 10px 40px -12px rgb(15 23 42 / 0.22), 0 2px 8px -2px rgb(15 23 42 / 0.1);
+
+    --glow-a: 2 132 199;
+    --glow-b: 13 148 136;
+    --glow-a-strength: 0.06;
+    --glow-b-strength: 0.05;
+  }
+
   html,
   body,
   #root {
     height: 100%;
   }
+
   body {
     @apply bg-navy-950 text-ink-200 antialiased;
-    background-image:
-      radial-gradient(1000px 600px at 100% -10%, rgba(56, 189, 248, 0.07), transparent 60%),
-      radial-gradient(800px 500px at -10% 110%, rgba(45, 212, 191, 0.05), transparent 55%);
+    background-image: radial-gradient(
+        1100px 620px at 100% -10%,
+        rgb(var(--glow-a) / var(--glow-a-strength)),
+        transparent 60%
+      ),
+      radial-gradient(900px 520px at -10% 110%, rgb(var(--glow-b) / var(--glow-b-strength)), transparent 55%);
     background-attachment: fixed;
     /* Clip (not hidden) so sticky headers keep working; wide tables own their scroll. */
     overflow-x: clip;
   }
+
   button,
   a,
   select,
   summary {
     touch-action: manipulation;
   }
+
   * {
     @apply border-navy-700/60;
   }
+
   ::selection {
-    background: rgba(56, 189, 248, 0.28);
+    background: rgb(var(--accent) / 0.28);
   }
+
   :focus-visible {
     @apply outline-none ring-2 ring-accent/60 ring-offset-2 ring-offset-navy-950;
   }
+
   input[type='number']::-webkit-outer-spin-button,
   input[type='number']::-webkit-inner-spin-button {
     -webkit-appearance: none;
     margin: 0;
   }
+
   ::-webkit-scrollbar {
     width: 10px;
     height: 10px;
   }
+
   ::-webkit-scrollbar-thumb {
     @apply rounded-full bg-navy-700;
   }
+
   ::-webkit-scrollbar-track {
     background: transparent;
   }
@@ -56,53 +158,77 @@
   .card {
     @apply min-w-0 rounded-xl border border-navy-700/70 bg-navy-850/80 shadow-card backdrop-blur-sm;
   }
+
   .card-hover {
-    @apply transition-colors hover:border-navy-600/80;
+    @apply transition-all duration-200 hover:border-navy-600/80 hover:shadow-pop;
   }
+
   .label {
     @apply mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-500;
   }
+
   .input {
     @apply w-full rounded-lg border border-navy-600/80 bg-navy-900/80 px-3 py-2 text-sm text-ink-100
-      placeholder:text-ink-500/70 transition focus:border-accent/70 focus:outline-none focus:ring-2 focus:ring-accent/20
-      disabled:cursor-not-allowed disabled:opacity-60;
+      placeholder:text-ink-500/70 transition focus:border-accent/70 focus:outline-none focus:ring-2
+      focus:ring-accent/20 disabled:cursor-not-allowed disabled:opacity-60;
   }
+
   .table-wrap {
     @apply w-full max-w-full overflow-x-auto overscroll-x-contain;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: thin;
   }
+
   /* Tables size to their content: narrow tables fit a phone, wide ones scroll
      inside their own wrapper (headers never wrap, so columns stay readable). */
   .data-table {
     @apply w-full border-collapse text-sm;
   }
+
   @media (max-width: 639px) {
     .data-table thead th {
       @apply px-3 py-2;
     }
+
     .data-table tbody td {
       @apply px-3 py-2.5;
     }
   }
+
   .data-table thead th {
-    @apply sticky top-0 z-[1] whitespace-nowrap border-b border-navy-700 bg-navy-850/95 px-4 py-2.5 text-left
-      text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-500 backdrop-blur;
+    @apply sticky top-0 z-[1] whitespace-nowrap border-b border-navy-700 bg-navy-850/95 px-4 py-2.5
+      text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-500 backdrop-blur;
   }
+
   .data-table tbody td {
     @apply border-b border-navy-800/80 px-4 py-3 align-middle text-ink-200;
   }
+
   .data-table tbody tr {
     @apply transition-colors hover:bg-navy-800/40;
   }
+
   .num {
     @apply font-mono tabular-nums;
   }
+
   .link {
     @apply text-accent underline-offset-4 transition hover:text-accent-teal hover:underline;
   }
+
   .scroll-thin {
     scrollbar-width: thin;
+  }
+
+  /* Shimmering placeholder used while data loads. */
+  .skeleton {
+    @apply relative overflow-hidden rounded-lg bg-navy-800/70;
+  }
+
+  .skeleton::after {
+    @apply absolute inset-0 -translate-x-full animate-shimmer;
+    content: '';
+    background-image: linear-gradient(90deg, transparent, rgb(var(--ink-100) / 0.06), transparent);
   }
 }
 
@@ -116,8 +242,7 @@
   }
 }
 
-
-/* ---------------------------------------------------------- touch & mobile */
+/* ------------------------------------------------------------------ mobile */
 /* Unlayered so it wins over Tailwind's component classes. */
 @media (max-width: 767px) {
   /* iOS Safari zooms the whole page when a focused field is under 16px. */
@@ -127,6 +252,7 @@
     font-size: 16px;
     line-height: 1.5rem;
   }
+
   /* Comfortable tap targets without changing desktop density. */
   .btn-touch {
     min-height: 2.5rem;

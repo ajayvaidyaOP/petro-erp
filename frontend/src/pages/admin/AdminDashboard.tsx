@@ -143,7 +143,7 @@ export default function AdminDashboard() {
                 {data.subscriptions.trialsEndingSoon.map((trial) => (
                   <Link key={trial.id} to={`/admin/tenants/${trial.tenantId}`} className="block rounded-lg border border-navy-700/60 p-3 hover:border-accent/40">
                     <p className="text-sm text-ink-200">{trial.tenantName}</p>
-                    <p className="text-xs text-amber-300">Trial of {trial.planName} ends {formatDateTime(trial.trialEndsAt)}</p>
+                    <p className="text-xs text-warn">Trial of {trial.planName} ends {formatDateTime(trial.trialEndsAt)}</p>
                   </Link>
                 ))}
                 {data.subscriptions.expiringSoon.map((sub) => (
@@ -203,7 +203,7 @@ export default function AdminDashboard() {
             <div className="space-y-2 p-4">
               {data.errors.recent.map((error) => (
                 <div key={error.id} className="flex items-start gap-2 rounded-lg border border-rose-400/20 bg-rose-400/5 p-3">
-                  <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-rose-300" />
+                  <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
                   <div className="min-w-0">
                     <p className="truncate text-sm text-ink-200">{error.message}</p>
                     <p className="text-xs text-ink-500">{error.path} · {formatDateTime(error.createdAt)}</p>

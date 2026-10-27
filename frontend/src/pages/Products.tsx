@@ -206,7 +206,7 @@ export default function Products() {
                           </td>
                           <td className="text-ink-400">{product.category}</td>
                           <td className="num text-right">
-                            {price ? formatINR(price.ratePerLitre) : <span className="text-amber-300">Not priced</span>}
+                            {price ? formatINR(price.ratePerLitre) : <span className="text-warn">Not priced</span>}
                           </td>
                           <td>
                             <StatusBadge status={product.isActive ? 'ACTIVE' : 'INACTIVE'} />
@@ -296,7 +296,7 @@ export default function Products() {
                       <td className="num text-right text-ink-100">{formatINR(price.ratePerLitre)}</td>
                       <td className="text-xs text-ink-400">
                         {formatDateTime(price.effectiveFrom)}
-                        {price.effectiveTo ? <span className="block text-ink-500">until {formatDateTime(price.effectiveTo)}</span> : <span className="block text-emerald-300">current</span>}
+                        {price.effectiveTo ? <span className="block text-ink-500">until {formatDateTime(price.effectiveTo)}</span> : <span className="block text-ok">current</span>}
                       </td>
                       <td className="text-xs text-ink-400">{price.stationName ?? 'All stations'}</td>
                     </tr>

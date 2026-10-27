@@ -139,12 +139,12 @@ export default function AdminDevices() {
                     </td>
                     <td className="text-right tabular-nums">{device.eventCount}</td>
                     <td className="text-right tabular-nums">
-                      {Number(device.errorCount) > 0 ? <span className="text-rose-300">{device.errorCount}</span> : '0'}
+                      {Number(device.errorCount) > 0 ? <span className="text-danger">{device.errorCount}</span> : '0'}
                     </td>
                     <td className="text-xs text-ink-400">v{device.keyVersion}</td>
                     <td>
                       <StatusBadge status={device.status} />
-                      <p className={`mt-1 text-[11px] ${device.online ? 'text-emerald-300' : 'text-rose-300'}`}>
+                      <p className={`mt-1 text-[11px] ${device.online ? 'text-ok' : 'text-danger'}`}>
                         {device.online ? 'reachable' : 'offline'}
                       </p>
                     </td>
