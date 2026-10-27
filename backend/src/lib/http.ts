@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { z } from 'zod';
 import { AppError, badRequest, unprocessable } from './errors.js';
+import { isIsoDate } from './time.js';
 import type { AuthContext } from './auth.js';
 
 /** Wrap an async route handler so rejected promises reach the error middleware. */
@@ -49,6 +50,19 @@ export function paging(query: Record<string, unknown>): Pagination {
   const pageSize =
     Number.isFinite(rawSize) && rawSize > 0 ? Math.min(rawSize, MAX_PAGE_SIZE) : DEFAULT_PAGE_SIZE;
   return { page, pageSize, offset: (page - 1) * pageSize };
+}
+
+/**
+ * Validate an optional YYYY-MM-DD query parameter.
+ *
+ * Date filters used to flow straight into `Date.UTC()`, where junk input such as
+ * `?from=garbage` threw a RangeError and produced a 500 (and a row in
+ * platform_errors). Rejecting it here turns that into a clean 422 instead.
+ */
+export function dayParam(value: unknown, label: string): string | null {
+  if (typeof value !== 'string' || value.trim() === '') return null;
+  if (!isIsoDate(value)) throw unprocessable(`${label} must be a valid YYYY-MM-DD date`);
+  return value;
 }
 
 export function pageMeta(total: number, p: Pagination) {

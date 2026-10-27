@@ -280,7 +280,7 @@ export default function Shifts() {
       {(alertsQuery.data ?? []).length > 0 && (
         <div className="mt-3 space-y-2">
           {(alertsQuery.data ?? []).slice(0, 3).map((alert, index) => (
-            <div key={index} className="flex items-center gap-2 rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs text-amber-200/90">
+            <div key={index} className="flex items-center gap-2 rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs text-warn/90">
               <CalendarDays className="h-3.5 w-3.5 shrink-0" />
               {alert.message}
             </div>
@@ -412,7 +412,7 @@ export default function Shifts() {
             {shift.alerts.length > 0 && (
               <div className="space-y-1.5 rounded-lg border border-amber-400/20 bg-amber-400/5 p-3">
                 {shift.alerts.map((alert, index) => (
-                  <p key={index} className="text-xs text-amber-200/90">• {alert.message}</p>
+                  <p key={index} className="text-xs text-warn/90">• {alert.message}</p>
                 ))}
               </div>
             )}
@@ -454,7 +454,7 @@ export default function Shifts() {
                         <p className="text-[10px] text-ink-500">{nozzle.dispenserCode} · {nozzle.productName}</p>
                       </td>
                       <td className="num text-right text-ink-300">
-                        {nozzle.openingReading ? formatNumber(nozzle.openingReading, 3) : <span className="text-rose-300">missing</span>}
+                        {nozzle.openingReading ? formatNumber(nozzle.openingReading, 3) : <span className="text-danger">missing</span>}
                         {nozzle.openingSource && <span className="block text-[9px] uppercase text-ink-600">{nozzle.openingSource}</span>}
                       </td>
                       <td className="num text-right text-ink-300">
@@ -464,12 +464,12 @@ export default function Shifts() {
                       <td className="num text-right font-medium text-ink-100">
                         {nozzle.litresSold ? formatNumber(nozzle.litresSold, 3) : '—'}
                         {Number(nozzle.adjustmentLitres) !== 0 && (
-                          <span className="block text-[9px] text-amber-300">adj {formatNumber(nozzle.adjustmentLitres, 3)}</span>
+                          <span className="block text-[9px] text-warn">adj {formatNumber(nozzle.adjustmentLitres, 3)}</span>
                         )}
                       </td>
                       <td className="num text-right text-ink-400">{nozzle.rate ? formatINR(nozzle.rate) : '—'}</td>
                       <td className="num text-right text-ink-200">{nozzle.salesValue ? formatINR(nozzle.salesValue) : '—'}</td>
-                      <td className={`num text-right ${nozzle.varianceLitres && Math.abs(Number(nozzle.varianceLitres)) > 1 ? 'text-amber-300' : 'text-ink-500'}`}>
+                      <td className={`num text-right ${nozzle.varianceLitres && Math.abs(Number(nozzle.varianceLitres)) > 1 ? 'text-warn' : 'text-ink-500'}`}>
                         {nozzle.varianceLitres ? `${formatNumber(nozzle.varianceLitres, 3)} L` : '—'}
                       </td>
                       <td><StatusBadge status={nozzle.status} /></td>

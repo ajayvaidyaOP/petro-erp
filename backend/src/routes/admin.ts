@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { all, get, run, shape, shapeAll, tx } from '../db/index.js';
-import { asyncHandler, created, ok, pageMeta, paging, parse, sortClause } from '../lib/http.js';
+import { asyncHandler, created, dayParam, ok, pageMeta, paging, parse, sortClause } from '../lib/http.js';
 import { conflict, forbidden, notFound, unprocessable } from '../lib/errors.js';
 import { requirePlatform } from '../lib/auth.js';
 import { audit } from '../lib/audit.js';
@@ -744,8 +744,10 @@ adminRouter.get(
       clauses.push('action = ?');
       params.push(req.query.action);
     }
-    if (typeof req.query.from === 'string' && req.query.from) { clauses.push('created_at >= ?'); params.push(istDayStart(req.query.from)); }
-    if (typeof req.query.to === 'string' && req.query.to) { clauses.push('created_at <= ?'); params.push(istDayEnd(req.query.to)); }
+    const from = dayParam(req.query.from, 'from');
+    const to = dayParam(req.query.to, 'to');
+    if (from) { clauses.push('created_at >= ?'); params.push(istDayStart(from)); }
+    if (to) { clauses.push('created_at <= ?'); params.push(istDayEnd(to)); }
     const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
     if (search) {
       clauses.push('(summary LIKE ? OR actor_email LIKE ? OR action LIKE ?)');

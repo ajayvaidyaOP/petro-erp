@@ -287,7 +287,7 @@ export default function Suppliers() {
                         <td><Badge tone={entry.type === 'PURCHASE' ? 'warning' : 'success'}>{entry.type}</Badge></td>
                         <td className="text-xs text-ink-300">{entry.description}</td>
                         <td className="num text-right">{Number(entry.debit) ? formatINR(entry.debit) : '—'}</td>
-                        <td className="num text-right text-emerald-300">{Number(entry.credit) ? formatINR(entry.credit) : '—'}</td>
+                        <td className="num text-right text-ok">{Number(entry.credit) ? formatINR(entry.credit) : '—'}</td>
                         <td className="num text-right">{formatINR(entry.runningBalance)}</td>
                       </tr>
                     ))

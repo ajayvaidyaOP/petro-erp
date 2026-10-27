@@ -256,7 +256,7 @@ export default function Devices() {
                     <td>
                       <div className="flex flex-col gap-1">
                         <StatusBadge status={device.status} />
-                        <span className={device.online ? 'text-[11px] text-emerald-300' : 'text-[11px] text-rose-300'}>
+                        <span className={device.online ? 'text-[11px] text-ok' : 'text-[11px] text-danger'}>
                           {device.online ? 'reachable' : 'offline'}
                         </span>
                       </div>
@@ -333,7 +333,7 @@ export default function Devices() {
                 </div>
               ))
             )}
-            <div className="col-span-2 rounded-lg border border-amber-400/20 bg-amber-400/5 p-3 text-xs text-amber-200/90">
+            <div className="col-span-2 rounded-lg border border-amber-400/20 bg-amber-400/5 p-3 text-xs text-warn/90">
               <TriangleAlert className="mr-1 inline h-3.5 w-3.5" />
               {diagnostics.data?.disclaimer ?? 'Real hardware has not been verified.'}
             </div>
@@ -424,7 +424,7 @@ export default function Devices() {
         footer={<Button onClick={() => setIssuedKey(null)}>I have stored this key</Button>}
       >
         <div className="space-y-3">
-          <div className="rounded-lg border border-navy-700 bg-navy-950/70 p-3">
+          <div className="rounded-lg border border-navy-700 bg-inset p-3">
             <p className="text-[11px] uppercase tracking-wider text-ink-500">API key for {issuedKey?.device}</p>
             <code className="mt-1 block break-all font-mono text-sm text-accent">{issuedKey?.apiKey}</code>
           </div>
@@ -474,7 +474,7 @@ export default function Devices() {
                       <td className="text-xs text-ink-400">{event.eventType}</td>
                       <td>
                         <StatusBadge status={event.status} />
-                        {event.error ? <span className="mt-1 block text-[11px] text-rose-300">{event.error}</span> : null}
+                        {event.error ? <span className="mt-1 block text-[11px] text-danger">{event.error}</span> : null}
                       </td>
                       <td className="whitespace-nowrap text-xs text-ink-400">{formatDateTime(event.receivedAt)}</td>
                       <td className="text-right">

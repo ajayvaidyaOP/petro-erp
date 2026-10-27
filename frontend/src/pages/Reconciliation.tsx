@@ -149,7 +149,7 @@ export default function Reconciliation() {
                     <Input inputMode="decimal" value={digitalSettled} onChange={(e) => setDigitalSettled(e.target.value)} placeholder="0.00" />
                   </Field>
                 </div>
-                <div className={`rounded-lg border px-3 py-2 text-xs ${Math.abs(variance) <= 1 ? 'border-emerald-500/25 bg-emerald-500/5 text-emerald-200' : 'border-amber-500/25 bg-amber-500/5 text-amber-200'}`}>
+                <div className={`rounded-lg border px-3 py-2 text-xs ${Math.abs(variance) <= 1 ? 'border-emerald-500/25 bg-emerald-500/5 text-ok' : 'border-amber-500/25 bg-amber-500/5 text-warn'}`}>
                   Cash variance against expectation: <span className="num font-semibold">{formatINR(variance)}</span>
                   {Math.abs(variance) > 1 && ' · requires approval'}
                 </div>
@@ -219,7 +219,7 @@ export default function Reconciliation() {
                         <td className="num text-right">{formatINR(row.cashCounted)}</td>
                         <td className="num text-right">{formatINR(row.digitalExpected)}</td>
                         <td className="num text-right">{formatINR(row.digitalSettled)}</td>
-                        <td className={`num text-right ${Math.abs(Number(row.variance)) > 1 ? 'text-amber-300' : 'text-emerald-300'}`}>{formatINR(row.variance)}</td>
+                        <td className={`num text-right ${Math.abs(Number(row.variance)) > 1 ? 'text-warn' : 'text-ok'}`}>{formatINR(row.variance)}</td>
                         <td><StatusBadge status={row.status} /></td>
                         <td className="text-xs text-ink-500">{formatDateTime(row.createdAt)}</td>
                         <td className="text-right">

@@ -208,7 +208,7 @@ export default function Settings() {
           <Card>
             <CardHeader title="Backup & recovery" subtitle="Documented procedure — no automated backup runs in this environment." />
             <div className="space-y-3 p-4 text-sm text-ink-400">
-              <p><CheckCircle2 className="mr-1 inline h-3.5 w-3.5 text-emerald-400" />{diagnostics.data?.operations.backup}</p>
+              <p><CheckCircle2 className="mr-1 inline h-3.5 w-3.5 text-ok" />{diagnostics.data?.operations.backup}</p>
               <p>{diagnostics.data?.operations.restore}</p>
               <p className="text-xs text-ink-500">{diagnostics.data?.operations.migrations}</p>
             </div>

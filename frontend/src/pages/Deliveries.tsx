@@ -228,7 +228,7 @@ export default function Deliveries() {
                           <span className="block text-[10px] text-ink-500">{delivery.tankCode} · {delivery.stationName}</span>
                         </td>
                         <td className="num text-right">{formatNumber(delivery.quantityLitres, 3)} L</td>
-                        <td className={`num text-right ${short !== null && Math.abs(short) > 0.5 ? 'text-amber-300' : ''}`}>
+                        <td className={`num text-right ${short !== null && Math.abs(short) > 0.5 ? 'text-warn' : ''}`}>
                           {delivery.receivedLitres ? `${formatNumber(delivery.receivedLitres, 3)} L` : '—'}
                           {short !== null && Math.abs(short) > 0.001 && <span className="block text-[10px]">{formatNumber(String(short), 3)} L</span>}
                         </td>
@@ -436,7 +436,7 @@ function ReceiveModal({
           <Input inputMode="decimal" value={litres} onChange={(e) => setLitres(e.target.value)} />
         </Field>
         {Math.abs(variance) > 0.001 && (
-          <div className="rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs text-amber-200">
+          <div className="rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs text-warn">
             Variance vs invoice: <span className="num font-semibold">{formatNumber(String(variance), 3)} L</span>. Short deliveries are recorded on the audit trail.
           </div>
         )}

@@ -167,7 +167,7 @@ export default function Errors() {
             <span>{formatDateTime(detail?.createdAt)}</span>
             <span>{detail?.tenantName ?? 'Platform-level'}</span>
           </div>
-          <pre className="max-h-72 overflow-auto rounded-lg border border-navy-700/60 bg-navy-950/60 p-3 text-[11px] text-ink-300">
+          <pre className="max-h-72 overflow-auto rounded-lg border border-navy-700/60 bg-inset p-3 text-[11px] text-ink-300">
             {detail?.detail ?? 'No stack trace captured.'}
           </pre>
         </div>

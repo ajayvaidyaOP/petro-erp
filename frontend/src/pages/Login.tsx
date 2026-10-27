@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, Fuel, Gauge, Lock, Mail, ShieldCheck, Sparkles } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, Fuel, Gauge, Loader2, Lock, Mail, ShieldCheck, Sparkles } from 'lucide-react';
 import { apiGet } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { Button, Input } from '../components/ui';
@@ -26,6 +26,9 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  // Which demo tile is signing in, so only that tile shows a spinner.
+  const [signingInAs, setSigningInAs] = useState<string | null>(null);
 
   const demo = useQuery<DemoAccounts>({
     queryKey: ['demo-accounts'],
@@ -38,13 +41,17 @@ export default function Login() {
     if (demo.data?.password) setPassword(demo.data.password);
   }, [demo.data?.password]);
 
+  const signIn = async (user: string, pass: string) => {
+    const me = await login(user.trim(), pass);
+    navigate(me.isSuperAdmin ? '/admin' : '/', { replace: true });
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
     try {
-      const me = await login(email.trim(), password);
-      navigate(me.isSuperAdmin ? '/admin' : '/', { replace: true });
+      await signIn(email, password);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to sign in');
     } finally {
@@ -52,10 +59,16 @@ export default function Login() {
     }
   };
 
-  const quickFill = (account: DemoAccount) => {
-    setEmail(account.email);
-    setPassword(demo.data?.password ?? 'PetroFlow@2025');
+  // Demo tiles sign straight in rather than only pre-filling the form.
+  const signInAs = async (account: DemoAccount) => {
     setError(null);
+    setSigningInAs(account.email);
+    try {
+      await signIn(account.email, demo.data?.password ?? 'PetroFlow@2025');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to sign in');
+      setSigningInAs(null);
+    }
   };
 
   return (
@@ -64,7 +77,7 @@ export default function Login() {
         <div className="absolute inset-0 opacity-60 [background:radial-gradient(600px_400px_at_20%_10%,rgba(56,189,248,0.12),transparent_60%),radial-gradient(500px_400px_at_80%_90%,rgba(45,212,191,0.08),transparent_60%)]" />
         <div className="relative">
           <div className="flex items-center gap-3">
-            <div className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-accent to-accent-teal text-navy-950">
+            <div className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-accent to-accent-teal text-onaccent">
               <Fuel className="h-5 w-5" strokeWidth={2.5} />
             </div>
             <div>
@@ -103,7 +116,7 @@ export default function Login() {
       <div className="flex items-center justify-center px-4 py-10 sm:px-8">
         <div className="w-full max-w-md">
           <div className="mb-6 flex items-center gap-3 lg:hidden">
-            <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-accent to-accent-teal text-navy-950">
+            <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-accent to-accent-teal text-onaccent">
               <Fuel className="h-5 w-5" />
             </div>
             <div>
@@ -137,19 +150,27 @@ export default function Login() {
                 <div className="relative">
                   <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500" />
                   <Input
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     autoComplete="current-password"
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••••"
-                    className="pl-9"
+                    className="pl-9 pr-10"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-ink-500 transition-colors hover:bg-navy-800 hover:text-ink-200"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
                 </div>
               </label>
 
               {error && (
-                <div role="alert" className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+                <div role="alert" className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-danger">
                   {error}
                 </div>
               )}
@@ -167,17 +188,19 @@ export default function Login() {
           {demo.data && demo.data.accounts.length > 0 && (
             <div className="card mt-4 p-4">
               <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold uppercase tracking-wider text-amber-300/90">Demo accounts</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-warn/90">Demo accounts</p>
                 <span className="text-[10px] text-ink-500">password: {demo.data.password}</span>
               </div>
               <p className="mt-1 text-[11px] text-ink-500">{demo.data.note}</p>
+              <p className="mt-0.5 text-[11px] text-accent">Click any account to sign in instantly.</p>
               <div className="mt-3 grid gap-1.5">
                 {demo.data.accounts.map((account) => (
                   <button
                     key={account.email}
                     type="button"
-                    onClick={() => quickFill(account)}
-                    className="flex items-center justify-between gap-2 rounded-lg border border-navy-700/70 bg-navy-800/40 px-3 py-2 text-left transition hover:border-accent/40 hover:bg-navy-800"
+                    disabled={signingInAs !== null}
+                    onClick={() => void signInAs(account)}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-navy-700/70 bg-navy-800/40 px-3 py-2 text-left transition-all hover:border-accent/50 hover:bg-navy-800 disabled:cursor-wait disabled:opacity-60"
                   >
                     <span className="min-w-0">
                       <span className="block truncate text-xs font-medium text-ink-200">
@@ -187,7 +210,11 @@ export default function Login() {
                         {account.tenant_name ?? 'Platform'} — {account.email}
                       </span>
                     </span>
-                    <ArrowRight className="h-3.5 w-3.5 shrink-0 text-ink-500" />
+                    {signingInAs === account.email ? (
+                      <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-accent" />
+                    ) : (
+                      <ArrowRight className="h-3.5 w-3.5 shrink-0 text-ink-500" />
+                    )}
                   </button>
                 ))}
               </div>

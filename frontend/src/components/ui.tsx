@@ -18,8 +18,10 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Fuel,
   Info,
   Loader2,
+  RotateCw,
   Search,
   X,
   XCircle,
@@ -32,13 +34,17 @@ type ButtonSize = 'sm' | 'md' | 'lg';
 
 const buttonVariants: Record<ButtonVariant, string> = {
   primary:
-    'bg-accent text-navy-950 font-semibold hover:bg-accent-teal shadow-sm shadow-accent/20 border border-accent/50',
+    // `text-onaccent` (not `text-navy-950`): navy is the surface ramp and inverts
+    // with the theme, which would render light-on-light text in light mode.
+    'bg-accent text-onaccent font-semibold hover:bg-accent-soft shadow-sm shadow-accent/25 border border-accent/50 active:scale-[.98]',
   secondary:
-    'bg-navy-750 text-ink-100 border border-navy-600/80 hover:bg-navy-700 hover:border-navy-600',
+    'bg-navy-750 text-ink-100 border border-navy-600/80 hover:bg-navy-700 hover:border-navy-600 active:scale-[.98]',
   ghost: 'text-ink-300 hover:bg-navy-800/70 hover:text-ink-100 border border-transparent',
-  danger: 'bg-rose-500/90 text-white hover:bg-rose-500 border border-rose-400/40',
-  success: 'bg-emerald-500 text-navy-950 font-semibold hover:bg-emerald-400 border border-emerald-400/50',
-  outline: 'border border-navy-600 text-ink-200 hover:bg-navy-800/70 hover:border-accent/40',
+  danger: 'bg-rose-500/90 text-white hover:bg-rose-500 border border-rose-400/40 active:scale-[.98]',
+  // `text-white` rather than `text-onaccent`: emerald-500 stays mid-tone in both
+  // themes, so white is the legible foreground here regardless of theme.
+  success: 'bg-emerald-500 text-white font-semibold hover:bg-emerald-400 border border-emerald-400/50 active:scale-[.98]',
+  outline: 'border border-navy-600 text-ink-200 hover:bg-navy-800/70 hover:border-accent/40 active:scale-[.98]',
 };
 
 const buttonSizes: Record<ButtonSize, string> = {
@@ -69,7 +75,7 @@ export function Button({
       {...props}
       disabled={disabled || loading}
       className={cn(
-        'inline-flex select-none items-center justify-center whitespace-nowrap rounded-lg transition-colors',
+        'inline-flex select-none items-center justify-center whitespace-nowrap rounded-lg transition-all duration-150',
         'btn-touch disabled:cursor-not-allowed disabled:opacity-50',
         buttonVariants[variant],
         buttonSizes[size],
@@ -123,10 +129,10 @@ type Tone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger' | 'info' | '
 const toneClasses: Record<Tone, string> = {
   neutral: 'bg-navy-700/60 text-ink-200 border-navy-600/60',
   accent: 'bg-accent/12 text-accent border-accent/30',
-  success: 'bg-emerald-500/12 text-emerald-300 border-emerald-500/30',
-  warning: 'bg-amber-500/12 text-amber-300 border-amber-500/30',
-  danger: 'bg-rose-500/12 text-rose-300 border-rose-500/30',
-  info: 'bg-sky-500/12 text-sky-300 border-sky-500/30',
+  success: 'bg-emerald-500/12 text-ok border-emerald-500/30',
+  warning: 'bg-amber-500/12 text-warn border-amber-500/30',
+  danger: 'bg-rose-500/12 text-danger border-rose-500/30',
+  info: 'bg-sky-500/12 text-info border-sky-500/30',
   muted: 'bg-navy-800 text-ink-500 border-navy-700',
 };
 
@@ -224,11 +230,11 @@ export function Field({
   return (
     <label className={cn('block', className)}>
       <span className="label">
-        {label} {required && <span className="text-rose-400">*</span>}
+        {label} {required && <span className="text-danger">*</span>}
       </span>
       {children}
       {hint && !error && <span className="mt-1 block text-xs text-ink-500">{hint}</span>}
-      {error && <span className="mt-1 block text-xs font-medium text-rose-400">{error}</span>}
+      {error && <span className="mt-1 block text-xs font-medium text-danger">{error}</span>}
     </label>
   );
 }
@@ -304,16 +310,33 @@ export function Spinner({ className }: { className?: string }) {
   return <Loader2 className={cn('h-5 w-5 animate-spin text-accent', className)} />;
 }
 
+/** Full-page splash used while a lazily-loaded screen or the session resolves. */
+export function PageLoader({ label = 'Loading…' }: { label?: string }) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="grid min-h-dvh place-items-center px-6"
+    >
+      <div className="flex flex-col items-center gap-4">
+        <div className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-accent to-accent-teal text-onaccent shadow-pop">
+          <Fuel className="h-6 w-6" strokeWidth={2.5} />
+        </div>
+        <div className="flex items-center gap-2">
+          <Spinner className="h-3.5 w-3.5" />
+          <p className="text-xs uppercase tracking-[0.2em] text-ink-500">{label}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function LoadingBlock({ label = 'Loading…', rows = 3 }: { label?: string; rows?: number }) {
   return (
     <div role="status" aria-live="polite" className="space-y-2 p-4">
       <span className="sr-only">{label}</span>
       {Array.from({ length: rows }).map((_, i) => (
-        <div
-          key={i}
-          className="h-10 animate-pulse rounded-lg bg-navy-800/70"
-          style={{ animationDelay: `${i * 100}ms` }}
-        />
+        <div key={i} className="skeleton h-10" style={{ animationDelay: `${i * 100}ms` }} />
       ))}
     </div>
   );
@@ -323,13 +346,20 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
   const message =
     error instanceof Error ? error.message : typeof error === 'string' ? error : 'Something went wrong';
   return (
-    <div className="flex flex-col items-start gap-3 rounded-lg border border-rose-500/25 bg-rose-500/5 p-4">
-      <div className="flex items-center gap-2 text-sm font-medium text-rose-300">
-        <AlertTriangle className="h-4 w-4" />
-        {message}
+    <div className="flex flex-col items-start gap-3 rounded-xl border border-rose-500/25 bg-rose-500/5 p-4">
+      <div className="flex items-start gap-2.5">
+        <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-rose-500/15 text-danger">
+          <AlertTriangle className="h-4 w-4" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-danger">{message}</p>
+          <p className="mt-0.5 text-xs text-danger/70">
+            Nothing was changed. Retry, or check your connection if this keeps happening.
+          </p>
+        </div>
       </div>
       {onRetry && (
-        <Button size="sm" variant="outline" onClick={onRetry}>
+        <Button size="sm" variant="outline" onClick={onRetry} icon={<RotateCw className="h-3.5 w-3.5" />}>
           Try again
         </Button>
       )}
@@ -350,12 +380,12 @@ export function EmptyState({
 }) {
   return (
     <div className="flex flex-col items-center justify-center gap-2 px-6 py-12 text-center">
-      <div className="mb-1 rounded-full border border-navy-700 bg-navy-800/60 p-3 text-ink-400">
+      <div className="mb-2 grid h-12 w-12 place-items-center rounded-2xl border border-navy-700/70 bg-navy-800/50 text-ink-400">
         {icon ?? <Info className="h-5 w-5" />}
       </div>
       <p className="text-sm font-medium text-ink-100">{title}</p>
-      {description && <p className="max-w-md text-xs text-ink-500">{description}</p>}
-      {action && <div className="mt-2">{action}</div>}
+      {description && <p className="max-w-md text-xs leading-relaxed text-ink-500">{description}</p>}
+      {action && <div className="mt-3">{action}</div>}
     </div>
   );
 }
@@ -402,14 +432,14 @@ export function Modal({
   const widths = { sm: 'max-w-md', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl' };
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto overscroll-contain bg-navy-950/70 p-0 backdrop-blur-sm sm:items-center sm:p-6">
+    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto overscroll-contain bg-scrim/70 p-0 backdrop-blur-sm sm:items-center sm:p-6">
       <div
         ref={ref}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         className={cn(
-          'animate-fade-in my-auto flex max-h-[92dvh] w-full flex-col rounded-t-2xl border border-navy-700/80 bg-navy-850 shadow-2xl sm:max-h-[88dvh] sm:rounded-2xl',
+          'animate-scale-in my-auto flex max-h-[92dvh] w-full flex-col rounded-t-2xl border border-navy-700/80 bg-navy-850 shadow-pop sm:max-h-[88dvh] sm:rounded-2xl',
           widths[size],
         )}
       >
@@ -517,10 +547,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(() => ({ toast }), [toast]);
   const icons = {
-    success: <Check className="h-4 w-4 text-emerald-400" />,
-    danger: <XCircle className="h-4 w-4 text-rose-400" />,
-    warning: <AlertTriangle className="h-4 w-4 text-amber-400" />,
-    info: <Info className="h-4 w-4 text-sky-400" />,
+    success: <Check className="h-4 w-4 text-ok" />,
+    danger: <XCircle className="h-4 w-4 text-danger" />,
+    warning: <AlertTriangle className="h-4 w-4 text-warn" />,
+    info: <Info className="h-4 w-4 text-info" />,
   };
 
   return (
@@ -647,9 +677,9 @@ export function StatCard({
   const tones = {
     default: 'text-ink-100',
     accent: 'text-accent',
-    success: 'text-emerald-300',
-    warning: 'text-amber-300',
-    danger: 'text-rose-300',
+    success: 'text-ok',
+    warning: 'text-warn',
+    danger: 'text-danger',
   };
   return (
     <div className="card card-hover p-4">
@@ -714,7 +744,7 @@ export function TableScrollHint({ className }: { className?: string }) {
 
 export function DemoNotice({ children }: { children?: ReactNode }) {
   return (
-    <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs text-amber-200/90">
+    <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs text-warn/90">
       <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
       <span>{children ?? 'DEMO DATA — seeded demonstration records. Clearly separated from real operational data and never created in production.'}</span>
     </div>

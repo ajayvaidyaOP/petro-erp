@@ -214,7 +214,7 @@ export default function Customers() {
                         <td className="text-xs text-ink-400">{customer.phone ?? '—'}<br /><span className="text-ink-600">{customer.email ?? ''}</span></td>
                         <td><StatusBadge status={customer.status} /></td>
                         <td className="num text-right text-ink-400">{formatINR(customer.creditLimit)}</td>
-                        <td className={`num text-right ${balance > 0 ? 'text-amber-300' : 'text-ink-300'}`}>{formatINR(customer.balance)}</td>
+                        <td className={`num text-right ${balance > 0 ? 'text-warn' : 'text-ink-300'}`}>{formatINR(customer.balance)}</td>
                         <td className="w-36">
                           <div className="flex items-center gap-2">
                             <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-navy-700">
@@ -329,7 +329,7 @@ export default function Customers() {
         ) : ledger.data ? (
           <div className="space-y-3">
             {(ledger.data.overdueEntries.length ?? 0) > 0 && (
-              <div className="rounded-lg border border-rose-500/25 bg-rose-500/5 px-3 py-2 text-xs text-rose-200">
+              <div className="rounded-lg border border-rose-500/25 bg-rose-500/5 px-3 py-2 text-xs text-danger">
                 {ledger.data.overdueEntries.length} overdue credit sale(s) beyond the agreed credit period.
               </div>
             )}
@@ -353,7 +353,7 @@ export default function Customers() {
                         </td>
                         <td className="text-xs text-ink-400">{entry.reference ?? '—'}</td>
                         <td className="text-xs text-ink-500">{entry.dueDate ? formatDate(entry.dueDate) : '—'}</td>
-                        <td className={`num text-right ${Number(entry.amount) >= 0 ? 'text-amber-300' : 'text-emerald-300'}`}>{formatINR(entry.amount)}</td>
+                        <td className={`num text-right ${Number(entry.amount) >= 0 ? 'text-warn' : 'text-ok'}`}>{formatINR(entry.amount)}</td>
                         <td className="num text-right text-ink-200">{formatINR(entry.runningBalance)}</td>
                       </tr>
                     ))

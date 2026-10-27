@@ -241,7 +241,7 @@ export default function Finance() {
                           </Badge>
                         </td>
                         <td className="text-xs text-ink-300">{payment.mode}</td>
-                        <td className={`num text-right ${payment.direction === 'RECEIPT' ? 'text-emerald-300' : 'text-amber-300'}`}>{formatINR(payment.amount)}</td>
+                        <td className={`num text-right ${payment.direction === 'RECEIPT' ? 'text-ok' : 'text-warn'}`}>{formatINR(payment.amount)}</td>
                         <td className="text-xs text-ink-500">{payment.settlementRef ?? (payment.mode === 'CASH' ? 'cash' : 'not settled')}</td>
                         <td><StatusBadge status={payment.status} /></td>
                         <td className="text-right">
@@ -289,7 +289,7 @@ export default function Finance() {
                           <p className="text-[10px] text-ink-500">{expense.reference ?? ''} {expense.createdByName ? `· ${expense.createdByName}` : ''}</p>
                         </td>
                         <td className="text-xs text-ink-300">{expense.paidVia}</td>
-                        <td className="num text-right text-rose-300">{formatINR(expense.amount)}</td>
+                        <td className="num text-right text-danger">{formatINR(expense.amount)}</td>
                         <td className="text-right">
                           {can('expenses.write') && <Button size="sm" variant="ghost" onClick={() => setDeleteExpense(expense)}>Delete</Button>}
                         </td>

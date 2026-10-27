@@ -19,11 +19,13 @@ import {
   ListChecks,
   LogOut,
   Menu,
+  Moon,
   Package,
   Receipt,
   Settings,
   ShieldCheck,
   Store,
+  Sun,
   Truck,
   Users,
   Wallet,
@@ -33,6 +35,7 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import { useAuth, useStations } from '../lib/auth';
+import { useTheme } from '../lib/theme';
 import { cn } from '../lib/utils';
 import { Badge, Button, Field, Input, Modal, useToast } from './ui';
 import { apiPost } from '../lib/api';
@@ -161,7 +164,7 @@ function SidebarNav({ groups, collapsed }: { groups: NavGroup[]; collapsed: bool
                     'group flex items-center rounded-lg text-sm transition-colors',
                     collapsed ? 'justify-center px-2 py-2' : 'gap-2.5 px-2.5 py-2',
                     isActive
-                      ? 'bg-accent/10 font-medium text-ink-100 shadow-[inset_2px_0_0_0_#38bdf8]'
+                      ? 'bg-accent/10 font-medium text-ink-100 shadow-[inset_2px_0_0_0_rgb(var(--accent))]'
                       : 'text-ink-400 hover:bg-navy-800/60 hover:text-ink-100',
                   )
                 }
@@ -268,7 +271,7 @@ export function Layout() {
     <div className="flex min-h-dvh bg-navy-950">
       <a
         href="#main"
-        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[70] focus:rounded focus:bg-accent focus:px-3 focus:py-2 focus:text-navy-950"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[70] focus:rounded focus:bg-accent focus:px-3 focus:py-2 focus:text-onaccent"
       >
         Skip to content
       </a>
@@ -299,7 +302,7 @@ export function Layout() {
       {/* mobile drawer */}
       {mobileOpen && (
         <div className="fixed inset-0 z-40 md:hidden">
-          <div className="absolute inset-0 bg-navy-950/70 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
+          <div className="absolute inset-0 bg-scrim/70 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
           <aside className="animate-slide-in relative flex h-[100dvh] w-[270px] max-w-[85vw] flex-col border-r border-navy-700 bg-navy-900">
             <div className="flex shrink-0 items-center justify-between px-3">
               <Brand collapsed={false} />
@@ -346,7 +349,7 @@ export function Layout() {
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-navy-700/60 bg-navy-900/80 px-3 backdrop-blur sm:px-5">
+        <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-navy-700/60 bg-navy-900/85 px-3 backdrop-blur-xl sm:px-5">
           <button
             className="shrink-0 rounded-md p-2 text-ink-300 hover:bg-navy-800 md:hidden"
             onClick={() => setMobileOpen(true)}
@@ -415,6 +418,7 @@ export function Layout() {
                 Trial ends soon
               </Badge>
             )}
+            <ThemeToggle />
             <div className="relative" ref={menuRef}>
               <button
                 onClick={() => setUserMenu((v) => !v)}
@@ -422,7 +426,7 @@ export function Layout() {
                 aria-haspopup="menu"
                 aria-expanded={userMenu}
               >
-                <span className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-accent/80 to-accent-teal/80 text-xs font-bold text-navy-950">
+                <span className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-accent/80 to-accent-teal/80 text-xs font-bold text-onaccent">
                   {me?.user.name
                     .split(' ')
                     .slice(0, 2)
@@ -461,7 +465,7 @@ export function Layout() {
                     </button>
                     <button
                       onClick={() => void logout()}
-                      className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-rose-300 hover:bg-rose-500/10"
+                      className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-danger hover:bg-rose-500/10"
                       role="menuitem"
                     >
                       <LogOut className="h-4 w-4" /> Sign out
@@ -478,20 +482,23 @@ export function Layout() {
           className="mx-auto w-full max-w-[1500px] flex-1 px-3 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-5 lg:px-6"
         >
           {isDemoTenant && (
-            <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs text-amber-200/90">
+            <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs text-warn/90">
               <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
               This tenant contains seeded DEMO records. Hardware readings in this environment are SIMULATED and are
               not derived from physical dispensers.
             </div>
           )}
-          <Outlet />
+          {/* Re-keying on the pathname gives every screen a subtle entrance animation. */}
+          <div key={location.pathname} className="animate-fade-in">
+            <Outlet />
+          </div>
         </main>
         <footer className="border-t border-navy-800/60 px-4 py-3 text-[11px] text-ink-600">
           <div className="mx-auto flex max-w-[1500px] flex-wrap items-center justify-between gap-2">
             <span>PetroFlow ERP · India · Asia/Kolkata · INR</span>
             <span className="flex items-center gap-2">
               <Activity className="h-3 w-3" /> API v1 ·{' '}
-              <span className={me ? 'text-emerald-400' : 'text-rose-400'}>{me ? 'session active' : 'signed out'}</span>
+              <span className={me ? 'text-ok' : 'text-danger'}>{me ? 'session active' : 'signed out'}</span>
             </span>
           </div>
         </footer>
@@ -542,10 +549,27 @@ export function Layout() {
   );
 }
 
+function ThemeToggle() {
+  const { theme, toggleTheme } = useTheme();
+  const isDark = theme === 'dark';
+  const label = isDark ? 'Switch to light theme' : 'Switch to dark theme';
+  return (
+    <button
+      type="button"
+      onClick={toggleTheme}
+      title={label}
+      aria-label={label}
+      className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-transparent text-ink-400 transition-colors hover:border-navy-600 hover:bg-navy-800/70 hover:text-ink-100"
+    >
+      {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+    </button>
+  );
+}
+
 function Brand({ collapsed }: { collapsed: boolean }) {
   return (
     <div className={cn('flex h-14 items-center gap-2.5 border-b border-navy-700/60 px-4', collapsed && 'justify-center px-2')}>
-      <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-accent to-accent-teal text-navy-950">
+      <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-accent to-accent-teal text-onaccent">
         <Receipt className="h-4 w-4" strokeWidth={2.5} />
       </div>
       {!collapsed && (
