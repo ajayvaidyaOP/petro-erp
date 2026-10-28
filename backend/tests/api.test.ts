@@ -79,8 +79,9 @@ describe('authentication & authorization', () => {
     const { env } = await import('../src/env.js');
     const isolatedApp = createApp();
     const agent = request.agent(isolatedApp);
-    expect((await agent.post('/api/v1/auth/login').send({ email: 'owner@sunrisefuels.in', password: PASSWORD })).status).toBe(200);
-    for (let i = 0; i < 3; i += 1) {
+    // Successful sign-ins must not consume the failed-credential allowance,
+    // even when the same browser/network signs in repeatedly.
+    for (let i = 0; i < env.LOGIN_RATE_LIMIT_MAX + 1; i += 1) {
       expect((await agent.post('/api/v1/auth/login').send({ email: 'owner@sunrisefuels.in', password: PASSWORD })).status).toBe(200);
     }
     for (let i = 0; i < env.LOGIN_RATE_LIMIT_MAX; i += 1) {

@@ -65,6 +65,8 @@ authRouter.post(
       }
     }
     const session = createSession(String(row.id), { ip: req.ip, userAgent: req.header('user-agent') });
+    // The dev fallback token is in the JSON body; never let intermediaries cache it.
+    res.setHeader('Cache-Control', 'no-store');
     res.cookie(env.SESSION_COOKIE_NAME, session.token, cookieOptions(req, session.expiresAt));
     run('UPDATE users SET last_login_at = ? WHERE id = ?', [nowIso(), String(row.id)]);
     audit(req, {
@@ -73,7 +75,13 @@ authRouter.post(
       actorId: String(row.id), actorEmail: String(row.email), actorRole: String(row.role_key),
     });
     const user = publicUser(String(row.id));
-    return ok(res, { user, sessionExpiresAt: session.expiresAt });
+    return ok(res, {
+      user,
+      sessionExpiresAt: session.expiresAt,
+      // Development-only fallback for preview/browser environments that reject
+      // all cookies. The frontend stores it in tab-scoped sessionStorage.
+      ...(env.NODE_ENV === 'development' ? { sessionToken: session.token } : {}),
+    });
   }),
 );
 

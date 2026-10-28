@@ -133,28 +133,36 @@ function buildContext(userId: string, sessionId: string): AuthContext | null {
 export function attachAuth(req: Request, _res: Response, next: NextFunction) {
   req.auth = undefined;
   req.sessionToken = undefined;
-  const token = (req as Request & { cookies?: Record<string, string> }).cookies?.[env.SESSION_COOKIE_NAME];
-  if (!token) return next();
-  const row = get<Record<string, unknown>>(
-    `SELECT s.id, s.user_id, s.expires_at, s.revoked_at, u.status AS user_status,
-            u.tenant_id, t.status AS tenant_status
-       FROM sessions s
-       JOIN users u ON u.id = s.user_id
-       LEFT JOIN tenants t ON t.id = u.tenant_id
-      WHERE s.token_hash = ?`,
-    [sha256(token)],
-  );
-  if (!row || row.revoked_at) return next();
-  if (new Date(String(row.expires_at)).getTime() <= Date.now()) return next();
-  if (String(row.user_status) !== 'ACTIVE') return next();
-  if (row.tenant_id && String(row.tenant_status) !== 'ACTIVE') return next();
+  const cookieToken = (req as Request & { cookies?: Record<string, string> }).cookies?.[env.SESSION_COOKIE_NAME];
+  // Bearer sessions are accepted only by the development server. The login
+  // endpoint exposes the token there solely as a cookie-block fallback.
+  const bearerToken = env.NODE_ENV === 'development'
+    ? req.header('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1]
+    : undefined;
+  const tokens = [...new Set([bearerToken, cookieToken].filter((token): token is string => Boolean(token)))];
+  for (const token of tokens) {
+    const row = get<Record<string, unknown>>(
+      `SELECT s.id, s.user_id, s.expires_at, s.revoked_at, u.status AS user_status,
+              u.tenant_id, t.status AS tenant_status
+         FROM sessions s
+         JOIN users u ON u.id = s.user_id
+         LEFT JOIN tenants t ON t.id = u.tenant_id
+        WHERE s.token_hash = ?`,
+      [sha256(token)],
+    );
+    if (!row || row.revoked_at) continue;
+    if (new Date(String(row.expires_at)).getTime() <= Date.now()) continue;
+    if (String(row.user_status) !== 'ACTIVE') continue;
+    if (row.tenant_id && String(row.tenant_status) !== 'ACTIVE') continue;
 
-  const context = buildContext(String(row.user_id), String(row.id));
-  if (!context) return next();
-  req.auth = context;
-  req.sessionToken = token;
-  if (Math.random() < 0.02) {
-    run('UPDATE sessions SET last_seen_at = ? WHERE id = ?', [nowIso(), String(row.id)]);
+    const context = buildContext(String(row.user_id), String(row.id));
+    if (!context) continue;
+    req.auth = context;
+    req.sessionToken = token;
+    if (Math.random() < 0.02) {
+      run('UPDATE sessions SET last_seen_at = ? WHERE id = ?', [nowIso(), String(row.id)]);
+    }
+    return next();
   }
   return next();
 }

@@ -17,6 +17,25 @@ afterAll(() => {
 });
 
 describe('preview session cookies', () => {
+  it('keeps repeated cookie-blocked preview sign-ins authenticated', async () => {
+    const origin = 'https://5173-previewtest.e2b.app';
+    for (let attempt = 0; attempt < 25; attempt += 1) {
+      const login = await request(app).post('/api/v1/auth/login')
+        .set('Host', 'localhost:5173').set('Origin', origin)
+        .send({ email: 'owner@sunrisefuels.in', password: 'PetroFlow@2025' });
+      expect(login.status).toBe(200);
+      expect(login.headers['cache-control']).toContain('no-store');
+      expect(login.body.data.sessionToken).toEqual(expect.any(String));
+
+      // Deliberately omit the cookie to mirror browsers that reject it.
+      const me = await request(app).get('/api/v1/auth/me')
+        .set('Host', 'localhost:5173')
+        .set('Authorization', `Bearer ${login.body.data.sessionToken}`);
+      expect(me.status).toBe(200);
+      expect(me.body.data.user.email).toBe('owner@sunrisefuels.in');
+    }
+  });
+
   it('sets and clears secure partitioned cookies for an embedded HTTPS preview', async () => {
     const host = '5173-sandbox.e2b.app';
     const origin = `https://${host}`;
@@ -44,6 +63,16 @@ describe('preview session cookies', () => {
     const cookie = login.headers['set-cookie'][0] as string;
     expect(cookie).toMatch(/SameSite=Lax/i);
     expect(cookie).not.toMatch(/Partitioned/i);
+    // The fallback is present even when a proxy obscures the preview origin.
+    expect(login.body.data.sessionToken).toEqual(expect.any(String));
+    const me = await request(app).get('/api/v1/auth/me')
+      .set('Authorization', `Bearer ${login.body.data.sessionToken}`);
+    expect(me.status).toBe(200);
+    const cookieValue = cookie.split(';')[0]!;
+    const cookieFallback = await request(app).get('/api/v1/auth/me')
+      .set('Authorization', 'Bearer expired-preview-token')
+      .set('Cookie', cookieValue);
+    expect(cookieFallback.status).toBe(200);
   });
 });
 
