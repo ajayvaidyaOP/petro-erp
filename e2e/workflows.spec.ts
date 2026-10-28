@@ -30,7 +30,13 @@ const owner = 'owner@sunrisefuels.in';
 
 async function demoLogin(page: Page, email = owner) {
   await page.goto('/login');
-  await page.getByRole('button', { name: new RegExp(email.replace('.', '\\.')) }).click();
+  if (email === 'superadmin@petroflow.dev') {
+    await page.getByLabel('Email').fill(email);
+    await page.locator('input[type="password"]').fill('PetroFlow@2025');
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  } else {
+    await page.getByRole('button', { name: new RegExp(email.replace('.', '\\.')) }).click();
+  }
   await expect(page.getByRole('navigation', { name: 'Primary' }).first()).toBeVisible();
 }
 
@@ -90,7 +96,9 @@ test('embedded HTTPS preview keeps its session when third-party cookies are bloc
   await page.routeWebSocket(/wss:\/\/5173-sandbox\.e2b\.app.*/, (socket) => socket.send('{"type":"connected"}'));
   await page.goto('https://arena.invalid/');
   const frame = page.frameLocator('iframe');
-  await frame.getByRole('button', { name: /superadmin@petroflow\.dev/ }).click();
+  await frame.getByLabel('Email').fill('superadmin@petroflow.dev');
+  await frame.locator('input[type="password"]').fill('PetroFlow@2025');
+  await frame.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(frame.getByRole('navigation', { name: 'Primary' }).first()).toBeVisible();
   const cookie = (await context.cookies()).find((item) => item.name === 'pf_session' && item.domain === '5173-sandbox.e2b.app');
   expect(cookie).toMatchObject({ secure: true, sameSite: 'None' });
@@ -103,10 +111,8 @@ test('embedded HTTPS preview keeps its session when third-party cookies are bloc
 
 for (const [role, email] of [
   ['owner', owner],
-  ['manager', 'manager@sunrisefuels.in'],
-  ['cashier', 'cashier@sunrisefuels.in'],
-  ['operator', 'operator@sunrisefuels.in'],
-  ['accountant', 'accounts@sunrisefuels.in'],
+  ['pump 1 staff', 'staff1@sunrisefuels.in'],
+  ['pump 2 staff', 'staff2@sunrisefuels.in'],
   ['platform admin', 'superadmin@petroflow.dev'],
 ] as const) {
   test(`${role}: every visible navigation screen loads without browser or API errors`, async ({ page }) => {
@@ -118,12 +124,7 @@ for (const [role, email] of [
       await nav.locator(`a[href="${path}"]`).first().click();
       await waitForPage(page);
     }
-    if (role === 'cashier') {
-      await expect(nav.getByRole('link', { name: 'Tanks & Stock' })).toHaveCount(0);
-      await page.goto('/tanks');
-      await expect(page.getByText('Stock access required')).toBeVisible();
-      await waitForPage(page);
-    }
+
   });
 }
 
@@ -235,4 +236,43 @@ test('shift preview, manual edit and close use the saved reading', async ({ page
   expect(body.data.nozzles.some((nozzle: { closingReading: string }) => nozzle.closingReading === manualClosing)).toBe(true);
   await expect(closeDialog).toBeHidden();
   await expect(detail.getByText(/closed|flagged/i).first()).toBeVisible();
+});
+
+for (const email of [owner, 'staff1@sunrisefuels.in', 'staff2@sunrisefuels.in']) {
+  test(`${email}: navigation screens fit a 360px phone in both themes`, async ({ page }) => {
+    await demoLogin(page, email);
+    const paths = await page.getByRole('navigation', { name: 'Primary' }).first().locator('a').evaluateAll((links) => links.map((link) => link.getAttribute('href')).filter((href): href is string => Boolean(href)));
+    await page.setViewportSize({ width: 360, height: 780 });
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate((value) => { localStorage.setItem('petroflow.theme', value); document.documentElement.dataset.theme = value; }, theme);
+      for (const path of paths) {
+        await page.goto(path);
+        await waitForPage(page);
+        const dimensions = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, viewport: document.documentElement.clientWidth }));
+        expect(dimensions.scroll, `${path} ${theme}`).toBeLessThanOrEqual(dimensions.viewport);
+      }
+    }
+  });
+}
+
+test('staff can enter a credit slip without seeing the company ledger', async ({ page }) => {
+  await demoLogin(page, 'staff1@sunrisefuels.in');
+  await page.goto('/customers');
+  await page.getByRole('button', { name: 'Credit slip' }).first().click();
+  const dialog = page.getByRole('dialog', { name: /Credit sale/ });
+  await expect(dialog.getByRole('button', { name: 'Post credit sale' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: /credit ledger/ })).toHaveCount(0);
+});
+
+test('owner can switch combined DSR and export both pump registers', async ({ page }) => {
+  await demoLogin(page);
+  await expect(page.getByText('Dono Pump · Owner overview')).toBeVisible();
+  await page.goto('/reports');
+  await page.getByLabel('Report pump').selectOption('all');
+  await expect(page.getByText('Dono Pump · Combined')).toBeVisible();
+  for (const label of ['Sales Register', 'Stock Statement']) {
+    const download = page.waitForEvent('download');
+    await page.getByRole('button', { name: new RegExp(label) }).click();
+    expect((await download).suggestedFilename()).toContain('.csv');
+  }
 });

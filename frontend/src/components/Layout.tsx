@@ -118,7 +118,7 @@ function tenantNav(can: (p: string) => boolean): NavGroup[] {
     },
   ];
   return groups
-    .map((group) => ({ ...group, items: group.items.filter((item) => !item.permission || can(item.permission)) }))
+    .map((group) => ({ ...group, items: group.items.filter((item) => (!item.permission || can(item.permission)) && (item.to !== '/suppliers' || can('reports.read'))) }))
     .filter((group) => group.items.length > 0);
 }
 
@@ -399,7 +399,7 @@ export function Layout() {
                     navigate(location.pathname);
                   }}
                   className="max-w-[240px] cursor-pointer rounded-md border border-transparent bg-transparent py-1 pr-6 text-sm font-medium text-ink-100 transition hover:border-navy-600 focus:border-accent/50 focus:outline-none"
-        ria-label="Active station"
+        aria-label="Active station"
                 >
                   {stations.map((s) => (
                     <option key={s.id} value={s.id} className="bg-navy-850">
@@ -592,7 +592,7 @@ function MobileBottomNav({ can, onMenu }: { can: (p: string) => boolean; onMenu:
     { to: '/shifts', label: 'Shifts', icon: <ListChecks className="h-5 w-5" />, permission: 'shifts.read' },
     { to: '/readings', label: 'Readings', icon: <Gauge className="h-5 w-5" />, permission: 'readings.read' },
     { to: '/tanks', label: 'Tanks', icon: <Database className="h-5 w-5" />, permission: 'stock.read' },
-  ].filter((item) => !item.permission || can(item.permission));
+  ].filter((item) => (!item.permission || can(item.permission)) && (item.to !== '/suppliers' || can('reports.read')));
 
   return (
     <nav

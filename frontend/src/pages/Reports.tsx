@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Download, Printer, ReceiptText } from 'lucide-react';
 import { apiDownload, apiGet } from '../lib/api';
-import { useStations } from '../lib/auth';
+import { useAuth, useStations } from '../lib/auth';
 import { formatDate, formatDateTime, formatINR, formatNumber, todayIst } from '../lib/format';
 import { downloadCsv } from '../lib/utils';
 import {
@@ -18,6 +18,7 @@ import {
   LoadingBlock,
   PageHeader,
   StatCard,
+  Select,
   StatusBadge,
 } from '../components/ui';
 
@@ -47,13 +48,36 @@ interface Dsr {
   notes: string[];
 }
 
+// Merge independently authorized station DSRs; integer minor units avoid floating-point drift.
+function mergeDsrs(reports: Dsr[]): Dsr {
+  const sum = (values: (string | number)[], digits: number) => (values.reduce<number>((a, v) => a + Math.round(Number(v) * 10 ** digits), 0) / 10 ** digits).toFixed(digits);
+  const productMap = new Map<string, Dsr['productTotals'][number]>();
+  for (const report of reports) for (const row of report.productTotals) {
+    const previous = productMap.get(row.code);
+    productMap.set(row.code, { ...row, litres: sum([previous?.litres ?? '0', row.litres], 3), value: sum([previous?.value ?? '0', row.value], 2) });
+  }
+  const keys = Object.keys(reports[0].totals) as (keyof Dsr['totals'])[];
+  const totals = Object.fromEntries(keys.map((key) => [key, sum(reports.map((r) => r.totals[key]), key.endsWith('Litres') ? 3 : 2)])) as unknown as Dsr['totals'];
+  const modes = new Set(reports.flatMap((r) => Object.keys(r.paymentMix)));
+  const tagged = (key: 'nozzleSales' | 'shifts' | 'transactions' | 'expenses' | 'deliveries' | 'receipts' | 'stock') => reports.flatMap((r) => r[key].map((row) => ({ ...row, stationName: r.station.name })));
+  return { ...reports[0], station: { name: 'Dono Pump · Combined', code: 'ALL', address: null, city: null, state: null },
+    totals, productTotals: [...productMap.values()], paymentMix: Object.fromEntries([...modes].map((mode) => [mode, sum(reports.map((r) => r.paymentMix[mode] ?? '0'), 2)])),
+    nozzleSales: tagged('nozzleSales'), shifts: tagged('shifts'), transactions: tagged('transactions'), expenses: tagged('expenses'), deliveries: tagged('deliveries'), receipts: tagged('receipts'), stock: tagged('stock'),
+    reconciliation: null, notes: [...reports[0].notes, 'Combined reconciliation is not shown; select a pump to view its reconciliation.'] };
+}
+
 export default function Reports() {
-  const { stationId, station } = useStations();
+  const { stationId, station, stations } = useStations();
+  const { me } = useAuth();
+  const [scope, setScope] = useState<string>('current');
+  const selected = scope === 'current' ? stationId : scope;
   const [date, setDate] = useState(todayIst());
 
   const dsr = useQuery({
-    queryKey: ['dsr', stationId, date],
-    queryFn: () => apiGet<Dsr>(`/reports/dsr?stationId=${stationId}&date=${date}`),
+    queryKey: ['dsr', selected, date, stations.map((s) => s.id).join(',')],
+    queryFn: async () => selected === 'all'
+      ? mergeDsrs(await Promise.all(stations.map((s) => apiGet<Dsr>(`/reports/dsr?stationId=${s.id}&date=${date}`))))
+      : apiGet<Dsr>(`/reports/dsr?stationId=${selected}&date=${date}`),
     enabled: Boolean(stationId),
   });
 
@@ -63,9 +87,10 @@ export default function Reports() {
     <>
       <PageHeader
         title="Daily Sales Report (DSR)"
-        description={`${station?.name ?? ''} · consolidated operational report for the business date`}
+        description={`${selected === 'all' ? 'Dono Pump' : stations.find((s) => s.id === selected)?.name ?? station?.name ?? ''} · operational report for the business date`}
         actions={
           <>
+            {me?.user.roleKey === 'OWNER' && stations.length > 1 && <Field label="Pump" className="mb-0"><Select value={selected} onChange={(e) => setScope(e.target.value)} aria-label="Report pump"><option value="all">Dono Pump</option>{stations.map((s, i) => <option key={s.id} value={s.id}>Pump {i + 1} · {s.name}</option>)}</Select></Field>}
             <Field label="Business date" className="mb-0">
               <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-auto" />
             </Field>
@@ -82,6 +107,7 @@ export default function Reports() {
                 downloadCsv(
                   `dsr-${date}.csv`,
                   (dsr.data?.nozzleSales ?? []).map((row) => ({
+                    pump: row.stationName ?? dsr.data?.station.name,
                     shift: row.shiftNumber,
                     nozzle: row.nozzleLabel,
                     dispenser: row.dispenserCode,
@@ -193,7 +219,7 @@ export default function Reports() {
                     dsr.data.nozzleSales.map((row, index) => (
                       <tr key={String(row.id ?? index)}>
                         <td className="text-xs text-ink-400">#{String(row.shiftNumber)} <StatusBadge status={String(row.shiftStatus)} /></td>
-                        <td className="font-medium text-ink-100">{String(row.nozzleLabel)}<span className="block text-[10px] text-ink-500">{String(row.dispenserCode)}</span></td>
+                        <td className="font-medium text-ink-100">{String(row.nozzleLabel)}<span className="block text-[10px] text-ink-500">{String(row.dispenserCode)}{row.stationName ? ` · ${String(row.stationName)}` : ''}</span></td>
                         <td className="text-xs text-ink-300">{String(row.productName)}</td>
                         <td className="num text-right">{row.openingReading ? formatNumber(String(row.openingReading), 3) : '—'}</td>
                         <td className="num text-right">{row.closingReading ? formatNumber(String(row.closingReading), 3) : '—'}</td>
@@ -219,7 +245,7 @@ export default function Reports() {
                   <tbody>
                     {dsr.data.stock.map((tank) => (
                       <tr key={String(tank.id)}>
-                        <td className="text-ink-100">{String(tank.code)}<span className="block text-[10px] text-ink-500">{String(tank.productName)}</span></td>
+                        <td className="text-ink-100">{String(tank.code)}<span className="block text-[10px] text-ink-500">{String(tank.productName)}{tank.stationName ? ` · ${String(tank.stationName)}` : ''}</span></td>
                         <td className="num text-right">{formatNumber(String(tank.openingBook), 3)}</td>
                         <td className="num text-right">{formatNumber(String(tank.deliveredToday), 3)}</td>
                         <td className="num text-right">{formatNumber(String(tank.dispensedBook), 3)}</td>
@@ -301,14 +327,15 @@ export default function Reports() {
         </div>
       ) : null}
 
-      <StockLossCard stationId={stationId} />
+      <StockLossCard stationId={selected} stations={stations} />
       <AgeingCard stationId={stationId} />
-      <ExportsCard stationId={stationId} />
+      <ExportsCard stationId={selected} />
     </>
   );
 }
 
 interface StockLossRow {
+  stationName?: string;
   productName: string;
   productCode: string;
   openingLitres: string;
@@ -324,11 +351,11 @@ interface StockLossRow {
   status: 'WITHIN_NORM' | 'BEYOND_NORM' | 'GAIN_CHECK' | 'NO_DIP';
 }
 
-function StockLossCard({ stationId }: { stationId: string }) {
+function StockLossCard({ stationId, stations }: { stationId: string; stations: { id: string; name: string }[] }) {
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const report = useQuery<{ month: string; rows: StockLossRow[] }>({
     queryKey: ['stock-loss', stationId, month],
-    queryFn: () => apiGet(`/reports/stock-loss?stationId=${stationId}&month=${month}`),
+    queryFn: async () => stationId === 'all' ? { month, rows: (await Promise.all(stations.map(async (s) => { const report = await apiGet<{ rows: StockLossRow[] }>(`/reports/stock-loss?stationId=${s.id}&month=${month}`); return report.rows.map((r) => ({ ...r, stationName: s.name })); }))).flat() } : apiGet(`/reports/stock-loss?stationId=${stationId}&month=${month}`),
     enabled: Boolean(stationId),
   });
   const rows = report.data?.rows ?? [];
@@ -371,8 +398,8 @@ function StockLossCard({ stationId }: { stationId: string }) {
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.productCode}>
-                  <td className="font-medium text-ink-100">{row.productName}</td>
+                <tr key={`${row.stationName ?? stationId}-${row.productCode}`}>
+                  <td className="font-medium text-ink-100">{row.productName}{row.stationName && <span className="block text-xs text-ink-500">{row.stationName}</span>}</td>
                   <td className="num text-right">{formatNumber(row.openingLitres, 0)}</td>
                   <td className="num text-right">{formatNumber(row.receiptsLitres, 0)}</td>
                   <td className="num text-right">{formatNumber(row.dispensedLitres, 0)}</td>
@@ -493,15 +520,10 @@ function ExportsCard({ stationId }: { stationId: string }) {
 
   const download = async (slug: string, filename: string) => {
     setBusy(slug);
-    const [year, monthStr] = month.split('-');
-    const from = `${month}-01`;
-    const lastDay = new Date(Number(year), Number(monthStr), 0).getDate();
-    const to = `${month}-${String(lastDay).padStart(2, '0')}`;
-    const query = slug === 'sales-register' || slug === 'lubricants-gst'
-      ? `stationId=${stationId}&from=${from}&to=${to}`
-      : slug === 'stock-statement' ? `stationId=${stationId}&month=${month}` : `stationId=${stationId}`;
+    const effectiveStation = stationId === 'all' && (slug === 'ageing' || slug === 'lubricants-gst') ? '' : stationId;
+    const query = `stationId=${effectiveStation}&month=${month}`;
     try {
-      await apiDownload(`/reports/export/${slug}?${query}`, filename);
+      await apiDownload(`/reports/export/${slug}.csv?${query}`, filename);
     } catch (error) {
       window.alert((error as Error).message);
     } finally {
@@ -513,7 +535,7 @@ function ExportsCard({ stationId }: { stationId: string }) {
     { slug: 'sales-register', name: 'Sales Register', detail: 'Mahine ki sahi bikri — product, mode wise (CA ke liye)' },
     { slug: 'stock-statement', name: 'Stock Statement', detail: 'Tank-wise opening/aavak/bikri/closing — oil company format' },
     { slug: 'ageing', name: 'Udhaar Ageing', detail: 'Party-wise purana bakaya buckets me' },
-    { slug: 'lubricants-gst', name: 'Lubricants GST Register', detail: 'Oil bikri GST alag karke — GSTR filing ready' },
+    ...(stationId === 'all' ? [] : [{ slug: 'lubricants-gst', name: 'Lubricants GST Register', detail: 'Oil bikri GST alag karke — GSTR filing ready' }]),
   ];
 
   return (

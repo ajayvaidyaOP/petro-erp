@@ -4,6 +4,9 @@ import { Link } from 'react-router-dom';
 import {
   Area,
   AreaChart,
+  Line,
+  LineChart,
+  Legend,
   CartesianGrid,
   Cell,
   Pie,
@@ -108,7 +111,8 @@ interface StationSummaryRow {
 }
 
 export default function Dashboard() {
-  const { can } = useAuth();
+  const { can, me } = useAuth();
+  const [combined, setCombined] = useState(true);
   const { stations, station, stationId, selectStation } = useStations();
   const [date, setDate] = useState(todayIst());
   const chart = useChartPalette();
@@ -177,6 +181,10 @@ export default function Dashboard() {
     [dashboard.data],
   );
 
+  if (me?.user.roleKey === 'OWNER' && stations.length > 1 && combined) {
+    return <CombinedDashboard date={date} setDate={setDate} onStation={(id) => { selectStation(id); setCombined(false); }} />;
+  }
+
   if (!stationId) {
     return (
       <>
@@ -238,6 +246,13 @@ export default function Dashboard() {
           </>
         }
       />
+
+      {me?.user.roleKey === 'OWNER' && stations.length > 1 && (
+        <div className="mb-4 flex flex-wrap gap-2" aria-label="Dashboard pump view">
+          <Button size="sm" variant="outline" onClick={() => setCombined(true)}>Dono Pump</Button>
+          {stations.map((item, index) => <Button key={item.id} size="sm" variant={item.id === stationId ? 'primary' : 'outline'} onClick={() => selectStation(item.id)}>Pump {index + 1}</Button>)}
+        </div>
+      )}
 
       {todayRates.length > 0 && (
         <div className="card mb-3 overflow-hidden">
@@ -645,4 +660,54 @@ export default function Dashboard() {
       </p>
     </>
   );
+}
+
+interface CombinedStation {
+  id: string; name: string; code: string; litres: string; value: string; monthValue: string;
+  shortExcess: string | null;
+  tanks: DashboardData['stock'];
+  alerts: DashboardData['alerts'];
+  trend: { date: string; value: string }[];
+  products: { name: string; color: string; litres: string }[];
+}
+interface CombinedData { date: string; stations: CombinedStation[]; totalValue: string; totalLitres: string; monthValue: string }
+
+function CombinedDashboard({ date, setDate, onStation }: { date: string; setDate: (date: string) => void; onStation: (id: string) => void }) {
+  const chart = useChartPalette();
+  const result = useQuery<CombinedData>({ queryKey: ['combined-dashboard', date], queryFn: () => apiGet(`/reports/combined-dashboard?date=${date}`), refetchInterval: 60_000 });
+  if (result.isLoading) return <LoadingBlock rows={6} />;
+  if (result.isError || !result.data) return <ErrorState error={result.error} onRetry={() => void result.refetch()} />;
+  const data = result.data;
+  const series = data.stations[0]?.trend.map((day, index) => ({ date: day.date.slice(5), ...Object.fromEntries(data.stations.map((station) => [station.id, Number(station.trend[index]?.value ?? 0)])) })) ?? [];
+  const products = new Map<string, { name: string; value: number; color: string }>();
+  for (const station of data.stations) for (const p of station.products) {
+    const old = products.get(p.name); products.set(p.name, { name: p.name, color: p.color, value: (old?.value ?? 0) + Number(p.litres) });
+  }
+  const pie = [...products.values()].filter((p) => p.value > 0);
+  const alerts = data.stations.flatMap((s) => s.alerts.map((a) => ({ ...a, station: s.name })));
+  const colors = ['#f97316', '#38bdf8', '#a78bfa', '#34d399'];
+  return <>
+    <PageHeader title="Dono Pump · Owner overview" description="Dono stations ka ek saath hisaab — closed shifts ki estimated sales" actions={<Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-auto" aria-label="Business date" />} />
+    <div className="mb-5 flex flex-wrap gap-2" aria-label="Dashboard pump view">
+      <Button size="sm" variant="primary">Dono Pump</Button>
+      {data.stations.map((s, i) => <Button key={s.id} size="sm" variant="outline" onClick={() => onStation(s.id)}>Pump {i + 1}</Button>)}
+    </div>
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <StatCard label="Aaj ki kul bikri" value={formatINR(data.totalValue)} hint={`${formatLitres(data.totalLitres)} · closed shifts`} tone="accent" icon={<Fuel className="h-4 w-4" />} />
+      <StatCard label="Is mahine ki bikri" value={formatINR(data.monthValue)} hint="Month start se selected date tak" icon={<Banknote className="h-4 w-4" />} />
+      <StatCard label="Tank & licence alerts" value={String(alerts.length)} hint="Dono pumps · stock aur compliance" tone={alerts.length ? 'warning' : 'default'} icon={<AlertTriangle className="h-4 w-4" />} />
+    </div>
+    <div className="mt-4 grid gap-3 lg:grid-cols-2">
+      {data.stations.map((s, i) => <Card key={s.id} className="overflow-hidden">
+        <div className="border-b border-navy-700/60 p-5"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-xs font-bold uppercase tracking-widest text-accent">Pump {i + 1} · {s.code}</p><h2 className="mt-1 font-display text-lg font-bold text-ink-100">{s.name}</h2></div><Badge tone={s.alerts.length ? 'warning' : 'success'}>{s.alerts.length} alerts</Badge></div>
+          <div className="mt-5 flex flex-wrap gap-x-8 gap-y-3"><div><p className="text-xs text-ink-500">Aaj ki bikri</p><p className="num font-display text-2xl font-bold text-ink-100">{formatINR(s.value)}</p><p className="text-xs text-ink-400">{formatLitres(s.litres)}</p></div><div><p className="text-xs text-ink-500">Cash short / excess</p><p className={`num mt-1 text-lg font-semibold ${s.shortExcess === null ? 'text-ink-500' : Number(s.shortExcess) < 0 ? 'text-danger' : 'text-ok'}`}>{s.shortExcess === null ? 'Not settled' : formatINR(s.shortExcess)}</p></div></div>
+        </div>
+        <div className="space-y-3 p-5"><p className="text-xs font-semibold uppercase tracking-wider text-ink-500">Tank levels · book stock</p>{s.tanks.length === 0 ? <p className="text-xs text-ink-500">Tank jodo aur stock entry karo.</p> : s.tanks.map((tank) => <div key={tank.id}><div className="mb-1 flex justify-between gap-2 text-xs"><span className="text-ink-300">{tank.code} · {tank.productName}</span><span className="num text-ink-400">{formatLitres(tank.bookStockLitres)} / {formatLitres(tank.capacityLitres)}</span></div><div className="h-2 overflow-hidden rounded-full bg-navy-700"><div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.max(0, Math.min(100, Number(tank.fillPct)))}%`, background: tank.productColor }} /></div></div>)}</div>
+      </Card>)}
+    </div>
+    <div className="mt-4 grid gap-3 lg:grid-cols-[1.5fr_1fr]"><Card><CardHeader title="7-din sales trend" subtitle="Closed shift value · pump-wise" /><div className="h-64 px-2 pb-4"><ResponsiveContainer width="100%" height="100%"><LineChart data={series}><CartesianGrid stroke={chart.grid} strokeDasharray="3 3" /><XAxis dataKey="date" tick={{ fill: chart.axis, fontSize: 11 }} /><YAxis tick={{ fill: chart.axis, fontSize: 11 }} width={65} /><Tooltip /><Legend />{data.stations.map((s, i) => <Line key={s.id} name={s.name} dataKey={s.id} stroke={colors[i % colors.length]} strokeWidth={2.5} dot={false} />)}</LineChart></ResponsiveContainer></div></Card>
+      <Card><CardHeader title="Product-wise bikri" subtitle="Litres · selected date" />{pie.length ? <div className="h-64"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={pie} dataKey="value" nameKey="name" innerRadius={52} outerRadius={80}>{pie.map((p) => <Cell key={p.name} fill={p.color} />)}</Pie><Tooltip /><Legend /></PieChart></ResponsiveContainer></div> : <EmptyState title="Abhi bikri nahi" description="Shift close hone par product-wise bikri yahan dikhegi." />}</Card></div>
+    <Card className="mt-4"><CardHeader title="Dono pumps ke alerts" subtitle="Tank levels aur licence expiry" /><div className="space-y-2 p-4">{alerts.length ? alerts.map((alert, i) => <div key={i} className="rounded-xl border border-navy-700 bg-navy-850 p-3 text-sm text-ink-300"><span className="font-semibold text-ink-100">{alert.station}</span> · {alert.message}</div>) : <EmptyState title="Sab theek hai" description="Filhaal tank ya licence ka koi alert nahi." />}</div></Card>
+    <p className="mt-4 text-xs text-ink-500">Sales estimated from closed and flagged shift totalizers; not audited revenue. Tank levels are current book stock.</p>
+  </>;
 }

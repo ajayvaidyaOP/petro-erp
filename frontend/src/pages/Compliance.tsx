@@ -157,8 +157,8 @@ export default function Compliance() {
         ) : (
           <CardBody className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {data.documents.map((doc) => (
-              <div key={doc.id} className="rounded-2xl border border-navy-700/50 bg-navy-800/30 p-4">
-                <div className="flex items-start justify-between gap-2">
+              <div key={doc.id} className="min-w-0 break-words rounded-2xl border border-navy-700/50 bg-navy-800/30 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate font-display text-sm font-bold text-ink-100">{doc.title}</p>
                     <p className="mt-0.5 text-[11px] text-ink-500">

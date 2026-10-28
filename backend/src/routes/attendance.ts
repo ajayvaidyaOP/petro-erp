@@ -32,8 +32,9 @@ attendanceRouter.get(
          LEFT JOIN attendance_records a
            ON a.user_id = u.id AND a.attendance_date = ? AND a.station_id = ?
         WHERE u.tenant_id = ? AND u.status = 'ACTIVE'
+          AND (? = 1 OR (u.role_key != 'OWNER' AND EXISTS (SELECT 1 FROM user_station_access usa WHERE usa.user_id = u.id AND usa.station_id = ?)))
         ORDER BY u.name`,
-      [date, station.id, tenantIdOf(auth)],
+      [date, station.id, tenantIdOf(auth), auth.allStations ? 1 : 0, station.id],
     );
     return ok(res, {
       date,
@@ -77,7 +78,7 @@ attendanceRouter.post(
     assertDayOpen(station.id, body.date);
     const tenantId = tenantIdOf(auth);
     const validUsers = new Set(
-      all<{ id: string }>('SELECT id FROM users WHERE tenant_id = ? AND status = ?', [tenantId, 'ACTIVE']).map((u) => u.id),
+      all<{ id: string }>(`SELECT id FROM users WHERE tenant_id = ? AND status = ? AND (? = 1 OR (role_key != 'OWNER' AND id IN (SELECT user_id FROM user_station_access WHERE station_id = ?)))`, [tenantId, 'ACTIVE', auth.allStations ? 1 : 0, station.id]).map((u) => u.id),
     );
     for (const entry of body.entries) {
       if (!validUsers.has(entry.userId)) throw unprocessable('Ek employee is organization ka active member nahi hai');

@@ -205,7 +205,7 @@ authRouter.get(
     const rows = all<Record<string, unknown>>(
       `SELECT u.email, u.name, u.role_key, t.name AS tenant_name, t.slug
          FROM users u LEFT JOIN tenants t ON t.id = u.tenant_id
-        WHERE u.is_demo = 1 ORDER BY (u.role_key = 'SUPER_ADMIN') DESC, u.role_key`,
+        WHERE u.is_demo = 1 AND u.role_key != 'SUPER_ADMIN' ORDER BY u.role_key, u.email`,
     );
     return ok(res, {
       demoMode: true,

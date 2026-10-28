@@ -37,6 +37,53 @@ function totalByMode(stationId: string, start: string, end: string) {
   return Object.fromEntries(rows.map((r) => [r.payment_mode, money(r.total)]));
 }
 
+// A consolidated view is deliberately tenant-wide and owner-only. All figures
+// come from the same closed/flagged shifts used by the individual dashboard.
+reportsRouter.get('/combined-dashboard', asyncHandler((req, res) => {
+  const auth = req.auth as AuthContext;
+  if (!auth.allStations || !can(auth, 'reports.read')) throw forbidden();
+  const date = dateParam(req.query.date);
+  const monthStart = `${date.slice(0, 7)}-01`;
+  const stations = all<{ id: string; name: string; code: string }>(
+    'SELECT id, name, code FROM stations WHERE tenant_id = ? ORDER BY name', [tenantIdOf(auth)],
+  );
+  const rows = stations.map((station) => {
+    const shifts = all<{ total_litres: string; total_value: string; short_excess: string | null }>(
+      "SELECT total_litres, total_value, short_excess FROM shifts WHERE station_id = ? AND business_date = ? AND status IN ('CLOSED','FLAGGED')", [station.id, date],
+    );
+    const monthShifts = all<{ total_value: string }>(
+      "SELECT total_value FROM shifts WHERE station_id = ? AND business_date >= ? AND business_date <= ? AND status IN ('CLOSED','FLAGGED')", [station.id, monthStart, date],
+    );
+    const tanks = tankSummary(station.id);
+    const alerts: { level: string; message: string }[] = [...complianceAlerts(station.id)];
+    for (const tank of tanks) {
+      if (D(tank.bookStockLitres).lt(0)) alerts.push({ level: 'error', message: `${tank.code}: negative book stock` });
+      else if (D(tank.capacityLitres).gt(0) && D(tank.fillPct).lt(15)) alerts.push({ level: 'warning', message: `${tank.code}: low stock at ${tank.fillPct}%` });
+    }
+    const trend = Array.from({ length: 7 }, (_, i) => {
+      const day = addDays(date, i - 6);
+      const daily = all<{ total_value: string }>("SELECT total_value FROM shifts WHERE station_id = ? AND business_date = ? AND status IN ('CLOSED','FLAGGED')", [station.id, day]);
+      return { date: day, value: money(daily.reduce((sum, row) => sum.plus(D(row.total_value)), D(0))) };
+    });
+    const products = all<{ name: string; color: string; litres: string }>(
+      `SELECT p.name, p.color, COALESCE(SUM(CAST(r.litres_sold AS REAL)), 0) AS litres
+       FROM shift_nozzle_readings r JOIN shifts s ON s.id = r.shift_id
+       JOIN nozzles n ON n.id = r.nozzle_id JOIN fuel_products p ON p.id = n.product_id
+       WHERE s.station_id = ? AND s.business_date = ? AND s.status IN ('CLOSED','FLAGGED') GROUP BY p.id`, [station.id, date],
+    );
+    const cashRows = shifts.filter((shift) => shift.short_excess !== null);
+    return { ...station, litres: shifts.reduce((sum, row) => sum.plus(D(row.total_litres)), D(0)).toFixed(3),
+      value: money(shifts.reduce((sum, row) => sum.plus(D(row.total_value)), D(0))),
+      monthValue: money(monthShifts.reduce((sum, row) => sum.plus(D(row.total_value)), D(0))),
+      shortExcess: cashRows.length ? money(cashRows.reduce((sum, row) => sum.plus(D(row.short_excess!)), D(0))) : null,
+      tanks, alerts, trend, products };
+  });
+  return ok(res, { date, stations: rows,
+    totalValue: money(rows.reduce((sum, row) => sum.plus(D(row.value)), D(0))),
+    totalLitres: rows.reduce((sum, row) => sum.plus(D(row.litres)), D(0)).toFixed(3),
+    monthValue: money(rows.reduce((sum, row) => sum.plus(D(row.monthValue)), D(0))) });
+}));
+
 reportsRouter.get(
   '/owner-dashboard',
   asyncHandler((req, res) => {
@@ -471,7 +518,7 @@ reportsRouter.get(
         'Stock closing is a book figure (opening + received − dispensed ± adjustments). Physical dips are recorded separately and are not substituted for book stock.',
         'Credit sales and customer receipts are recorded in the credit ledger and are not counted as cash until a receipt is recorded.',
         flaggedShifts > 0 ? `${flaggedShifts} flagged shift(s) on this date require owner/manager approval.` : 'All shifts on this date are approved or closed without variances.',
-        `Tank stocks below are shown in litres. Aggregate dispensed volume is spread across every active tank holding that grade in proportion to book stock, because totalizer capture is per nozzle, not per tank.`,
+        'Dispensed stock is posted to the tank mapped to each nozzle.',
         ACCOUNTING_DISCLAIMER,
       ],
     });
@@ -738,26 +785,25 @@ reportsRouter.get(
   asyncHandler((req, res) => {
     const auth = req.auth as AuthContext;
     if (!can(auth, 'reports.read')) throw forbidden();
-    const station = getStationOrThrow(auth, stationParam(req));
+    const requested = stationParam(req);
+    if (requested === 'all' && !auth.allStations) throw forbidden();
+    const stations = requested === 'all'
+      ? accessibleStationIds(auth).map((id) => getStationOrThrow(auth, id))
+      : [getStationOrThrow(auth, requested)];
     const month = monthParam(req);
     const { fromIso, toIso } = monthRange(month);
-    const rows = all<Record<string, unknown>>(
+    const rows = stations.flatMap((station) => all<Record<string, unknown>>(
       `SELECT ft.occurred_at, p.name AS product_name, p.code AS product_code, n.label AS nozzle_label,
               s.shift_number, ft.quantity_litres, ft.rate, ft.amount, ft.payment_mode,
               c.name AS customer_name, ft.reference, ft.source
-         FROM fuel_transactions ft
-         JOIN fuel_products p ON p.id = ft.product_id
-         LEFT JOIN nozzles n ON n.id = ft.nozzle_id
-         LEFT JOIN shifts s ON s.id = ft.shift_id
+         FROM fuel_transactions ft JOIN fuel_products p ON p.id = ft.product_id
+         LEFT JOIN nozzles n ON n.id = ft.nozzle_id LEFT JOIN shifts s ON s.id = ft.shift_id
          LEFT JOIN customers c ON c.id = ft.customer_id
         WHERE ft.station_id = ? AND ft.occurred_at >= ? AND ft.occurred_at < ? AND ft.voided_at IS NULL
-        ORDER BY ft.occurred_at ASC`,
-      [station.id, fromIso, toIso],
-    );
-    return sendCsv(res as never, `sales-register-${station.code}-${month}.csv`,
-      ['DateTime (UTC)', 'Product', 'Code', 'Nozzle', 'Shift', 'Litres', 'Rate', 'Amount (INR)', 'Payment Mode', 'Customer', 'Reference', 'Source'],
-      rows.map((r) => [r.occurred_at, r.product_name, r.product_code, r.nozzle_label, r.shift_number, r.quantity_litres, r.rate, r.amount, r.payment_mode, r.customer_name, r.reference, r.source]),
-    );
+        ORDER BY ft.occurred_at ASC`, [station.id, fromIso, toIso],
+    ).map((r) => [station.name, r.occurred_at, r.product_name, r.product_code, r.nozzle_label, r.shift_number, r.quantity_litres, r.rate, r.amount, r.payment_mode, r.customer_name, r.reference, r.source]));
+    return sendCsv(res as never, `sales-register-${requested === 'all' ? 'combined' : stations[0].code}-${month}.csv`,
+      ['Pump', 'DateTime (UTC)', 'Product', 'Code', 'Nozzle', 'Shift', 'Litres', 'Rate', 'Amount (INR)', 'Payment Mode', 'Customer', 'Reference', 'Source'], rows);
   }),
 );
 
@@ -766,13 +812,16 @@ reportsRouter.get(
   asyncHandler((req, res) => {
     const auth = req.auth as AuthContext;
     if (!can(auth, 'reports.read')) throw forbidden();
-    const station = getStationOrThrow(auth, stationParam(req));
+    const requested = stationParam(req);
+    if (requested === 'all' && !auth.allStations) throw forbidden();
+    const stations = requested === 'all'
+      ? accessibleStationIds(auth).map((id) => getStationOrThrow(auth, id))
+      : [getStationOrThrow(auth, requested)];
     const month = monthParam(req);
-    const rows = stockLossRows(station.id, month);
-    return sendCsv(res as never, `stock-statement-${station.code}-${month}.csv`,
-      ['Product', 'Code', 'Opening (L)', 'Receipts (L)', 'Sales (L)', 'Adjustments (L)', 'Closing Book (L)', 'Physical Dip (L)', 'Loss/Gain (L)', 'Loss/Gain % of Sales', 'Norm %', 'Status'],
-      rows.map((r) => [r.productName, r.productCode, r.openingLitres, r.receiptsLitres, r.dispensedLitres, r.adjustmentsLitres, r.closingBookLitres, r.physicalLitres, r.lossGainLitres, r.lossGainPctOfSales, r.normPct, r.status]),
-    );
+    const rows = stations.flatMap((station) => stockLossRows(station.id, month).map((r) =>
+      [station.name, r.productName, r.productCode, r.openingLitres, r.receiptsLitres, r.dispensedLitres, r.adjustmentsLitres, r.closingBookLitres, r.physicalLitres, r.lossGainLitres, r.lossGainPctOfSales, r.normPct, r.status]));
+    return sendCsv(res as never, `stock-statement-${requested === 'all' ? 'combined' : stations[0].code}-${month}.csv`,
+      ['Pump', 'Product', 'Code', 'Opening (L)', 'Receipts (L)', 'Sales (L)', 'Adjustments (L)', 'Closing Book (L)', 'Physical Dip (L)', 'Loss/Gain (L)', 'Loss/Gain % of Sales', 'Norm %', 'Status'], rows);
   }),
 );
 

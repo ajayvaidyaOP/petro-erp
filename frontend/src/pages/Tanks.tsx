@@ -303,7 +303,7 @@ export default function Tanks() {
             )}
           </div>
 
-          <IndentCard stationId={stationId} />
+          {can('reports.read') && <IndentCard stationId={stationId} />}
 
           <Card className="mt-3">
             <CardHeader title="Book stock by product" subtitle="Derived from tank movement ledgers" />

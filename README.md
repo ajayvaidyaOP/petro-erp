@@ -109,9 +109,14 @@ On the first non-production start, an empty database is created at `db/petroflow
 
 The demo tenant **Sunrise Fuels** runs two outlets (Baner and Hinjewadi) with separate nozzles, tanks, shifts, deliveries and reconciliations, so multi-station behaviour can be reviewed without any setup. Switch between outlets from the station picker in the header (or the mobile menu) and compare both on the dashboard.
 
-- Owner: `owner@sunrisefuels.in`
-- Platform administrator: `superadmin@petroflow.dev`
+- Owner (both pumps): `owner@sunrisefuels.in`
+- Pump 1 staff (Baner): `staff1@sunrisefuels.in`
+- Pump 2 staff (Hinjewadi): `staff2@sunrisefuels.in`
 - Password: `PetroFlow@2025` (or the `DEMO_PASSWORD` in your ignored `.env`)
+
+The platform administrator still exists in the backend, but is not shown among client demo tiles. The owner dashboard defaults to **Dono Pump**; individual pumps can be selected there and in DSR/CSV exports. Sales figures are estimates from closed or flagged shift totalizers, not audited revenue. Customer accounts and balances are company-wide; staff can post a credit slip but the cross-pump ledger and statement are owner-only.
+
+The new demo layout is seeded **only into an empty database**. Existing databases are migrated additively and are never reset or stripped of users/companies automatically. If an old demo database is no longer needed, back it up first; `npm run db:reset` is destructive and is the explicit way to create a fresh demo. Existing customer and accounting data is not deleted on upgrade.
 
 These are development-only credentials. Do not expose a local/demo instance as a public service.
 
@@ -132,7 +137,7 @@ npm run db:reset            # DESTRUCTIVE: delete the local SQLite DB and re-see
 
 ### Automated checks
 
-`npm test` uses the separate ignored `db/test-petroflow.db`; it does not reset `db/petroflow.db`. Do not run `npm run db:reset` if you need to keep your local data.
+`npm test` uses the separate ignored `db/test-petroflow.db` (legacy authorization tests explicitly create their own multi-tenant fixture; the two-pump tests exercise the actual default seed); it does not reset `db/petroflow.db`. Do not run `npm run db:reset` if you need to keep your local data.
 
 For browser checks, install Playwright's Chromium once, then run:
 

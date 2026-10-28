@@ -180,7 +180,7 @@ export default function Devices() {
         title="Gateways & Devices"
         description="Hardware gateways authenticate with a device key, buffer locally and push idempotent events. This screen shows liveness, credential versions and raw event delivery."
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {me?.demoMode && can('devices.write') && simulated > 0 ? (
               <Button variant="outline" loading={simulate.isPending} onClick={() => simulate.mutate()}>
                 <Zap className="h-4 w-4" /> Inject simulated reading
@@ -427,7 +427,7 @@ export default function Devices() {
             <p className="text-[11px] uppercase tracking-wider text-ink-500">API key for {issuedKey?.device}</p>
             <code className="mt-1 block break-all font-mono text-sm text-accent">{issuedKey?.apiKey}</code>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
               onClick={() => {
