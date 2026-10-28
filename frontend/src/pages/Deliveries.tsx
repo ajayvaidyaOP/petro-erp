@@ -48,6 +48,10 @@ interface Delivery {
   vehicleNumber: string | null;
   driverName: string | null;
   notes: string | null;
+  densityAt15c: string | null;
+  ttSealNumbers: string | null;
+  dipBeforeCm: string | null;
+  dipAfterCm: string | null;
   supplierPaidTotal: string;
   stationName: string;
 }
@@ -108,8 +112,8 @@ export default function Deliveries() {
   });
 
   const receive = useMutation({
-    mutationFn: ({ id, receivedLitres, notes }: { id: string; receivedLitres: string; notes?: string }) =>
-      apiPost<Delivery & { discrepancyLitres?: string }>(`/inventory/deliveries/${id}/receive`, { receivedLitres, notes }),
+    mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) =>
+      apiPost<Delivery & { discrepancyLitres?: string }>(`/inventory/deliveries/${id}/receive`, payload),
     onSuccess: (row: Delivery & { discrepancyLitres?: string }) => {
       const discrepancy = Number(row.discrepancyLitres ?? 0);
       toast('Delivery received into tank', {
@@ -272,7 +276,7 @@ export default function Deliveries() {
           delivery={receiveDelivery}
           loading={receive.isPending}
           onClose={() => setReceiveDelivery(null)}
-          onSubmit={(receivedLitres, notes) => receive.mutate({ id: receiveDelivery.id, receivedLitres, notes })}
+          onSubmit={(payload) => receive.mutate({ id: receiveDelivery.id, payload })}
         />
       )}
 
@@ -320,6 +324,11 @@ function DeliveryModal({
     notes: '',
     receiveNow: true,
     receivedLitres: '',
+    densityInvoice: '',
+    densityObserved: '',
+    tempObservedC: '30',
+    ttSealNumbers: '',
+    sampleSealNo: '',
   });
 
   const tank = tanks.find((t) => t.id === form.tankId);
@@ -355,6 +364,11 @@ function DeliveryModal({
                 notes: form.notes || undefined,
                 receiveNow: form.receiveNow,
                 receivedLitres: form.receiveNow ? form.receivedLitres || form.quantityLitres : undefined,
+                densityInvoice: form.densityInvoice || undefined,
+                densityObserved: form.densityObserved || undefined,
+                tempObservedC: form.densityObserved ? form.tempObservedC || undefined : undefined,
+                ttSealNumbers: form.ttSealNumbers || undefined,
+                sampleSealNo: form.sampleSealNo || undefined,
               })
             }
           >
@@ -394,7 +408,15 @@ function DeliveryModal({
             <Input inputMode="decimal" value={form.receivedLitres} onChange={(e) => setForm({ ...form, receivedLitres: e.target.value })} />
           </Field>
         )}
-        <Field label="Notes" className="sm:col-span-2"><Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
+        <p className="sm:col-span-2 mt-1 border-t border-navy-700/60 pt-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-accent-muted">
+            TT jaanch — seal &amp; density (utarna shuru karne se pehle)
+          </p>
+          <Field label="Density — bill par (kg/m³, 15°C)"><Input inputMode="decimal" value={form.densityInvoice} onChange={(e) => setForm({ ...form, densityInvoice: e.target.value })} placeholder="745.0" /></Field>
+          <Field label="Density — yahan napi (kg/m³)"><Input inputMode="decimal" value={form.densityObserved} onChange={(e) => setForm({ ...form, densityObserved: e.target.value })} placeholder="738.4" /></Field>
+          <Field label="Taapmaan (°C)"><Input inputMode="decimal" value={form.tempObservedC} onChange={(e) => setForm({ ...form, tempObservedC: e.target.value })} /></Field>
+          <Field label="TT seal numbers" hint="Chamber-wise seals, comma se alag"><Input value={form.ttSealNumbers} onChange={(e) => setForm({ ...form, ttSealNumbers: e.target.value })} placeholder="A-1101, A-1102" /></Field>
+          <Field label="Sample band seal no." hint="2L sample bottle ki seal"><Input value={form.sampleSealNo} onChange={(e) => setForm({ ...form, sampleSealNo: e.target.value })} /></Field>
+          <Field label="Notes" className="sm:col-span-2"><Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
         <div className="sm:col-span-2 rounded-lg border border-navy-700/60 bg-navy-900/40 px-3 py-2 text-xs text-ink-400">
           Invoice value: <span className="num font-semibold text-ink-100">{formatINR(total)}</span>
           <span className="ml-2 text-ink-600">(quantity × rate + tax)</span>
@@ -413,34 +435,84 @@ function ReceiveModal({
   delivery: Delivery;
   loading: boolean;
   onClose: () => void;
-  onSubmit: (receivedLitres: string, notes?: string) => void;
+  onSubmit: (payload: Record<string, unknown>) => void;
 }) {
   const [litres, setLitres] = useState(delivery.quantityLitres);
   const [notes, setNotes] = useState('');
+  const [dec, setDec] = useState({
+    dipBeforeCm: delivery.dipBeforeCm ?? '',
+    dipAfterCm: delivery.dipAfterCm ?? '',
+    densityObserved: '',
+    tempObservedC: '30',
+    ttSealNumbers: delivery.ttSealNumbers ?? '',
+    sampleSealNo: '',
+    chamberDetails: '',
+  });
   const variance = Number(litres || 0) - Number(delivery.quantityLitres);
   return (
     <Modal
       open
       onClose={onClose}
-      title={`Receive delivery · ${delivery.invoiceNumber}`}
-      description={`${delivery.productName} into ${delivery.tankCode} · invoice ${formatNumber(delivery.quantityLitres, 3)} L`}
+      title={`Receive delivery · ${delivery.invoiceNumber} — decantation record`}
+      description={`${delivery.productName} into ${delivery.tankCode} · invoice ${formatNumber(delivery.quantityLitres, 3)} L. Dip pehle, seal jaanch, phir utaro — sab yahan pakka karo.`}
+      size="lg"
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button variant="primary" loading={loading} disabled={!litres || Number(litres) <= 0} onClick={() => onSubmit(litres, notes || undefined)}>Receive into tank</Button>
+          <Button
+            variant="primary"
+            loading={loading}
+            disabled={!litres || Number(litres) <= 0}
+            onClick={() => onSubmit({
+              receivedLitres: litres,
+              notes: notes || undefined,
+              dipBeforeCm: dec.dipBeforeCm || undefined,
+              dipAfterCm: dec.dipAfterCm || undefined,
+              densityObserved: dec.densityObserved || undefined,
+              tempObservedC: dec.densityObserved ? dec.tempObservedC || undefined : undefined,
+              ttSealNumbers: dec.ttSealNumbers || undefined,
+              sampleSealNo: dec.sampleSealNo || undefined,
+              chamberDetails: dec.chamberDetails || undefined,
+            })}
+          >
+            Receive into tank
+          </Button>
         </>
       }
     >
       <div className="space-y-3">
-        <Field label="Received quantity (litres)" required>
-          <Input inputMode="decimal" value={litres} onChange={(e) => setLitres(e.target.value)} />
-        </Field>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Received quantity (litres)" required hint="Dip ke hisaab se asal utra hua">
+            <Input inputMode="decimal" value={litres} onChange={(e) => setLitres(e.target.value)} />
+          </Field>
+          <Field label="Tank dip — utarne se PEHLE (cm)">
+            <Input inputMode="decimal" value={dec.dipBeforeCm} onChange={(e) => setDec({ ...dec, dipBeforeCm: e.target.value })} />
+          </Field>
+          <Field label="Tank dip — utarne ke BAAD (cm)">
+            <Input inputMode="decimal" value={dec.dipAfterCm} onChange={(e) => setDec({ ...dec, dipAfterCm: e.target.value })} />
+          </Field>
+          <Field label="Density napi (kg/m³)" hint="Hydrometer se TT ka sample">
+            <Input inputMode="decimal" value={dec.densityObserved} onChange={(e) => setDec({ ...dec, densityObserved: e.target.value })} placeholder="738.4" />
+          </Field>
+          <Field label="Taapmaan (°C)">
+            <Input inputMode="decimal" value={dec.tempObservedC} onChange={(e) => setDec({ ...dec, tempObservedC: e.target.value })} />
+          </Field>
+          <Field label="TT seal numbers" hint="Invoice se milao — tuti seal = utaro mat, pehpehle manager ko bulao">
+            <Input value={dec.ttSealNumbers} onChange={(e) => setDec({ ...dec, ttSealNumbers: e.target.value })} placeholder="A-1101, A-1102" />
+          </Field>
+          <Field label="Sample band seal no.">
+            <Input value={dec.sampleSealNo} onChange={(e) => setDec({ ...dec, sampleSealNo: e.target.value })} />
+          </Field>
+          <Field label="Chamber-wise detail" hint="e.g. C1 4000L · C2 4000L">
+            <Input value={dec.chamberDetails} onChange={(e) => setDec({ ...dec, chamberDetails: e.target.value })} />
+          </Field>
+        </div>
         {Math.abs(variance) > 0.001 && (
           <div className="rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs text-warn">
-            Variance vs invoice: <span className="num font-semibold">{formatNumber(String(variance), 3)} L</span>. Short deliveries are recorded on the audit trail.
+            Variance vs invoice: <span className="num font-semibold">{formatNumber(String(variance), 3)} L</span>. Kam utra to claim ke liye yahi record kaam aayega.
           </div>
         )}
-        <Field label="Receipt notes"><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Dip before/after, seal number, driver signature…" /></Field>
+        <Field label="Receipt notes"><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Driver signature, samay, koi khaas baat…" /></Field>
       </div>
     </Modal>
   );

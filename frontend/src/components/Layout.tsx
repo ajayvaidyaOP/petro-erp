@@ -12,6 +12,8 @@ import {
   ChevronRight,
   CreditCard,
   Database,
+  Droplets,
+  FlaskConical,
   Fuel,
   Gauge,
   HardDrive,
@@ -21,7 +23,6 @@ import {
   Menu,
   Moon,
   Package,
-  Receipt,
   Settings,
   ShieldCheck,
   Store,
@@ -68,34 +69,32 @@ interface NavGroup {
 }
 
 function tenantNav(can: (p: string) => boolean): NavGroup[] {
+  // Groups follow the pump's day: forecourt pehle, phir stock, phir paisa, phir setup.
   const groups: NavGroup[] = [
     {
       title: 'Overview',
       items: [{ to: '/', label: 'Station Dashboard', icon: <LayoutDashboard className="h-4 w-4" />, permission: 'reports.read', end: true }],
     },
     {
-      title: 'Operations',
+      title: 'Forecourt · Roz ka kaam',
       items: [
         { to: '/shifts', label: 'Shifts', icon: <ListChecks className="h-4 w-4" />, permission: 'shifts.read' },
         { to: '/readings', label: 'Live Readings', icon: <Gauge className="h-4 w-4" />, permission: 'readings.read' },
         { to: '/sales', label: 'Nozzle Sales', icon: <Fuel className="h-4 w-4" />, permission: 'sales.read' },
-      ],
-    },
-    {
-      title: 'Inventory',
-      items: [
-        { to: '/tanks', label: 'Tanks & Stock', icon: <Database className="h-4 w-4" />, permission: 'stock.read' },
-        { to: '/deliveries', label: 'Deliveries', icon: <Truck className="h-4 w-4" />, permission: 'deliveries.read' },
-      ],
-    },
-    {
-      title: 'Hardware',
-      items: [
+        { to: '/density', label: 'Density Register', icon: <FlaskConical className="h-4 w-4" />, permission: 'density.read' },
         { to: '/devices', label: 'Gateways & Devices', icon: <HardDrive className="h-4 w-4" />, permission: 'devices.read' },
       ],
     },
     {
-      title: 'Finance',
+      title: 'Stock & Supply',
+      items: [
+        { to: '/tanks', label: 'Tanks & Stock', icon: <Database className="h-4 w-4" />, permission: 'stock.read' },
+        { to: '/deliveries', label: 'Deliveries', icon: <Truck className="h-4 w-4" />, permission: 'deliveries.read' },
+        { to: '/lubricants', label: 'Lubricants & Oil', icon: <Droplets className="h-4 w-4" />, permission: 'lubricants.read' },
+      ],
+    },
+    {
+      title: 'Paisa · Finance',
       items: [
         { to: '/customers', label: 'Customers & Credit', icon: <Users className="h-4 w-4" />, permission: 'customers.read' },
         { to: '/suppliers', label: 'Supplier Ledger', icon: <Building2 className="h-4 w-4" />, permission: 'suppliers.read' },
@@ -105,12 +104,13 @@ function tenantNav(can: (p: string) => boolean): NavGroup[] {
       ],
     },
     {
-      title: 'Administration',
+      title: 'Pump Setup',
       items: [
         { to: '/stations', label: 'Stations', icon: <Store className="h-4 w-4" />, permission: 'stations.read' },
         { to: '/products', label: 'Products & Prices', icon: <Package className="h-4 w-4" />, permission: 'products.read' },
         { to: '/dispensers', label: 'Dispensers & Nozzles', icon: <Fuel className="h-4 w-4" />, permission: 'dispensers.read' },
         { to: '/employees', label: 'Employees & Roles', icon: <Users className="h-4 w-4" />, permission: 'employees.read' },
+        { to: '/compliance', label: 'Licences & Compliance', icon: <ShieldCheck className="h-4 w-4" />, permission: 'compliance.read' },
         { to: '/audit', label: 'Audit Log', icon: <ScrollText className="h-4 w-4" />, permission: 'audit.read' },
         { to: '/billing', label: 'Subscription', icon: <CreditCard className="h-4 w-4" />, permission: 'billing.read' },
         { to: '/settings', label: 'Settings & Diagnostics', icon: <Settings className="h-4 w-4" />, permission: 'settings.read' },
@@ -144,15 +144,15 @@ const adminNav: NavGroup[] = [
 
 function SidebarNav({ groups, collapsed }: { groups: NavGroup[]; collapsed: boolean }) {
   return (
-    <nav className="flex-1 space-y-5 overflow-y-auto px-2 py-4 scroll-thin" aria-label="Primary">
+    <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-5 scroll-thin" aria-label="Primary">
       {groups.map((group) => (
         <div key={group.title}>
           {!collapsed && (
-            <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-500/70">
+            <p className="mb-2 px-2 text-[10px] font-bold uppercase tracking-[0.16em] text-ink-500/80">
               {group.title}
             </p>
           )}
-          <div className="space-y-0.5">
+          <div className="space-y-1">
             {group.items.map((item) => (
               <NavLink
                 key={item.to}
@@ -161,16 +161,20 @@ function SidebarNav({ groups, collapsed }: { groups: NavGroup[]; collapsed: bool
                 title={collapsed ? item.label : undefined}
                 className={({ isActive }) =>
                   cn(
-                    'group flex items-center rounded-lg text-sm transition-colors',
-                    collapsed ? 'justify-center px-2 py-2' : 'gap-2.5 px-2.5 py-2',
+                    'group flex items-center rounded-xl text-sm transition-all duration-150',
+                    collapsed ? 'justify-center px-2 py-2.5' : 'gap-2.5 px-3 py-2.5',
                     isActive
-                      ? 'bg-accent/10 font-medium text-ink-100 shadow-[inset_2px_0_0_0_rgb(var(--accent))]'
-                      : 'text-ink-400 hover:bg-navy-800/60 hover:text-ink-100',
+                      ? 'brand-gradient font-semibold text-onaccent shadow-glow'
+                      : 'text-ink-400 hover:bg-accent/[0.08] hover:text-ink-100',
                   )
                 }
               >
-                <span className="shrink-0 text-ink-400 group-hover:text-accent">{item.icon}</span>
-                {!collapsed && <span className="truncate">{item.label}</span>}
+                {({ isActive }) => (
+                  <>
+                    <span className={cn('shrink-0', isActive ? 'text-onaccent' : 'text-ink-500 group-hover:text-accent')}>{item.icon}</span>
+                    {!collapsed && <span className="truncate">{item.label}</span>}
+                  </>
+                )}
               </NavLink>
             ))}
           </div>
@@ -279,8 +283,8 @@ export function Layout() {
       {/* desktop sidebar */}
       <aside
         className={cn(
-          'sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-navy-700/60 bg-navy-900/70 backdrop-blur transition-[width] duration-200 md:flex',
-          railCollapsed ? 'w-[68px]' : 'w-[252px]',
+          'sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-navy-700/50 bg-gradient-to-b from-navy-900 via-navy-900 to-navy-950 backdrop-blur transition-[width] duration-200 md:flex',
+          railCollapsed ? 'w-[72px]' : 'w-[264px]',
         )}
       >
         <Brand collapsed={railCollapsed} />
@@ -395,7 +399,7 @@ export function Layout() {
                     navigate(location.pathname);
                   }}
                   className="max-w-[240px] cursor-pointer rounded-md border border-transparent bg-transparent py-1 pr-6 text-sm font-medium text-ink-100 transition hover:border-navy-600 focus:border-accent/50 focus:outline-none"
-                  aria-label="Active station"
+        ria-label="Active station"
                 >
                   {stations.map((s) => (
                     <option key={s.id} value={s.id} className="bg-navy-850">
@@ -418,6 +422,7 @@ export function Layout() {
                 Trial ends soon
               </Badge>
             )}
+            <IstClock />
             <ThemeToggle />
             <div className="relative" ref={menuRef}>
               <button
@@ -426,7 +431,7 @@ export function Layout() {
                 aria-haspopup="menu"
                 aria-expanded={userMenu}
               >
-                <span className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-accent/80 to-accent-teal/80 text-xs font-bold text-onaccent">
+                <span className="brand-gradient grid h-9 w-9 place-items-center rounded-full text-xs font-bold text-onaccent shadow-glow">
                   {me?.user.name
                     .split(' ')
                     .slice(0, 2)
@@ -479,7 +484,7 @@ export function Layout() {
 
         <main
           id="main"
-          className="mx-auto w-full max-w-[1500px] flex-1 px-3 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-5 lg:px-6"
+          className="mx-auto w-full max-w-[1500px] flex-1 px-3 pb-24 pt-5 sm:px-5 md:pb-8 lg:px-6"
         >
           {isDemoTenant && (
             <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs text-warn/90">
@@ -503,6 +508,8 @@ export function Layout() {
           </div>
         </footer>
       </div>
+
+      {!me?.isSuperAdmin && <MobileBottomNav can={can} onMenu={() => setMobileOpen(true)} />}
 
       <Modal
         open={passwordOpen}
@@ -549,6 +556,86 @@ export function Layout() {
   );
 }
 
+/** Live IST clock — pump ka din ghadi se chalta hai (price change 6 AM, shift change). */
+function IstClock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+  const time = new Intl.DateTimeFormat('en-IN', {
+    hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata',
+  }).format(now);
+  const day = new Intl.DateTimeFormat('en-IN', {
+    weekday: 'short', day: '2-digit', month: 'short', timeZone: 'Asia/Kolkata',
+  }).format(now);
+  return (
+    <div
+      className="hidden items-center gap-2 rounded-full border border-navy-700/60 bg-navy-800/50 py-1.5 pl-3 pr-3.5 lg:flex"
+      aria-label="Current time in India"
+    >
+      <span className="relative flex h-2 w-2" aria-hidden>
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ok opacity-60" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-ok" />
+      </span>
+      <span className="text-xs text-ink-400">
+        {day} · <span className="num font-semibold text-ink-100">{time} IST</span>
+      </span>
+    </div>
+  );
+}
+
+/** Forecourt-friendly bottom navigation: filler/manager phone ek haath se chala sake. */
+function MobileBottomNav({ can, onMenu }: { can: (p: string) => boolean; onMenu: () => void }) {
+  const items: NavItem[] = [
+    { to: '/', label: 'Home', icon: <LayoutDashboard className="h-5 w-5" />, permission: 'reports.read', end: true },
+    { to: '/shifts', label: 'Shifts', icon: <ListChecks className="h-5 w-5" />, permission: 'shifts.read' },
+    { to: '/readings', label: 'Readings', icon: <Gauge className="h-5 w-5" />, permission: 'readings.read' },
+    { to: '/tanks', label: 'Tanks', icon: <Database className="h-5 w-5" />, permission: 'stock.read' },
+  ].filter((item) => !item.permission || can(item.permission));
+
+  return (
+    <nav
+      aria-label="Quick navigation"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-navy-700/50 bg-navy-900/95 pb-[env(safe-area-inset-bottom)] shadow-pop backdrop-blur-xl md:hidden"
+    >
+      <div className="mx-auto grid max-w-md auto-cols-fr grid-flow-col">
+        {items.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end={item.end}
+            className={({ isActive }) =>
+              cn(
+                'flex flex-col items-center gap-0.5 px-1 pb-1.5 pt-2 text-[10px] font-medium transition-colors',
+                isActive ? 'text-accent' : 'text-ink-500',
+              )
+            }
+          >
+            {({ isActive }) => (
+              <>
+                <span className={cn('rounded-full px-3.5 py-1 transition-all', isActive && 'bg-accent/15')}>{item.icon}</span>
+                {item.label}
+              </>
+            )}
+          </NavLink>
+        ))}
+        <button
+          type="button"
+          onClick={onMenu}
+          aria-label="Open full menu"
+          className="flex flex-col items-center gap-0.5 px-1 pb-1.5 pt-2 text-[10px] font-medium text-ink-500"
+        >
+          <span className="rounded-full px-3.5 py-1">
+            <Menu className="h-5 w-5" />
+          </span>
+          Menu
+        </button>
+      </div>
+    </nav>
+  );
+}
+
 function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === 'dark';
@@ -568,14 +655,16 @@ function ThemeToggle() {
 
 function Brand({ collapsed }: { collapsed: boolean }) {
   return (
-    <div className={cn('flex h-14 items-center gap-2.5 border-b border-navy-700/60 px-4', collapsed && 'justify-center px-2')}>
-      <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-accent to-accent-teal text-onaccent">
-        <Receipt className="h-4 w-4" strokeWidth={2.5} />
+    <div className={cn('flex h-16 items-center gap-3 border-b border-navy-700/50 px-4', collapsed && 'justify-center px-2')}>
+      <div className="brand-gradient grid h-10 w-10 shrink-0 place-items-center rounded-2xl text-onaccent shadow-glow">
+        <Fuel className="h-5 w-5" strokeWidth={2.5} />
       </div>
       {!collapsed && (
         <div className="min-w-0">
-          <p className="text-sm font-semibold tracking-tight text-ink-100">PetroFlow</p>
-          <p className="text-[10px] uppercase tracking-[0.15em] text-ink-500">ERP</p>
+          <p className="font-display text-[17px] font-bold leading-tight tracking-tight text-ink-100">
+            Petro<span className="text-accent">Flow</span>
+          </p>
+          <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-ink-500">Petrol Pump ERP</p>
         </div>
       )}
     </div>

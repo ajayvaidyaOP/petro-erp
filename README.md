@@ -17,9 +17,33 @@ petro-erp/
 └── README.md
 ```
 
+## Petrol-pump audit & roadmap
+
+`docs/PETROL-PUMP-ERP-AUDIT.md` contains a full domain audit of this codebase against how an Indian
+petrol pump actually runs, plus the complete feature checklist. **Phases 1–3 of that roadmap are now
+implemented** (Oct 2026):
+
+- **Forecourt truth:** every nozzle is hard-mapped to its tank (no pro-rata guessing), testing litres
+  are netted out of sales, and tank stock moves only through the ledger.
+- **Shift hisaab:** note-wise cash counting (₹500 → ₹1), mode-wise settlement (Cash/UPI/Card/Bank/Credit)
+  with automatic short/excess, and a day-closing lock that freezes a finished business date.
+- **Quality & law:** daily density register with 15°C correction + BIS spec flag, full TT decantation
+  record (dip before/after, seals, sample, chambers), and Licence & Compliance expiry alerts
+  (PESO, W&M stamping, Fire NOC, tank testing…) on the dashboard.
+- **Stock wisdom:** monthly stock loss/gain vs oil-company norms (MS 0.75% / HSD 0.25%), water dip,
+  and indent suggestions (days-of-cover + safe ullage) per tank.
+- **Udhaar control:** vehicle-wise credit slips with auto slip numbers, printable monthly customer
+  statements, and a FIFO ageing report (0–30/31–60/61–90/90+).
+- **Counter business:** lubricant SKU stock & sales (GST-ready), staff attendance with payable-days,
+  and one-click CSV exports (sales register, stock statement, ageing, lubricants GST).
+
+Existing databases migrate automatically on boot (additive columns/tables + role sync).
+
 ## Theming
 
-The UI ships with dark (default) and light themes. Every colour resolves through CSS
+The UI uses the **Forecourt** design system: fuel orange/amber brand gradient, warm graphite (dark)
+and warm paper (light) surfaces, Sora display type for headings and figures, and a phone-friendly
+bottom navigation for forecourt staff. It ships with dark (default) and light themes. Every colour resolves through CSS
 custom properties defined in `frontend/src/index.css` and exposed to Tailwind in
 `frontend/tailwind.config.js`, so switching `data-theme` on `<html>` re-tints the whole
 app — components only ever reference semantic tokens:

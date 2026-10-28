@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BookOpen, IndianRupee, Plus, UserPlus, Users } from 'lucide-react';
-import { apiGet, apiList, apiPatch, apiPost, idempotencyKey, type ListMeta } from '../lib/api';
+import { BookOpen, IndianRupee, Plus, Printer, Trash2, Truck, UserPlus, Users } from 'lucide-react';
+import { apiDelete, apiGet, apiList, apiPatch, apiPost, idempotencyKey, type ListMeta } from '../lib/api';
 import { useAuth, useStations } from '../lib/auth';
 import { formatDate, formatDateTime, formatINR, formatNumber, todayIst } from '../lib/format';
 import {
@@ -45,6 +45,11 @@ interface LedgerEntry {
   type: string;
   amount: string;
   reference: string | null;
+  slipNumber: string | null;
+  vehicleNumber: string | null;
+  productName: string | null;
+  quantityLitres: string | null;
+  ratePerLitre: string | null;
   occurredAt: string;
   dueDate: string | null;
   note: string | null;
@@ -52,13 +57,21 @@ interface LedgerEntry {
   stationName: string | null;
 }
 
+interface Vehicle {
+  id: string;
+  vehicleNumber: string;
+  vehicleType: string | null;
+  driverName: string | null;
+  isActive: number;
+}
+
 interface Ledger {
   customer: Customer;
-  entries: LedgerEntry[];
+  ledger: LedgerEntry[];
   closingBalance: string;
   creditLimit: string;
   availableCredit: string;
-  overdueEntries: Record<string, unknown>[];
+  overdueAmount: string;
 }
 
 interface Product { id: string; code: string; name: string; isActive: number }
@@ -89,6 +102,7 @@ export default function Customers() {
   const [ledgerCustomer, setLedgerCustomer] = useState<Customer | null>(null);
   const [saleOpen, setSaleOpen] = useState(false);
   const [receiptOpen, setReceiptOpen] = useState(false);
+  const [statementOpen, setStatementOpen] = useState(false);
 
   const list = useQuery({
     queryKey: ['customers', search, page],
@@ -308,7 +322,7 @@ export default function Customers() {
         size="xl"
         footer={
           <div className="flex w-full flex-wrap items-center justify-between gap-2">
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {can('sales.write') && (
                 <Button size="sm" variant="secondary" icon={<Plus className="h-3.5 w-3.5" />} onClick={() => setSaleOpen(true)}>
                   Credit sale
@@ -317,6 +331,9 @@ export default function Customers() {
               {can('payments.write') && (
                 <Button size="sm" variant="primary" onClick={() => setReceiptOpen(true)}>Record receipt</Button>
               )}
+              <Button size="sm" variant="outline" icon={<Printer className="h-3.5 w-3.5" />} onClick={() => setStatementOpen(true)}>
+                Mahine ki statement
+              </Button>
             </div>
             <Button size="sm" variant="ghost" onClick={() => setLedgerCustomer(null)}>Close</Button>
           </div>
@@ -328,9 +345,10 @@ export default function Customers() {
           <ErrorState error={ledger.error} onRetry={() => void ledger.refetch()} />
         ) : ledger.data ? (
           <div className="space-y-3">
-            {(ledger.data.overdueEntries.length ?? 0) > 0 && (
+            {ledgerCustomer && <VehiclesSection customerId={ledgerCustomer.id} canWrite={can('customers.write')} />}
+            {Number(ledger.data.overdueAmount) > 0 && (
               <div className="rounded-lg border border-rose-500/25 bg-rose-500/5 px-3 py-2 text-xs text-danger">
-                {ledger.data.overdueEntries.length} overdue credit sale(s) beyond the agreed credit period.
+                {formatINR(ledger.data.overdueAmount)} overdue hai — credit period paar ho gaya hai.
               </div>
             )}
             <TableScrollHint className="rounded-t-lg border border-b-0 border-navy-700/60" />
@@ -340,10 +358,10 @@ export default function Customers() {
                   <tr><th>Date</th><th>Type</th><th>Reference</th><th>Due</th><th className="text-right">Amount</th><th className="text-right">Running</th></tr>
                 </thead>
                 <tbody>
-                  {ledger.data.entries.length === 0 ? (
+                  {ledger.data.ledger.length === 0 ? (
                     <tr><td colSpan={6} className="py-8 text-center text-xs text-ink-500">No ledger entries yet.</td></tr>
                   ) : (
-                    ledger.data.entries.map((entry) => (
+                    ledger.data.ledger.map((entry) => (
                       <tr key={entry.id}>
                         <td className="text-xs text-ink-400">{formatDateTime(entry.occurredAt)}</td>
                         <td>
@@ -351,9 +369,19 @@ export default function Customers() {
                             {entry.type.replace(/_/g, ' ')}
                           </Badge>
                         </td>
-                        <td className="text-xs text-ink-400">{entry.reference ?? '—'}</td>
+                        <td className="text-xs text-ink-400">
+                          <span className="font-medium text-ink-200">{entry.slipNumber ?? entry.reference ?? '—'}</span>
+                          {(entry.vehicleNumber || entry.productName) && (
+                            <span className="block text-[10px] text-ink-500">
+                              {entry.vehicleNumber}{entry.productName ? ` · ${entry.productName}` : ''}
+                              {entry.quantityLitres ? ` · ${formatNumber(entry.quantityLitres, 1)}L` : ''}
+                            </span>
+                          )}
+                        </td>
                         <td className="text-xs text-ink-500">{entry.dueDate ? formatDate(entry.dueDate) : '—'}</td>
-                        <td className={`num text-right ${Number(entry.amount) >= 0 ? 'text-warn' : 'text-ok'}`}>{formatINR(entry.amount)}</td>
+                        <td className={`num text-right ${entry.type === 'PAYMENT' ? 'text-ok' : 'text-warn'}`}>
+                          {entry.type === 'PAYMENT' ? '−' : '+'}{formatINR(entry.amount)}
+                        </td>
                         <td className="num text-right text-ink-200">{formatINR(entry.runningBalance)}</td>
                       </tr>
                     ))
@@ -383,9 +411,175 @@ export default function Customers() {
             stationId={stationId}
             onDone={() => { setReceiptOpen(false); invalidate(); }}
           />
+          <StatementModal
+            open={statementOpen}
+            onClose={() => setStatementOpen(false)}
+            customer={ledgerCustomer}
+          />
         </>
       )}
     </>
+  );
+}
+
+function VehiclesSection({ customerId, canWrite }: { customerId: string; canWrite: boolean }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState({ vehicleNumber: '', vehicleType: 'Truck', driverName: '' });
+  const vehicles = useQuery<Vehicle[]>({
+    queryKey: ['customer-vehicles', customerId],
+    queryFn: () => apiGet<Vehicle[]>(`/catalog/customers/${customerId}/vehicles`),
+  });
+  const invalidate = () => void queryClient.invalidateQueries({ queryKey: ['customer-vehicles', customerId] });
+  const add = useMutation({
+    mutationFn: () => apiPost(`/catalog/customers/${customerId}/vehicles`, form),
+    onSuccess: () => { toast('Gaadi register ho gayi'); setForm({ vehicleNumber: '', vehicleType: 'Truck', driverName: '' }); invalidate(); },
+    onError: (error: Error) => toast('Gaadi add nahi hui', { tone: 'danger', description: error.message }),
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => apiDelete(`/catalog/customers/${customerId}/vehicles/${id}`),
+    onSuccess: invalidate,
+    onError: (error: Error) => toast('Delete nahi hua', { tone: 'danger', description: error.message }),
+  });
+
+  return (
+    <div className="rounded-lg border border-navy-700/60 bg-navy-800/30 p-3">
+      <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-ink-200">
+        <Truck className="h-3.5 w-3.5 text-teal-300" /> Registered gaadiyan — sirf in par udhaar dena hai
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {(vehicles.data ?? []).map((v) => (
+          <span key={v.id} className="inline-flex items-center gap-1.5 rounded-full border border-navy-700 bg-navy-900/60 py-1 pl-2.5 pr-1 text-[11px] text-ink-200">
+            <span className="font-semibold tracking-wide">{v.vehicleNumber}</span>
+            <span className="text-ink-500">{v.vehicleType ?? ''}{v.driverName ? ` · ${v.driverName}` : ''}</span>
+            {canWrite && (
+              <button type="button" aria-label={`Remove ${v.vehicleNumber}`} className="rounded-full p-0.5 text-ink-500 hover:text-danger" onClick={() => remove.mutate(v.id)}>
+                <Trash2 className="h-3 w-3" />
+              </button>
+            )}
+          </span>
+        ))}
+        {(vehicles.data ?? []).length === 0 && !vehicles.isLoading && (
+          <span className="text-[11px] text-ink-500">Koi gaadi register nahi — gaadi-wise p-slip ke liye number add karo.</span>
+        )}
+      </div>
+      {canWrite && (
+        <div className="mt-2.5 grid gap-2 sm:grid-cols-[1fr_140px_1fr_auto]">
+          <Input placeholder="MH12AB1234" aria-label="Vehicle number" value={form.vehicleNumber} onChange={(e) => setForm({ ...form, vehicleNumber: e.target.value.toUpperCase() })} className="py-1.5 text-xs" />
+          <Select value={form.vehicleType} onChange={(e) => setForm({ ...form, vehicleType: e.target.value })} className="py-1.5 text-xs" aria-label="Vehicle type">
+            {['Truck', 'Tempo', 'Tractor', 'Car', 'Bus', 'Two-wheeler', 'Other'].map((t) => <option key={t} value={t}>{t}</option>)}
+          </Select>
+          <Input placeholder="Driver ka naam" aria-label="Driver name" value={form.driverName} onChange={(e) => setForm({ ...form, driverName: e.target.value })} className="py-1.5 text-xs" />
+          <Button size="sm" variant="secondary" disabled={!form.vehicleNumber} loading={add.isPending} onClick={() => add.mutate()}>Gaadi jodo</Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface StatementData {
+  customer: Customer;
+  month: string;
+  openingBalance: string;
+  lines: {
+    id: string; occurredAt: string; type: string; slipNumber: string | null; reference: string | null;
+    vehicleNumber: string | null; driverName: string | null;
+    productName: string | null; quantityLitres: string | null; ratePerLitre: string | null;
+    debit: string; credit: string; runningBalance: string;
+  }[];
+  closingBalance: string;
+  totalSales: string;
+  totalPayments: string;
+}
+
+function StatementModal({ open, onClose, customer }: { open: boolean; onClose: () => void; customer: Customer }) {
+  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const statement = useQuery<StatementData>({
+    queryKey: ['customer-statement', customer.id, month],
+    queryFn: () => apiGet<StatementData>(`/finance/customer-statement?customerId=${customer.id}&month=${month}`),
+    enabled: open,
+  });
+  const data = statement.data;
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={`Statement — ${customer.name}`}
+      description="Party ko bhejine wali mahine-bhar ki p-slip-wise statement. Print karke ya PDF banakar do."
+      size="xl"
+      footer={
+        <>
+          <Button variant="primary" icon={<Printer className="h-4 w-4" />} onClick={() => window.print()}>Print / PDF</Button>
+          <Button variant="ghost" onClick={onClose}>Close</Button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <Field label="Mahina" className="w-full sm:w-52">
+          <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
+        </Field>
+        {statement.isLoading ? (
+          <LoadingBlock rows={4} />
+        ) : statement.isError ? (
+          <ErrorState error={statement.error} onRetry={() => void statement.refetch()} />
+        ) : data ? (
+          <div className="rounded-xl border border-navy-700 bg-navy-900/60 p-4 print-area">
+            <div className="flex flex-wrap justify-between gap-2 border-b border-navy-700 pb-3">
+              <div>
+                <p className="font-display text-lg font-bold text-ink-100">{data.customer.name}</p>
+                <p className="text-[11px] text-ink-500">
+                  {data.customer.code}{data.customer.gstin ? ` · GSTIN ${data.customer.gstin}` : ''}{data.customer.phone ? ` · ${data.customer.phone}` : ''}
+                </p>
+              </div>
+              <div className="text-right text-[11px] text-ink-400">
+                <p>Statement period</p>
+                <p className="num font-semibold text-ink-100">{data.month}</p>
+              </div>
+            </div>
+            <p className="mt-3 text-xs text-ink-300">
+              Pichla bakaya (opening): <strong className="num">{formatINR(data.openingBalance)}</strong>
+            </p>
+            <TableScrollHint />
+            <div className="table-wrap mt-2">
+              <table className="data-table min-w-[760px]">
+                <thead>
+                  <tr>
+                    <th>Tarikh</th><th>Slip no.</th><th>Gaadi</th><th>Product</th>
+                    <th className="text-right">Litre</th><th className="text-right">Rate</th>
+                    <th className="text-right">Udhaar (Dr)</th><th className="text-right">Vasuli (Cr)</th><th className="text-right">Balance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.lines.length === 0 ? (
+                    <tr><td colSpan={9} className="py-6 text-center text-xs text-ink-500">Is mahine koi lena-dena nahi.</td></tr>
+                  ) : data.lines.map((entry) => (
+                    <tr key={entry.id}>
+                      <td className="whitespace-nowrap text-xs">{formatDate(entry.occurredAt)}</td>
+                      <td className="text-xs">{entry.slipNumber ?? entry.reference ?? (entry.type === 'PAYMENT' ? 'PAYMENT' : '—')}</td>
+                      <td className="text-xs">{entry.vehicleNumber ?? '—'}</td>
+                      <td className="text-xs">{entry.productName ?? '—'}</td>
+                      <td className="num text-right">{entry.quantityLitres ? formatNumber(entry.quantityLitres, 1) : '—'}</td>
+                      <td className="num text-right">{entry.ratePerLitre ? formatINR(entry.ratePerLitre) : '—'}</td>
+                      <td className="num text-right text-warn">{Number(entry.debit) > 0 ? formatINR(entry.debit) : '—'}</td>
+                      <td className="num text-right text-ok">{Number(entry.credit) > 0 ? formatINR(entry.credit) : '—'}</td>
+                      <td className="num text-right font-medium text-ink-100">{formatINR(entry.runningBalance)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-3 flex flex-wrap justify-end gap-5 border-t border-navy-700 pt-3 text-xs">
+              <span className="text-ink-400">Kul tel: <strong className="num text-ink-100">{formatNumber(data.lines.reduce((acc, line) => acc + Number(line.quantityLitres ?? 0), 0), 1)} L</strong></span>
+              <span className="text-ink-400">Mahine ka udhaar: <strong className="num text-warn">{formatINR(data.totalSales)}</strong></span>
+              <span className="text-ink-400">Vasuli: <strong className="num text-ok">{formatINR(data.totalPayments)}</strong></span>
+              <span className="text-ink-200">Aakhir me bakaya: <strong className="num font-display text-base text-ink-100">{formatINR(data.closingBalance)}</strong></span>
+            </div>
+            <p className="mt-2 text-[10px] text-ink-600">Please pay within the agreed credit period. Kishi slip me galti lage to 7 din ke andar jankari dein.</p>
+          </div>
+        ) : null}
+      </div>
+    </Modal>
   );
 }
 
@@ -408,7 +602,16 @@ function CreditSaleModal({
   const [productId, setProductId] = useState(products[0]?.id ?? '');
   const [quantity, setQuantity] = useState('');
   const [amount, setAmount] = useState('');
+  const [vehicleNumber, setVehicleNumber] = useState('');
+  const [driverName, setDriverName] = useState('');
+  const [slipNumber, setSlipNumber] = useState('');
   const [reference, setReference] = useState('');
+
+  const vehicles = useQuery<Vehicle[]>({
+    queryKey: ['customer-vehicles', customer.id],
+    queryFn: () => apiGet<Vehicle[]>(`/catalog/customers/${customer.id}/vehicles`),
+    enabled: open,
+  });
   const [dueDate, setDueDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() + (customer.creditDays || 15));
@@ -425,6 +628,9 @@ function CreditSaleModal({
           productId: productId || undefined,
           quantityLitres: quantity || undefined,
           amount: quantity ? undefined : amount,
+          slipNumber: slipNumber || undefined,
+          vehicleNumber: vehicleNumber || undefined,
+          driverName: driverName || undefined,
           reference: reference || undefined,
           dueDate,
           paymentMode: 'CREDIT',
@@ -471,6 +677,23 @@ function CreditSaleModal({
         </Field>
         <Field label="Due date">
           <Input type="date" value={dueDate} min={todayIst()} onChange={(e) => setDueDate(e.target.value)} />
+        </Field>
+        <Field label="Gaadi number" hint="Registered gaadi chuno ya number type karo">
+          <Input
+            list={`vehicles-${customer.id}`}
+            value={vehicleNumber}
+            onChange={(e) => setVehicleNumber(e.target.value.toUpperCase())}
+            placeholder="MH12AB1234"
+          />
+          <datalist id={`vehicles-${customer.id}`}>
+            {(vehicles.data ?? []).map((v) => <option key={v.id} value={v.vehicleNumber}>{v.vehicleType ?? ''}</option>)}
+          </datalist>
+        </Field>
+        <Field label="Driver ka naam">
+          <Input value={driverName} onChange={(e) => setDriverName(e.target.value)} placeholder="P-slip par jisne sign kiya" />
+        </Field>
+        <Field label="P-slip number" hint="Khaali rakha to system khud number de dega">
+          <Input value={slipNumber} onChange={(e) => setSlipNumber(e.target.value)} placeholder="auto-generated" />
         </Field>
       </div>
     </Modal>

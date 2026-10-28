@@ -22,6 +22,8 @@ import {
   Fuel,
   Gauge,
   RadioTower,
+  Ruler,
+  Tags,
   Truck,
   Users,
   Wallet,
@@ -76,6 +78,17 @@ interface DashboardData {
   disclaimer: string;
 }
 
+interface PriceRow {
+  id: string;
+  productId: string;
+  productName: string;
+  productCode: string;
+  stationId: string | null;
+  ratePerLitre: string;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+}
+
 interface StationSummaryRow {
   id: string;
   code: string;
@@ -121,6 +134,30 @@ export default function Dashboard() {
     enabled: Boolean(stationId) && can('shifts.read'),
     refetchInterval: 60_000,
   });
+
+  // Aaj ke rates — wahi rate jo subah price-change ke baad totem par lagta hai.
+  const pricesQuery = useQuery<PriceRow[]>({
+    queryKey: ['prices', stationId],
+    queryFn: () => apiGet<PriceRow[]>(`/catalog/prices?stationId=${stationId}`),
+    enabled: Boolean(stationId) && can('products.read'),
+    refetchInterval: 60_000,
+  });
+
+  const todayRates = useMemo(() => {
+    const byProduct = new Map<string, PriceRow>();
+    for (const p of pricesQuery.data ?? []) {
+      if (p.stationId && p.stationId !== stationId) continue;
+      if (!p.effectiveTo && !byProduct.has(p.productId)) byProduct.set(p.productId, p);
+    }
+    return [...byProduct.values()];
+  }, [pricesQuery.data, stationId]);
+
+  const productColors = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const p of dashboard.data?.productSplit ?? []) map.set(p.name, p.color);
+    for (const t of dashboard.data?.stock ?? []) if (!map.has(t.productName)) map.set(t.productName, t.productColor);
+    return map;
+  }, [dashboard.data]);
 
   const chartData = useMemo(
     () =>
@@ -192,12 +229,42 @@ export default function Dashboard() {
         actions={
           <>
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-auto" aria-label="Business date" />
+            <Link to="/tanks">
+              <Button variant="outline" size="sm" icon={<Ruler className="h-4 w-4" />}>Record dip</Button>
+            </Link>
             <Link to="/reports">
               <Button variant="primary" size="sm" icon={<ArrowUpRight className="h-4 w-4" />}>Open DSR</Button>
             </Link>
           </>
         }
       />
+
+      {todayRates.length > 0 && (
+        <div className="card mb-3 overflow-hidden">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-3 px-4 py-3.5">
+            <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.14em] text-ink-500">
+              <span className="brand-gradient grid h-7 w-7 place-items-center rounded-lg text-onaccent">
+                <Tags className="h-3.5 w-3.5" />
+              </span>
+              Aaj ke rates
+            </span>
+            {todayRates.map((rate) => (
+              <span key={rate.id} className="flex items-baseline gap-2">
+                <span
+                  className="h-2.5 w-2.5 shrink-0 translate-y-[-1px] rounded-full"
+                  style={{ background: productColors.get(rate.productName) ?? '#f97316' }}
+                  aria-hidden
+                />
+                <span className="text-xs font-medium text-ink-400">{rate.productName}</span>
+                <span className="num font-display text-base font-bold text-ink-100">{formatINR(rate.ratePerLitre)}<span className="text-[10px] font-medium text-ink-500">/L</span></span>
+              </span>
+            ))}
+            <Link to="/products" className="link ml-auto hidden text-xs font-medium sm:inline">
+              Price change →
+            </Link>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
@@ -473,55 +540,65 @@ export default function Dashboard() {
             subtitle="Book stock derived from the movement ledger (not totalizer readings)"
             action={<Link to="/tanks"><Button size="sm" variant="ghost">Manage</Button></Link>}
           />
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Tank</th>
-                  <th>Product</th>
-                  <th className="text-right">Book stock</th>
-                  <th className="text-right">Capacity</th>
-                  <th>Fill</th>
-                  <th>Dip variance</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.stock.map((tank) => (
-                  <tr key={tank.id}>
-                    <td className="font-medium text-ink-100">{tank.code}</td>
-                    <td>
-                      <span className="flex items-center gap-1.5 text-xs text-ink-300">
-                        <span className="h-2 w-2 rounded-full" style={{ background: tank.productColor }} />
-                        {tank.productName}
-                      </span>
-                    </td>
-                    <td className="num text-right">{formatLitres(tank.bookStockLitres)}</td>
-                    <td className="num text-right text-ink-500">{formatLitres(tank.capacityLitres)}</td>
-                    <td className="w-32">
-                      <div className="flex items-center gap-2">
-                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-navy-700">
-                          <div
-                            className="h-full rounded-full bg-accent"
-                            style={{ width: `${Math.min(100, Math.max(0, Number(tank.fillPct)))}%` }}
-                          />
-                        </div>
-                        <span className="num text-[10px] text-ink-500">{formatNumber(tank.fillPct, 0)}%</span>
-                      </div>
-                    </td>
-                    <td>
-                      {tank.lastVarianceLitres ? (
-                        <span className={Number(tank.lastVarianceLitres) < -50 ? 'text-danger' : 'text-ink-300'}>
-                          {formatNumber(tank.lastVarianceLitres, 1)} L
+          <CardBody>
+            {data.stock.length === 0 ? (
+              <EmptyState title="No tanks configured" description="Add tanks to start tracking stock." icon={<Database className="h-4 w-4" />} />
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {data.stock.map((tank) => {
+                  const pct = Math.min(100, Math.max(0, Number(tank.fillPct)));
+                  const low = pct < 20;
+                  const variance = tank.lastVarianceLitres ? Number(tank.lastVarianceLitres) : null;
+                  return (
+                    <div key={tank.id} className="flex gap-3.5 rounded-2xl border border-navy-700/50 bg-navy-800/30 p-3.5">
+                      {/* Underground tank gauge — jitna bhara, utna rang */}
+                      <div
+                        className="relative h-[104px] w-14 shrink-0 overflow-hidden rounded-b-[22px] rounded-t-lg border border-navy-600/70 bg-navy-900/70"
+                        role="img"
+                        aria-label={`${tank.code} ${formatNumber(tank.fillPct, 0)} percent full`}
+                      >
+                        <div
+                          className="absolute inset-x-0 bottom-0 transition-[height] duration-500"
+                          style={{
+                            height: `${pct}%`,
+                            background: `linear-gradient(180deg, ${tank.productColor}cc, ${tank.productColor}88)`,
+                          }}
+                        />
+                        <span className="num absolute inset-0 grid place-items-center text-[11px] font-bold text-ink-100 [text-shadow:0_1px_6px_rgb(0_0_0/0.7)]">
+                          {formatNumber(tank.fillPct, 0)}%
                         </span>
-                      ) : (
-                        <span className="text-ink-600">no dip</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-display text-sm font-bold text-ink-100">{tank.code}</p>
+                          <span className="flex items-center gap-1.5 text-[11px] font-medium text-ink-400">
+                            <span className="h-2 w-2 rounded-full" style={{ background: tank.productColor }} />
+                            {tank.productName}
+                          </span>
+                          {low && <Badge tone="danger" dot>Low stock</Badge>}
+                        </div>
+                        <p className="num mt-1.5 font-display text-xl font-bold leading-none text-ink-100">
+                          {formatLitres(tank.bookStockLitres)}
+                        </p>
+                        <p className="mt-1 text-[11px] text-ink-500">
+                          Capacity {formatLitres(tank.capacityLitres)} · ullage {formatLitres(Math.max(0, Number(tank.capacityLitres) - Number(tank.bookStockLitres)))}
+                        </p>
+                        <p className="mt-1.5 text-[11px]">
+                          {variance !== null ? (
+                            <span className={variance < -50 ? 'font-medium text-danger' : 'text-ink-400'}>
+                              Last dip variance {variance > 0 ? '+' : ''}{formatNumber(variance, 1)} L
+                            </span>
+                          ) : (
+                            <span className="text-ink-600">No dip recorded yet</span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardBody>
         </Card>
 
         <Card>

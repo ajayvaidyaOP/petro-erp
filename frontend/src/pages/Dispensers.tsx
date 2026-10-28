@@ -42,10 +42,17 @@ interface Nozzle {
   stationId: string;
   dispenserId: string;
   productId: string;
+  tankId: string | null;
   number: number;
   label: string;
   totalizerUnit: string;
   status: string;
+}
+interface TankMini {
+  id: string;
+  code: string;
+  productId: string;
+  stationId: string;
 }
 interface Device {
   id: string;
@@ -64,7 +71,7 @@ export default function Dispensers() {
   const [dispenserOpen, setDispenserOpen] = useState(false);
   const [nozzleFor, setNozzleFor] = useState<Dispenser | null>(null);
   const [form, setForm] = useState({ code: '', name: '', model: '', serialNumber: '', protocol: '' });
-  const [nozzleForm, setNozzleForm] = useState({ number: '1', label: '', productId: '', totalizerUnit: 'L' });
+  const [nozzleForm, setNozzleForm] = useState({ number: '1', label: '', productId: '', tankId: '', totalizerUnit: 'L' });
 
   const products = useQuery<Product[]>({
     queryKey: ['products-all'],
@@ -80,6 +87,12 @@ export default function Dispensers() {
     queryFn: () => apiGet<Nozzle[]>(`/catalog/nozzles?stationId=${stationId}&pageSize=100`),
     enabled: Boolean(stationId),
   });
+  const tanks = useQuery<TankMini[]>({
+    queryKey: ['tanks-min', stationId],
+    queryFn: () => apiGet<TankMini[]>(`/catalog/tanks?stationId=${stationId}&pageSize=100`),
+    enabled: Boolean(stationId),
+  });
+  const tankMap = new Map((tanks.data ?? []).map((t) => [t.id, t]));
   const devices = useQuery<Device[]>({
     queryKey: ['devices', stationId],
     queryFn: () => apiGet<Device[]>(`/devices?stationId=${stationId}&pageSize=100`),
@@ -119,6 +132,7 @@ export default function Dispensers() {
         stationId,
         dispenserId: nozzleFor?.id,
         productId: nozzleForm.productId,
+        tankId: nozzleForm.tankId || null,
         number: Number(nozzleForm.number),
         label: nozzleForm.label,
         totalizerUnit: nozzleForm.totalizerUnit,
@@ -127,7 +141,7 @@ export default function Dispensers() {
     onSuccess: () => {
       toast('Nozzle mapped', { tone: 'success' });
       setNozzleFor(null);
-      setNozzleForm({ number: '1', label: '', productId: '', totalizerUnit: 'L' });
+      setNozzleForm({ number: '1', label: '', productId: '', tankId: '', totalizerUnit: 'L' });
       invalidate();
     },
     onError: (error: Error) => toast('Could not add nozzle', { tone: 'danger', description: error.message }),
@@ -140,6 +154,16 @@ export default function Dispensers() {
       invalidate();
     },
     onError: (error: Error) => toast('Update failed', { tone: 'danger', description: error.message }),
+  });
+
+  const remapTank = useMutation({
+    mutationFn: ({ id, tankId }: { id: string; tankId: string | null }) =>
+      apiPatch<Nozzle>(`/catalog/nozzles/${id}`, { tankId }),
+    onSuccess: () => {
+      toast('Nozzle-tank jod gaya', { tone: 'success', description: 'Is nozzle ki bikri ab is tank se kategi.' });
+      invalidate();
+    },
+    onError: (error: Error) => toast('Mapping nahi hui', { tone: 'danger', description: error.message }),
   });
 
   const rows = dispensers.data ?? [];
@@ -168,6 +192,12 @@ export default function Dispensers() {
           value={unmapped}
           tone={unmapped ? 'danger' : 'success'}
           hint="A nozzle without a valid product cannot value sales."
+        />
+        <StatCard
+          label="Tank-unmapped"
+          value={allNozzles.filter((n) => !n.tankId).length}
+          tone={allNozzles.some((n) => !n.tankId) ? 'warning' : 'success'}
+          hint="Bina tank wali nozzle ki bikri sab tankon me bantti hai — tank jod do."
         />
         {can('devices.read') && (
           <StatCard
@@ -237,7 +267,7 @@ export default function Dispensers() {
                       <tr>
                         <th>Nozzle</th>
                         <th>Product</th>
-                        <th>Unit</th>
+                        <th>Tank (kis tank se kategi)</th>
                         <th>Status</th>
                       </tr>
                     </thead>
@@ -267,7 +297,27 @@ export default function Dispensers() {
                                   <Badge tone="danger">Unmapped</Badge>
                                 )}
                               </td>
-                              <td className="text-ink-400">{nozzle.totalizerUnit}</td>
+                              <td>
+                                {can('dispensers.write') ? (
+                                  <Select
+                                    className="max-w-fit px-2 py-1 text-xs"
+                                    value={nozzle.tankId ?? ''}
+                                    aria-label="Nozzle tank select"
+                                    onChange={(e) => remapTank.mutate({ id: nozzle.id, tankId: e.target.value || null })}
+                                  >
+                                    <option value="">— Tank jodo —</option>
+                                    {(tanks.data ?? [])
+                                      .filter((t) => t.productId === nozzle.productId)
+                                      .map((t) => (
+                                        <option key={t.id} value={t.id}>{t.code}</option>
+                                      ))}
+                                  </Select>
+                                ) : nozzle.tankId ? (
+                                  <span className="text-ink-300">{tankMap.get(nozzle.tankId)?.code ?? '—'}</span>
+                                ) : (
+                                  <Badge tone="warning">Bina tank</Badge>
+                                )}
+                              </td>
                               <td>
                                 <StatusBadge status={nozzle.status} />
                               </td>
@@ -342,7 +392,7 @@ export default function Dispensers() {
             <Input value={nozzleForm.label} onChange={(e) => setNozzleForm({ ...nozzleForm, label: e.target.value })} placeholder="P1-N1" />
           </Field>
           <Field label="Product" required className="sm:col-span-2">
-            <Select value={nozzleForm.productId} onChange={(e) => setNozzleForm({ ...nozzleForm, productId: e.target.value })}>
+            <Select value={nozzleForm.productId} onChange={(e) => setNozzleForm({ ...nozzleForm, productId: e.target.value, tankId: '' })}>
               <option value="">Select a product…</option>
               {(products.data ?? []).map((p) => (
                 <option key={p.id} value={p.id}>
@@ -353,6 +403,24 @@ export default function Dispensers() {
           </Field>
           <Field label="Totalizer unit">
             <Input value={nozzleForm.totalizerUnit} onChange={(e) => setNozzleForm({ ...nozzleForm, totalizerUnit: e.target.value })} />
+          </Field>
+          <Field
+            label="Tank — is nozzle ka fuel kis tanki se aata hai"
+            className="sm:col-span-2"
+            hint="Ye sabse zaruri setting hai: nozzle ki bikri seedha is tank ke stock se kategi. Galat tank = galat dip milaan."
+          >
+            <Select
+              value={nozzleForm.tankId}
+              onChange={(e) => setNozzleForm({ ...nozzleForm, tankId: e.target.value })}
+              disabled={!nozzleForm.productId}
+            >
+              <option value="">{nozzleForm.productId ? 'Tank chuno…' : 'Pehle product chuno'}</option>
+              {(tanks.data ?? [])
+                .filter((t) => t.productId === nozzleForm.productId)
+                .map((t) => (
+                  <option key={t.id} value={t.id}>{t.code} ({productMap.get(t.productId)?.name ?? ''})</option>
+                ))}
+            </Select>
           </Field>
         </div>
       </Modal>

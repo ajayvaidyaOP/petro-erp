@@ -7,7 +7,9 @@ import { can, requireAuth, type AuthContext } from '../lib/auth.js';
 import { getStationOrThrow, tenantIdOf } from '../lib/tenant.js';
 import { audit } from '../lib/audit.js';
 import { newId } from '../lib/ids.js';
-import { nowIso } from '../lib/time.js';
+import { nowIso, businessDateOf } from '../lib/time.js';
+import { evaluateDensity } from '../lib/density.js';
+import { assertDayOpen } from '../lib/dayclose.js';
 import { D, money, rate as fmtRate } from '../lib/decimal.js';
 import { recordMovement, signedLitres, stockByProduct, tankBookStock, tankSummary } from '../lib/stock.js';
 import { STOCK_VARIANCE_TOLERANCE_LITRES } from '@petroflow/shared';
@@ -160,6 +162,28 @@ inventoryRouter.get(
   }),
 );
 
+// TT decantation ke saath ka record: dip pehle/baad, density, seal, sample.
+// Yehi saboot hota hai jab maal kam aaye aur OMC se claim karna pade.
+const decantationFields = {
+  dipBeforeCm: z.union([z.string(), z.number()]).transform(String).optional().nullable(),
+  dipAfterCm: z.union([z.string(), z.number()]).transform(String).optional().nullable(),
+  densityInvoice: z.union([z.string(), z.number()]).transform(String).optional().nullable(),
+  densityObserved: z.union([z.string(), z.number()]).transform(String).optional().nullable(),
+  tempObservedC: z.union([z.string(), z.number()]).transform(String).optional().nullable(),
+  ttSealNumbers: z.string().max(200).optional().nullable(),
+  sampleSealNo: z.string().max(60).optional().nullable(),
+  chamberDetails: z.string().max(500).optional().nullable(),
+};
+
+type DecantationInput = Partial<Record<keyof typeof decantationFields, string | null | undefined>>;
+
+/** Observed density + temperature se 15°C corrected density (agar dono diye hon). */
+function densityAt15For(productId: string, body: DecantationInput): string | null {
+  if (!body.densityObserved || !body.tempObservedC) return null;
+  const product = get<{ category: string }>('SELECT category FROM fuel_products WHERE id = ?', [productId]);
+  return evaluateDensity(product?.category ?? 'DIESEL', body.densityObserved, body.tempObservedC).densityAt15c;
+}
+
 const deliverySchema = z.object({
   stationId: z.string().min(3),
   supplierId: z.string().min(3),
@@ -175,6 +199,7 @@ const deliverySchema = z.object({
   notes: z.string().max(500).optional().nullable(),
   receiveNow: z.boolean().default(false),
   receivedLitres: z.union([z.string(), z.number()]).transform(String).optional(),
+  ...decantationFields,
 });
 
 inventoryRouter.post(
@@ -184,6 +209,7 @@ inventoryRouter.post(
     if (!can(auth, 'deliveries.write')) throw forbidden();
     const body = parseRequestBody(deliverySchema, req.body);
     const station = getStationOrThrow(auth, body.stationId);
+    assertDayOpen(station.id, body.receiveNow ? businessDateOf(nowIso()) : body.invoiceDate);
     const tank = tankInTenant(auth, body.tankId);
     if (tank.station_id !== station.id) throw unprocessable('Tank does not belong to this station');
     if (tank.product_id !== body.productId) throw unprocessable('Tank holds a different fuel product');
@@ -210,12 +236,17 @@ inventoryRouter.post(
         `INSERT INTO deliveries
           (id, tenant_id, station_id, supplier_id, invoice_number, invoice_date, product_id, tank_id,
            quantity_litres, received_litres, rate_per_litre, taxable_amount, tax_amount, total_amount, status,
-           received_at, vehicle_number, driver_name, notes, is_demo, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
+           received_at, vehicle_number, driver_name, dip_before_cm, dip_after_cm, density_invoice,
+           density_observed, temp_observed_c, density_at_15c, tt_seal_numbers, sample_seal_no, chamber_details,
+           notes, is_demo, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
         [id, station.tenant_id, station.id, body.supplierId, body.invoiceNumber, body.invoiceDate,
           body.productId, body.tankId, quantity.toFixed(3), received ? received.toFixed(3) : null,
           fmtRate(rate), money(taxable), money(tax), money(total), status,
           body.receiveNow ? nowIso() : null, body.vehicleNumber ?? null, body.driverName ?? null,
+          body.dipBeforeCm ?? null, body.dipAfterCm ?? null, body.densityInvoice ?? null,
+          body.densityObserved ?? null, body.tempObservedC ?? null, densityAt15For(body.productId, body),
+          body.ttSealNumbers ?? null, body.sampleSealNo ?? null, body.chamberDetails ?? null,
           body.notes ?? null, auth.user.id, nowIso(), nowIso()],
       );
       if (received && received.gt(0)) {
@@ -259,6 +290,7 @@ inventoryRouter.post(
         receivedLitres: z.union([z.string(), z.number()]).transform(String),
         receivedAt: z.string().datetime().optional(),
         notes: z.string().max(500).optional().nullable(),
+        ...decantationFields,
       }),
       req.body,
     );
@@ -267,10 +299,22 @@ inventoryRouter.post(
     const ordered = D(delivery.quantity_litres as string);
     if (received.gt(ordered.mul(1.02))) throw unprocessable('Received quantity exceeds the invoiced quantity by more than 2%');
     const receivedAt = body.receivedAt ?? nowIso();
+    assertDayOpen(station.id, businessDateOf(receivedAt));
     tx(() => {
       run(
-        "UPDATE deliveries SET status = 'RECEIVED', received_litres = ?, received_at = ?, notes = COALESCE(?, notes), updated_at = ? WHERE id = ?",
-        [received.toFixed(3), receivedAt, body.notes ?? null, nowIso(), String(delivery.id)],
+        `UPDATE deliveries SET status = 'RECEIVED', received_litres = ?, received_at = ?,
+                dip_before_cm = COALESCE(?, dip_before_cm), dip_after_cm = COALESCE(?, dip_after_cm),
+                density_invoice = COALESCE(?, density_invoice), density_observed = COALESCE(?, density_observed),
+                temp_observed_c = COALESCE(?, temp_observed_c), density_at_15c = COALESCE(?, density_at_15c),
+                tt_seal_numbers = COALESCE(?, tt_seal_numbers), sample_seal_no = COALESCE(?, sample_seal_no),
+                chamber_details = COALESCE(?, chamber_details),
+                notes = COALESCE(?, notes), updated_at = ? WHERE id = ?`,
+        [received.toFixed(3), receivedAt,
+          body.dipBeforeCm ?? null, body.dipAfterCm ?? null, body.densityInvoice ?? null,
+          body.densityObserved ?? null, body.tempObservedC ?? null,
+          densityAt15For(String(delivery.product_id), body),
+          body.ttSealNumbers ?? null, body.sampleSealNo ?? null, body.chamberDetails ?? null,
+          body.notes ?? null, nowIso(), String(delivery.id)],
       );
       recordMovement({
         tenantId: String(delivery.tenant_id),

@@ -41,7 +41,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     root.style.colorScheme = theme;
     // Paints native widgets (date pickers, selects, scrollbars) to match.
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', theme === 'dark' ? '#070c17' : '#f4f7fc');
+    if (meta) meta.setAttribute('content', theme === 'dark' ? '#0a0d12' : '#f7f5f1');
   }, [theme]);
 
   // Keep tracking the OS only while the user has not made an explicit choice.
@@ -95,22 +95,22 @@ export interface ChartPalette {
 // Recharts paints through SVG attributes, which do not resolve CSS custom
 // properties, so chart colours are supplied per theme from here.
 const CHART_DARK: ChartPalette = {
-  grid: '#24395c',
-  axis: '#7488a8',
-  tooltipBg: '#101a2e',
-  tooltipBorder: '#31507c',
-  tooltipLabel: '#bccbe4',
-  accent: '#38bdf8',
+  grid: '#2b394c',
+  axis: '#9c968f',
+  tooltipBg: '#131a24',
+  tooltipBorder: '#3b4d66',
+  tooltipLabel: '#e4dfd8',
+  accent: '#fb923c',
   teal: '#2dd4bf',
 };
 
 const CHART_LIGHT: ChartPalette = {
-  grid: '#dbe4f0',
-  axis: '#6b7d9b',
+  grid: '#e9e3d6',
+  axis: '#7c7063',
   tooltipBg: '#ffffff',
-  tooltipBorder: '#c2d0e4',
-  tooltipLabel: '#3d5170',
-  accent: '#0284c7',
+  tooltipBorder: '#d9d0bd',
+  tooltipLabel: '#4a4239',
+  accent: '#ea580c',
   teal: '#0d9488',
 };
 

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { CASH_DENOMINATIONS } from '@petroflow/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarDays, CheckCircle2, Clock, Download, Plus, RefreshCw, SlidersHorizontal, Undo2 } from 'lucide-react';
 import { apiGet, apiList, apiPatch, apiPost, type ListMeta } from '../lib/api';
@@ -58,6 +59,8 @@ interface ShiftNozzle {
   openingSource: string | null;
   closingSource: string | null;
   litresSold: string | null;
+  testingLitres: string;
+  operatorId: string | null;
   rate: string | null;
   salesValue: string | null;
   varianceLitres: string | null;
@@ -76,9 +79,22 @@ interface ShiftDetail extends Omit<ShiftRow, 'nozzleCount'> {
   approvedAt: string | null;
   closeNotes: string | null;
   notes: string | null;
+  cashCounted: string | null;
+  shortExcess: string | null;
   nozzles: ShiftNozzle[];
+  settlements?: { mode: string; expectedAmount: string; receivedAmount: string | null; differenceAmount: string | null }[];
+  denominations?: { denomination: number; count: number; amount: string }[];
   warnings?: string[];
-  totals: { litres: string; value: string; nozzleCount: number; flaggedNozzles: number };
+  totals: { litres: string; value: string; testingLitres: string; nozzleCount: number; flaggedNozzles: number };
+}
+
+interface DayClosing {
+  id: string;
+  businessDate: string;
+  status: string;
+  closedByName: string | null;
+  closedAt: string;
+  reopenReason: string | null;
 }
 
 interface CapturePreview {
@@ -296,6 +312,8 @@ export default function Shifts() {
         </div>
       )}
 
+      <DayClosingCard stationId={stationId} canManage={can('dayclose.manage')} />
+
       <Card className="mt-3">
         <div className="flex flex-wrap items-end gap-2 border-b border-navy-700/60 p-3">
           <Field label="Status" className="w-full sm:w-40">
@@ -431,7 +449,9 @@ export default function Shifts() {
                 <p className="text-[11px] text-ink-500">{capturePreview.note}</p>
                 {capturePreview.preview.map((item) => (
                   <p key={item.nozzleId} className="text-xs text-ink-300">
-                    {item.nozzle}: closing {item.closing ?? 'missing'} · {item.litres === null ? 'no volume' : `${item.litres} L`} · {item.status}
+                    {item.nozzle}: closing {item.closing ?? 'missing'} · {item.litres === null ? 'no volume' : `${item.litres} L net`}
+                    {(item as { testingLitres?: string }).testingLitres && Number((item as { testingLitres?: string }).testingLitres) > 0
+                      ? ` (testing ${(item as { testingLitres?: string }).testingLitres} L kata)` : ''} · {item.status}
                     {item.note ? ` — ${item.note}` : ''}
                   </p>
                 ))}
@@ -440,10 +460,13 @@ export default function Shifts() {
 
             <div className="grid gap-2 sm:grid-cols-4">
               {[
-                { label: 'Total litres', value: `${formatNumber(shift.totals.litres, 3)} L` },
+                { label: 'Net litres (bikri)', value: `${formatNumber(shift.totals.litres, 3)} L` },
+                { label: 'Testing litres (wapas tank me)', value: `${formatNumber(shift.totals.testingLitres ?? '0', 3)} L` },
                 { label: 'Aggregate estimate', value: formatINR(shift.totals.value) },
-                { label: 'Opening cash', value: formatINR(shift.openingCash) },
-                { label: 'Closing cash', value: formatINR(shift.closingCash) },
+                {
+                  label: 'Cash short / excess',
+                  value: shift.shortExcess === null ? '—' : `${Number(shift.shortExcess) >= 0 ? '+' : ''}${formatINR(shift.shortExcess)}`,
+                },
               ].map((item) => (
                 <div key={item.label} className="rounded-lg border border-navy-700/60 bg-navy-800/30 p-2.5">
                   <p className="text-[10px] uppercase tracking-wider text-ink-500">{item.label}</p>
@@ -484,6 +507,9 @@ export default function Shifts() {
                       </td>
                       <td className="num text-right font-medium text-ink-100">
                         {nozzle.litresSold ? formatNumber(nozzle.litresSold, 3) : '—'}
+                        {Number(nozzle.testingLitres) > 0 && (
+                          <span className="block text-[9px] text-info">testing −{formatNumber(nozzle.testingLitres, 3)} L</span>
+                        )}
                         {Number(nozzle.adjustmentLitres) !== 0 && (
                           <span className="block text-[9px] text-warn">adj {formatNumber(nozzle.adjustmentLitres, 3)}</span>
                         )}
@@ -504,8 +530,41 @@ export default function Shifts() {
                 </tbody>
               </table>
             </div>
+            {(shift.settlements ?? []).length > 0 && (
+              <div className="rounded-lg border border-navy-700/60">
+                <p className="border-b border-navy-700/60 px-3 py-2 text-xs font-semibold text-ink-200">
+                  Paise ka milaan — expected (system) vs received (galla)
+                </p>
+                <div className="table-wrap">
+                  <table className="data-table">
+                    <thead>
+                      <tr><th>Mode</th><th className="text-right">Expected</th><th className="text-right">Received</th><th className="text-right">Short / Excess</th></tr>
+                    </thead>
+                    <tbody>
+                      {(shift.settlements ?? []).map((row) => (
+                        <tr key={row.mode}>
+                          <td className="font-medium text-ink-100">{row.mode}</td>
+                          <td className="num text-right">{formatINR(row.expectedAmount)}</td>
+                          <td className="num text-right">{row.receivedAmount !== null ? formatINR(row.receivedAmount) : '—'}</td>
+                          <td className={`num text-right ${row.differenceAmount !== null && Number(row.differenceAmount) < 0 ? 'font-semibold text-danger' : row.differenceAmount !== null && Number(row.differenceAmount) > 0 ? 'text-warn' : 'text-ink-400'}`}>
+                            {row.differenceAmount !== null ? `${Number(row.differenceAmount) > 0 ? '+' : ''}${formatINR(row.differenceAmount)}` : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {(shift.denominations ?? []).length > 0 && (
+                  <p className="border-t border-navy-700/60 px-3 py-2 text-[11px] text-ink-400">
+                    Cash ginti: {(shift.denominations ?? []).map((d) => `₹${d.denomination}×${d.count}`).join(' · ')}
+                    {' = '}<span className="num text-ink-100">{formatINR(shift.cashCounted ?? 0)}</span>
+                  </p>
+                )}
+              </div>
+            )}
             <p className="text-[11px] leading-relaxed text-ink-500">
-              Net litres = closing totalizer − opening totalizer + approved adjustment. Totalizer-only shifts produce an
+              Net litres = closing totalizer − opening totalizer + approved adjustment − testing (testing fuel tank me
+              wapas jata hai, sale nahi hota). Totalizer-only shifts produce an
               <span className="text-ink-300"> aggregate estimated sales value</span>, not per-vehicle invoices.
             </p>
             {shift.closeNotes && <p className="text-xs text-ink-400">Close note: {shift.closeNotes}</p>}
@@ -548,6 +607,7 @@ export default function Shifts() {
           onClose={() => setEditNozzle(null)}
           shift={shift}
           nozzle={editNozzle}
+          employees={employees.data ?? []}
           loading={nozzleMutation.isPending}
           onSubmit={(payload) =>
             nozzleMutation.mutate({ shiftId: shift.id, nozzleId: editNozzle.nozzleId, payload })
@@ -659,44 +719,201 @@ function CloseShiftModal({
   onSubmit: (payload: Record<string, unknown>) => void;
 }) {
   const [closingCash, setClosingCash] = useState(shift.openingCash ?? '0');
+  const [counts, setCounts] = useState<Record<number, string>>({});
+  const [modes, setModes] = useState<Record<string, string>>({ UPI: '', CARD: '', BANK: '', CREDIT: '' });
   const [notes, setNotes] = useState('');
+
+  const denomTotal = useMemo(
+    () => CASH_DENOMINATIONS.reduce((acc, d) => acc + d * (Number(counts[d]) || 0), 0),
+    [counts],
+  );
+  const denomUsed = Object.values(counts).some((v) => Number(v) > 0);
+  const effectiveCash = denomUsed ? String(denomTotal) : closingCash;
+
+  const submit = () => {
+    const settlements = Object.entries(modes)
+      .filter(([, v]) => v.trim() !== '')
+      .map(([mode, received]) => ({ mode, received }));
+    if (denomUsed) settlements.unshift({ mode: 'CASH', received: String(denomTotal) });
+    onSubmit({
+      closingCash: effectiveCash,
+      denominations: denomUsed
+        ? CASH_DENOMINATIONS.filter((d) => Number(counts[d]) > 0).map((d) => ({ denomination: d, count: Number(counts[d]) }))
+        : undefined,
+      settlements: settlements.length > 0 ? settlements : undefined,
+      notes: notes || undefined,
+    });
+  };
 
   return (
     <Modal
       open={open}
       onClose={onClose}
       title={`Close shift #${shift.shiftNumber}`}
-      description="Saved manual closing readings take priority; otherwise the latest countable device snapshots are used."
+      description="Pehle galla gino (note-wise), phir UPI/Card machine ke totals daalo — system khud short/excess nikal dega."
+      size="lg"
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button
-            variant="primary"
-            loading={loading}
-            onClick={() => onSubmit({ closingCash, notes: notes || undefined })}
-          >
+          <Button variant="primary" loading={loading} onClick={submit}>
             Close & compute
           </Button>
         </>
       }
     >
-      <div className="space-y-3">
+      <div className="space-y-4">
+        <div>
+          <p className="label">Cash ginti — note-wise (galla gin ke)</p>
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+            {CASH_DENOMINATIONS.map((d) => (
+              <label key={d} className="rounded-xl border border-navy-700/60 bg-navy-800/30 p-2">
+                <span className="num block text-[11px] font-semibold text-ink-300">₹{d} ×</span>
+                <input
+                  inputMode="numeric"
+                  aria-label={`₹${d} notes count`}
+                  className="input mt-1 px-2 py-1.5 text-center"
+                  placeholder="0"
+                  value={counts[d] ?? ''}
+                  onChange={(e) => setCounts({ ...counts, [d]: e.target.value.replace(/[^0-9]/g, '') })}
+                />
+                <span className="num mt-1 block text-right text-[10px] text-ink-500">
+                  {formatINR(d * (Number(counts[d]) || 0))}
+                </span>
+              </label>
+            ))}
+          </div>
+          <p className="mt-2 text-sm text-ink-300">
+            Ginti total: <span className="num font-display text-base font-bold text-ink-100">{formatINR(denomTotal)}</span>
+            {denomUsed && <span className="text-[11px] text-ink-500"> · yahi received cash mana jayega</span>}
+          </p>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Closing cash (INR)" hint={denomUsed ? 'Ginti se auto bhara gaya' : 'Ginti nahi ki to seedha cash daalo'}>
+            <Input inputMode="decimal" value={effectiveCash} onChange={(e) => setClosingCash(e.target.value)} />
+          </Field>
+          <Field label="UPI mila (INR)" hint="UPI app/machine ka total">
+            <Input inputMode="decimal" value={modes.UPI} onChange={(e) => setModes({ ...modes, UPI: e.target.value })} placeholder="0" />
+          </Field>
+          <Field label="Card mila (INR)" hint="Swipe machine batch total">
+            <Input inputMode="decimal" value={modes.CARD} onChange={(e) => setModes({ ...modes, CARD: e.target.value })} placeholder="0" />
+          </Field>
+          <Field label="Bank / Fleet mila (INR)">
+            <Input inputMode="decimal" value={modes.BANK} onChange={(e) => setModes({ ...modes, BANK: e.target.value })} placeholder="0" />
+          </Field>
+          <Field label="Credit slips ka total (INR)" hint="Is shift ki udhaar p-slips ka jog">
+            <Input inputMode="decimal" value={modes.CREDIT} onChange={(e) => setModes({ ...modes, CREDIT: e.target.value })} placeholder="0" />
+          </Field>
+          <Field label="Close notes">
+            <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Cash handover, short/excess ka karan…" />
+          </Field>
+        </div>
+
         <div className="rounded-lg border border-navy-700/60 bg-navy-800/30 p-3 text-xs text-ink-400">
-          <p className="mb-1 font-medium text-ink-200">Before closing</p>
+          <p className="mb-1 font-medium text-ink-200">Band karne se pehle</p>
           <ul className="list-inside list-disc space-y-0.5">
-            <li>Verify each nozzle has a comparable opening and closing totalizer.</li>
-            <li>Large manual-vs-device differences are flagged for approval.</li>
-            <li>Closed shifts cannot be silently edited — use adjustments or a reversal.</li>
+            <li>Har nozzle ki opening/closing reading aur testing litres check kar lo.</li>
+            <li>Expected paisa shift ki record hui bikri se banta hai; bachi hui rakam cash mani jati hai.</li>
+            <li>Band shift chup-chaap edit nahi hoti — adjustment ya reversal use karo.</li>
           </ul>
         </div>
-        <Field label="Closing cash (INR)">
-          <Input inputMode="decimal" value={closingCash} onChange={(e) => setClosingCash(e.target.value)} />
-        </Field>
-        <Field label="Close notes">
-          <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Cash handover, variance explanation…" />
-        </Field>
       </div>
     </Modal>
+  );
+}
+
+function DayClosingCard({ stationId, canManage }: { stationId: string; canManage: boolean }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [date, setDate] = useState(() => {
+    const d = new Date(`${todayIst()}T12:00:00+05:30`);
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().slice(0, 10);
+  });
+  const [reopenFor, setReopenFor] = useState<DayClosing | null>(null);
+  const [reason, setReason] = useState('');
+
+  const closings = useQuery<DayClosing[]>({
+    queryKey: ['day-closings', stationId],
+    queryFn: () => apiGet<DayClosing[]>(`/shifts/day-closings?stationId=${stationId}`),
+    enabled: Boolean(stationId),
+  });
+
+  const invalidate = () => void queryClient.invalidateQueries({ queryKey: ['day-closings'] });
+  const closeDay = useMutation({
+    mutationFn: () => apiPost('/shifts/day-close', { stationId, businessDate: date }),
+    onSuccess: () => { toast('Din band ho gaya', { description: `${date} ki entries ab lock hain.` }); invalidate(); },
+    onError: (error: Error) => toast('Din band nahi hua', { tone: 'danger', description: error.message }),
+  });
+  const reopenDay = useMutation({
+    mutationFn: () => apiPost('/shifts/day-close/reopen', { stationId, businessDate: reopenFor?.businessDate, reason: reason.trim() }),
+    onSuccess: () => { toast('Din dobara khul gaya'); setReopenFor(null); setReason(''); invalidate(); },
+    onError: (error: Error) => toast('Reopen nahi hua', { tone: 'danger', description: error.message }),
+  });
+
+  const recent = (closings.data ?? []).slice(0, 5);
+
+  return (
+    <Card className="mt-3">
+      <CardHeader
+        title="Day closing — Roznamcha"
+        subtitle="Din band karne ke baad us date ki shift, bikri, kharcha aur dip entries lock ho jati hain."
+        action={canManage ? (
+          <div className="flex items-center gap-2">
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-auto" aria-label="Day closing date" />
+            <Button size="sm" variant="primary" loading={closeDay.isPending} onClick={() => closeDay.mutate()}>
+              Din band karo
+            </Button>
+          </div>
+        ) : <Badge tone="muted">Sirf manager/owner din band kar sakte hain</Badge>}
+      />
+      <CardBody>
+        {closings.isLoading ? (
+          <LoadingBlock rows={2} />
+        ) : recent.length === 0 ? (
+          <p className="py-2 text-center text-xs text-ink-500">Abhi tak koi din band nahi hua. Kal ka hisaab pakka ho jaye to upar se din band kar do.</p>
+        ) : (
+          <div className="divide-y divide-navy-800/70">
+            {recent.map((row) => (
+              <div key={row.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
+                <div>
+                  <p className="num text-sm font-medium text-ink-100">{row.businessDate}</p>
+                  <p className="text-[11px] text-ink-500">
+                    Band kiya: {row.closedByName ?? '—'} · {formatDateTime(row.closedAt)}
+                    {row.status === 'REOPENED' && row.reopenReason ? ` · Reopen karan: ${row.reopenReason}` : ''}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <StatusBadge status={row.status} label={row.status === 'CLOSED' ? 'DIN BAND' : 'REOPENED'} />
+                  {canManage && row.status === 'CLOSED' && (
+                    <Button size="sm" variant="outline" onClick={() => setReopenFor(row)}>Reopen</Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardBody>
+      <Modal
+        open={reopenFor !== null}
+        onClose={() => setReopenFor(null)}
+        title={`Din dobara kholo — ${reopenFor?.businessDate ?? ''}`}
+        description="Reopen ka karan audit me hamesha rahega. Sudhar karke din phir se band kar dena."
+        size="sm"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setReopenFor(null)}>Cancel</Button>
+            <Button variant="primary" loading={reopenDay.isPending} disabled={reason.trim().length < 10} onClick={() => reopenDay.mutate()}>
+              Reopen karo
+            </Button>
+          </>
+        }
+      >
+        <Field label="Reopen ka karan (kam se kam 10 akshar)" required>
+          <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Ek credit slip galat customer par chadh gayi thi" />
+        </Field>
+      </Modal>
+    </Card>
   );
 }
 
@@ -739,6 +956,7 @@ function EditNozzleModal({
   onClose,
   shift,
   nozzle,
+  employees,
   loading,
   onSubmit,
 }: {
@@ -746,11 +964,14 @@ function EditNozzleModal({
   onClose: () => void;
   shift: ShiftDetail;
   nozzle: ShiftNozzle;
+  employees: Employee[];
   loading: boolean;
   onSubmit: (payload: Record<string, unknown>) => void;
 }) {
   const [opening, setOpening] = useState(nozzle.openingReading ?? '');
   const [closing, setClosing] = useState(nozzle.closingReading ?? '');
+  const [testing, setTesting] = useState(nozzle.testingLitres ?? '0');
+  const [operatorId, setOperatorId] = useState(nozzle.operatorId ?? '');
   const [adjustment, setAdjustment] = useState(nozzle.adjustmentLitres ?? '0');
   const [reason, setReason] = useState(nozzle.adjustmentReason ?? '');
 
@@ -770,6 +991,8 @@ function EditNozzleModal({
               onSubmit({
                 openingReading: shift.status === 'OPEN' && opening.trim() && opening !== (nozzle.openingReading ?? '') ? opening : undefined,
                 closingReading: closing.trim() && closing !== (nozzle.closingReading ?? '') ? closing : undefined,
+                testingLitres: testing || '0',
+                operatorId: operatorId || null,
                 adjustmentLitres: adjustment || '0',
                 adjustmentReason: reason || undefined,
               })
@@ -786,6 +1009,17 @@ function EditNozzleModal({
         </Field>
         <Field label="Closing totalizer">
           <Input value={closing} onChange={(e) => setClosing(e.target.value)} />
+        </Field>
+        <Field label="Testing litres" hint="5L calibration/sample jo tank me wapas gaya — bikri se katega">
+          <Input inputMode="decimal" value={testing} onChange={(e) => setTesting(e.target.value)} />
+        </Field>
+        <Field label="Is nozzle ka filler" hint="Is nozzle ka cash isi ke hisaab me">
+          <Select value={operatorId} onChange={(e) => setOperatorId(e.target.value)}>
+            <option value="">Shift operator hi</option>
+            {employees.map((employee) => (
+              <option key={employee.id} value={employee.id}>{employee.name} · {employee.roleKey}</option>
+            ))}
+          </Select>
         </Field>
         <Field label="Adjustment (litres)" hint="Signed value, e.g. -2.5 for an evaporation correction">
           <Input value={adjustment} onChange={(e) => setAdjustment(e.target.value)} />

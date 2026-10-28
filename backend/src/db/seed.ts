@@ -8,6 +8,7 @@ import { newId } from '../lib/ids.js';
 import { hashPassword } from '../lib/security.js';
 import { addDays } from '../lib/time.js';
 import { D, Decimal, money, litres as fmtLitres, rate as fmtRate } from '../lib/decimal.js';
+import { evaluateDensity } from '../lib/density.js';
 import { ROLE_DEFINITIONS, ROLE_KEYS } from '@petroflow/shared';
 import { logger } from '../lib/logger.js';
 
@@ -46,6 +47,28 @@ interface SeededNozzle {
   deviceId: string;
   totalizer: Decimal;
   sequence: number;
+}
+
+/**
+ * Keep the system roles in sync with @petroflow/shared definitions. Runs on
+ * every boot (not just first seed) so newly added permissions reach existing
+ * databases without a reset.
+ */
+export function syncRoles() {
+  for (const key of ROLE_KEYS) {
+    const def = ROLE_DEFINITIONS[key];
+    const existingRole = get<{ id: string }>('SELECT id FROM roles WHERE key = ?', [key]);
+    if (existingRole) {
+      run('UPDATE roles SET name = ?, description = ?, permissions = ?, scope = ? WHERE key = ?', [
+        def.name, def.description, JSON.stringify(def.permissions), def.scope, key,
+      ]);
+    } else {
+      run(
+        'INSERT INTO roles (id, key, name, description, permissions, scope, is_system) VALUES (?, ?, ?, ?, ?, ?, 1)',
+        [newId('rol'), key, def.name, def.description, JSON.stringify(def.permissions), def.scope],
+      );
+    }
+  }
 }
 
 export async function runSeed(options: { force?: boolean } = {}) {
@@ -336,6 +359,17 @@ export async function runSeed(options: { force?: boolean } = {}) {
         deviceId: '', totalizer: D(50000 + index * 4200 + Math.floor(randBetween(1000, 9000))), sequence: 0,
       });
     });
+
+    // Nozzle -> fix tank mapping: har nozzle apne product wale pehle tank se
+    // juda hai (asli pump par pipe aise hi lagta hai). Isse shift ki dispensed
+    // stock seedha sahi tank par girti hai, pro-rata andaz nahi lagta.
+    run(
+      `UPDATE nozzles SET tank_id = (
+         SELECT t.id FROM tanks t
+          WHERE t.station_id = nozzles.station_id AND t.product_id = nozzles.product_id
+          ORDER BY t.code LIMIT 1
+       ) WHERE tank_id IS NULL`,
+    );
 
     // ------------------------------------------------------------ devices ---
     const deviceSpecs = [
@@ -789,6 +823,114 @@ export async function runSeed(options: { force?: boolean } = {}) {
     );
 
     // ----------------------------------------------------------- audit log --
+    // ------------------------------------------------- pump ops demo pack ---
+    // Density register (last 5 din, Baner ke 3 tanks) — observed density ko
+    // 15°C par correct karke dikhaya gaya hai, jaisa asli register me hota hai.
+    {
+      const densityPlan = [
+        { tankKey: `${stationA.id}:T1`, product: msA, category: 'PETROL', observed: '738.4', temp: '31.0' },
+        { tankKey: `${stationA.id}:T2`, product: hsdA, category: 'DIESEL', observed: '829.6', temp: '30.5' },
+        { tankKey: `${stationA.id}:T3`, product: xpA, category: 'PETROL', observed: '745.1', temp: '31.5' },
+      ];
+      for (let dayAgo = 4; dayAgo >= 0; dayAgo -= 1) {
+        for (const plan of densityPlan) {
+          const wobble = (dayAgo % 3) * 0.4;
+          const observed = D(plan.observed).plus(wobble).toFixed(1);
+          const ev = evaluateDensity(plan.category, observed, plan.temp);
+          run(
+            `INSERT INTO density_checks
+              (id, tenant_id, station_id, tank_id, product_id, business_date, checked_at, observed_density,
+               observed_temp_c, density_at_15c, spec_min, spec_max, within_spec, source, checked_by, note, is_demo, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'NOZZLE', ?, 'Subah ki density check (demo)', 1, ?)`,
+            [newId('den'), tenantA, stationA.id, tankIds[plan.tankKey], plan.product, businessDate(dayAgo),
+              isoAt(businessDate(dayAgo), 7, 15), observed, plan.temp, ev.densityAt15c, ev.specMin, ev.specMax,
+              ev.withinSpec ? 1 : 0, managerA ?? ownerA, nowIso()],
+          );
+        }
+      }
+    }
+
+    // Compliance documents: ek W&M stamping jald expire, PESO theek-thak.
+    {
+      const banerD1 = dispenserIds[`${stationA.id}:D1`];
+      const docs = [
+        { type: 'PESO_LICENCE', title: 'PESO Storage Licence', number: 'PESO/WEST/2021/1187', authority: 'PESO Nagpur', issued: addDays(businessDate(0), -700), expires: addDays(businessDate(0), 400), dispenser: null as string | null, tank: null as string | null },
+        { type: 'WM_STAMPING', title: 'Weights & Measures Stamping — D1', number: 'WM/PUNE/2026/4421', authority: 'Legal Metrology Pune', issued: addDays(businessDate(0), -350), expires: addDays(businessDate(0), 12), dispenser: banerD1, tank: null },
+        { type: 'FIRE_NOC', title: 'Fire NOC', number: 'FNOC/PMC/2025/087', authority: 'Pune Fire Brigade', issued: addDays(businessDate(0), -200), expires: addDays(businessDate(0), 165), dispenser: null, tank: null },
+        { type: 'TANK_TESTING', title: 'Tank T1 Pressure Testing', number: 'TT/2024/19', authority: 'Approved Testing Agency', issued: addDays(businessDate(0), -900), expires: addDays(businessDate(0), -15), dispenser: null, tank: tankIds[`${stationA.id}:T1`] },
+        { type: 'TRADE_LICENCE', title: 'Trade Licence (Gumasta)', number: 'PMC/TL/2026/3310', authority: 'Pune Municipal Corporation', issued: addDays(businessDate(0), -100), expires: addDays(businessDate(0), 265), dispenser: null, tank: null },
+      ];
+      for (const doc of docs) {
+        run(
+          `INSERT INTO compliance_documents
+            (id, tenant_id, station_id, dispenser_id, tank_id, doc_type, title, doc_number, authority,
+             issued_on, expires_on, renewal_lead_days, notes, is_demo, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 30, 'Demo compliance record', 1, ?, ?)`,
+          [newId('cmp'), tenantA, stationA.id, doc.dispenser, doc.tank, doc.type, doc.title, doc.number,
+            doc.authority, doc.issued, doc.expires, nowIso(), nowIso()],
+        );
+      }
+    }
+
+    // Credit customers ki gaadiyan (fleet).
+    {
+      const vehicles: [string, string, string, string][] = [
+        ['CUST-001', 'MH12AB4521', 'Truck', 'Ramesh Mane'],
+        ['CUST-001', 'MH12CD8890', 'Tempo', 'Vijay Shinde'],
+        ['CUST-002', 'MH14EF2210', 'Pickup', 'Sanjay Patil'],
+      ];
+      for (const [code, number, type, driver] of vehicles) {
+        if (!customers[code]) continue;
+        run(
+          `INSERT INTO customer_vehicles (id, tenant_id, customer_id, vehicle_number, vehicle_type, driver_name, is_active, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+          [newId('veh'), tenantA, customers[code], number, type, driver, nowIso(), nowIso()],
+        );
+      }
+    }
+
+    // Lubricants: catalog + opening stock + chand bikri.
+    {
+      const lubes = [
+        { code: 'SERVO-4T-900', name: 'Servo 4T Bike Oil', brand: 'Servo', pack: '900 ml', buy: '285.00', sell: '340.00', opening: '48' },
+        { code: 'HP-MILCY-15W40', name: 'HP Milcy Turbo 15W40', brand: 'HP', pack: '5 L', buy: '1420.00', sell: '1699.00', opening: '20' },
+        { code: 'MAK-2T-500', name: 'MAK 2T Oil', brand: 'MAK', pack: '500 ml', buy: '150.00', sell: '185.00', opening: '60' },
+        { code: 'DW-1L', name: 'Distilled Water', brand: 'Local', pack: '1 L', buy: '18.00', sell: '30.00', opening: '120' },
+      ];
+      for (const lube of lubes) {
+        const id = newId('lub');
+        run(
+          `INSERT INTO lube_products (id, tenant_id, code, name, brand, pack_size, hsn_code, gst_rate_pct, purchase_rate, sale_rate, is_active, is_demo, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, '271019', '18', ?, ?, 1, 1, ?, ?)`,
+          [id, tenantA, lube.code, lube.name, lube.brand, lube.pack, lube.buy, lube.sell, nowIso(), nowIso()],
+        );
+        run(
+          `INSERT INTO lube_movements (id, tenant_id, station_id, product_id, type, quantity, rate, amount, occurred_at, note, created_by, is_demo, created_at)
+           VALUES (?, ?, ?, ?, 'OPENING', ?, ?, ?, ?, 'Opening lubricant stock (demo)', ?, 1, ?)`,
+          [newId('lum'), tenantA, stationA.id, id, lube.opening, lube.buy,
+            money(D(lube.opening).mul(D(lube.buy))), isoAt(businessDate(10), 9), ownerA, nowIso()],
+        );
+        run(
+          `INSERT INTO lube_movements (id, tenant_id, station_id, product_id, type, quantity, rate, amount, payment_mode, vehicle_number, occurred_at, note, created_by, is_demo, created_at)
+           VALUES (?, ?, ?, ?, 'SALE', '-2.00', ?, ?, 'UPI', 'MH12XY7788', ?, 'Counter sale (demo)', ?, 1, ?)`,
+          [newId('lum'), tenantA, stationA.id, id, lube.sell, money(D(lube.sell).mul(2)),
+            isoAt(businessDate(1), 13), cashierA ?? ownerA, nowIso()],
+        );
+      }
+    }
+
+    // Aaj ki attendance (Baner team).
+    {
+      const team = [managerA, cashierA, userSpecs[4].id].filter(Boolean) as string[];
+      for (const userId of team) {
+        run(
+          `INSERT INTO attendance_records (id, tenant_id, station_id, user_id, attendance_date, status, in_time, note, marked_by, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, 'PRESENT', '07:00', NULL, ?, ?, ?)`,
+          [newId('att'), tenantA, stationA.id, userId, businessDate(0), ownerA, nowIso(), nowIso()],
+        );
+      }
+    }
+
     const auditSeeds = [
       { action: 'TENANT_ONBOARDED', entity: 'Tenant', entityId: tenantA, summary: 'Sunrise Fuels onboarded on Growth plan', tenant: tenantA },
       { action: 'FUEL_PRICE_UPDATED', entity: 'FuelPrice', entityId: null, summary: 'Petrol price revised to ₹106.31/L', tenant: tenantA },

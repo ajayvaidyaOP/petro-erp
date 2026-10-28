@@ -8,13 +8,14 @@ import { can, requireAuth, type AuthContext } from '../lib/auth.js';
 import { getStationOrThrow, tenantIdOf } from '../lib/tenant.js';
 import { audit } from '../lib/audit.js';
 import { D, money, rate as fmtRate } from '../lib/decimal.js';
-import { nowIso } from '../lib/time.js';
+import { nowIso , businessDateOf } from '../lib/time.js';
 import { newId } from '../lib/ids.js';
 import { hashPassword, assertPasswordStrength } from '../lib/security.js';
 import { makeCrudRouter, isoDateTime } from '../lib/crud.js';
 import { priceAt } from '../lib/pricing.js';
 import { settingsValue } from '../lib/settings.js';
 import { tankBookStock, convertDipToLitres } from '../lib/stock.js';
+import { assertDayOpen } from '../lib/dayclose.js';
 
 export const catalogRouter = Router();
 
@@ -399,6 +400,7 @@ catalogRouter.post(
       z.object({
         measuredAt: isoDateTime.optional(),
         dipCm: z.union([z.string(), z.number()]).transform(String).optional().nullable(),
+        waterDipCm: z.union([z.string(), z.number()]).transform(String).optional().nullable(),
         measuredLitres: z.union([z.string(), z.number()]).transform(String).optional(),
         note: z.string().max(300).optional().nullable(),
         method: z.enum(['DIP', 'MANUAL', 'AUTOMATED']).optional(),
@@ -413,12 +415,13 @@ catalogRouter.post(
     if (litres.lt(0)) throw unprocessable('Measured litres cannot be negative');
     const variance = litres.minus(book);
     const id = newId('tms');
+    assertDayOpen(station.id, businessDateOf(body.measuredAt ?? nowIso()));
     run(
       `INSERT INTO tank_measurements
-        (id, tenant_id, station_id, tank_id, measured_at, dip_cm, measured_litres, book_stock_litres,
+        (id, tenant_id, station_id, tank_id, measured_at, dip_cm, water_dip_cm, measured_litres, book_stock_litres,
          variance_litres, method, entered_by, note, is_demo, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
-      [id, station.tenant_id, station.id, tank.id, body.measuredAt ?? nowIso(), body.dipCm ?? null,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
+      [id, station.tenant_id, station.id, tank.id, body.measuredAt ?? nowIso(), body.dipCm ?? null, body.waterDipCm ?? null,
         litres.toFixed(3), book.toFixed(3), variance.toFixed(3), body.method ?? (body.dipCm ? 'DIP' : 'MANUAL'),
         auth.user.id, body.note ?? null, nowIso()],
     );
@@ -465,11 +468,20 @@ catalogRouter.use('/dispensers', dispenserCrud);
 
 // ------------------------------------------------------------------ nozzles
 
+/** Nozzle jis tank se juda hai, us tank ka product nozzle ke product se milna hi chahiye. */
+function validateNozzleTank(tankId: string | null | undefined, stationId: string, productId: string) {
+  if (!tankId) return;
+  const tank = get<{ station_id: string; product_id: string }>('SELECT station_id, product_id FROM tanks WHERE id = ?', [tankId]);
+  if (!tank) throw notFound('Tank not found');
+  if (tank.station_id !== stationId) throw unprocessable('Nozzle ka tank usi station par hona chahiye');
+  if (tank.product_id !== productId) throw unprocessable('Tank ka product nozzle ke product se match nahi karta — galat tank jud jayega');
+}
+
 const nozzleCrud = makeCrudRouter({
   table: 'nozzles',
   entity: 'Nozzle',
   idPrefix: 'noz',
-  fields: ['stationId', 'dispenserId', 'productId', { name: 'number', type: 'integer' }, 'label', 'totalizerUnit', 'status'],
+  fields: ['stationId', 'dispenserId', 'productId', 'tankId', { name: 'number', type: 'integer' }, 'label', 'totalizerUnit', 'status'],
   stationScoped: true,
   searchColumns: ['label'],
   sortable: { label: 'label', number: 'number' },
@@ -479,6 +491,7 @@ const nozzleCrud = makeCrudRouter({
     stationId: z.string().min(3),
     dispenserId: z.string().min(3),
     productId: z.string().min(3),
+    tankId: z.string().min(3).optional().nullable(),
     number: z.coerce.number().int().min(1).max(99),
     label: z.string().min(1).max(40),
     totalizerUnit: z.string().max(6).optional(),
@@ -488,6 +501,7 @@ const nozzleCrud = makeCrudRouter({
     label: z.string().min(1).max(40).optional(),
     number: z.coerce.number().int().min(1).max(99).optional(),
     productId: z.string().min(3).optional(),
+    tankId: z.string().min(3).optional().nullable(),
     totalizerUnit: z.string().max(6).optional(),
     status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
   }),
@@ -499,12 +513,17 @@ const nozzleCrud = makeCrudRouter({
     if (dispenser.station_id !== data.stationId) throw unprocessable('Nozzle must belong to the dispenser’s station');
     const product = get('SELECT id FROM fuel_products WHERE id = ? AND tenant_id = ?', [String(data.productId), tenantId]);
     if (!product) throw notFound('Fuel product not found');
+    validateNozzleTank(data.tankId as string | null | undefined, String(data.stationId), String(data.productId));
     return data;
   },
-  beforeUpdate: (data, _existing, auth) => {
+  beforeUpdate: (data, existing, auth) => {
+    const productId = String(data.productId ?? existing.product_id);
     if (data.productId) {
       const product = get('SELECT id FROM fuel_products WHERE id = ? AND tenant_id = ?', [String(data.productId), tenantIdOf(auth)]);
       if (!product) throw notFound('Fuel product not found');
+    }
+    if (data.tankId !== undefined) {
+      validateNozzleTank(data.tankId as string | null, String(existing.station_id), productId);
     }
     return data;
   },
@@ -569,6 +588,83 @@ const customerCrud = makeCrudRouter({
   hasUpdatedAt: true,
 });
 catalogRouter.use('/customers', customerCrud);
+
+// ------------------------------------------------------ customer vehicles
+// Credit customer ki gaadiyan — slip par gaadi number + driver ke liye.
+
+function customerInTenantOrThrow(auth: AuthContext, customerId: string) {
+  const customer = get<Record<string, unknown>>('SELECT * FROM customers WHERE id = ? AND tenant_id = ?', [
+    customerId, tenantIdOf(auth),
+  ]);
+  if (!customer) throw notFound('Customer not found');
+  return customer;
+}
+
+catalogRouter.get(
+  '/customers/:id/vehicles',
+  requireAuth,
+  asyncHandler((req, res) => {
+    const auth = req.auth as AuthContext;
+    if (!can(auth, 'customers.read')) throw forbidden();
+    const customer = customerInTenantOrThrow(auth, req.params.id);
+    const rows = all('SELECT * FROM customer_vehicles WHERE customer_id = ? ORDER BY vehicle_number', [String(customer.id)]);
+    return ok(res, shapeAll(rows));
+  }),
+);
+
+catalogRouter.post(
+  '/customers/:id/vehicles',
+  requireAuth,
+  asyncHandler((req, res) => {
+    const auth = req.auth as AuthContext;
+    if (!can(auth, 'customers.write')) throw forbidden();
+    const customer = customerInTenantOrThrow(auth, req.params.id);
+    const body = parse(
+      z.object({
+        vehicleNumber: z.string().trim().toUpperCase().pipe(z.string().min(4).max(20).regex(/^[A-Z0-9][A-Z0-9 -]*$/, 'Gaadi number sahi format me daalo (e.g. MH12AB1234)')),
+        vehicleType: z.string().max(40).optional().nullable(),
+        driverName: z.string().max(80).optional().nullable(),
+      }),
+      req.body,
+    );
+    const id = newId('veh');
+    try {
+      run(
+        `INSERT INTO customer_vehicles (id, tenant_id, customer_id, vehicle_number, vehicle_type, driver_name, is_active, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+        [id, tenantIdOf(auth), String(customer.id), body.vehicleNumber.replace(/\s+/g, ''), body.vehicleType ?? null, body.driverName ?? null, nowIso(), nowIso()],
+      );
+    } catch (error) {
+      if (error instanceof Error && /UNIQUE/i.test(error.message)) throw conflict('Ye gaadi is customer ke liye pehle se register hai');
+      throw error;
+    }
+    audit(req, {
+      action: 'CUSTOMER_VEHICLE_ADDED', entity: 'CustomerVehicle', entityId: id,
+      summary: `${String(customer.name)}: gaadi ${body.vehicleNumber} jodi gayi`,
+    });
+    return created(res, shape(get('SELECT * FROM customer_vehicles WHERE id = ?', [id])));
+  }),
+);
+
+catalogRouter.delete(
+  '/customers/:id/vehicles/:vehicleId',
+  requireAuth,
+  asyncHandler((req, res) => {
+    const auth = req.auth as AuthContext;
+    if (!can(auth, 'customers.write')) throw forbidden();
+    const customer = customerInTenantOrThrow(auth, req.params.id);
+    const vehicle = get<Record<string, unknown>>('SELECT * FROM customer_vehicles WHERE id = ? AND customer_id = ?', [
+      req.params.vehicleId, String(customer.id),
+    ]);
+    if (!vehicle) throw notFound('Vehicle not found');
+    run('UPDATE customer_vehicles SET is_active = 0, updated_at = ? WHERE id = ?', [nowIso(), String(vehicle.id)]);
+    audit(req, {
+      action: 'CUSTOMER_VEHICLE_DEACTIVATED', entity: 'CustomerVehicle', entityId: String(vehicle.id),
+      summary: `${String(customer.name)}: gaadi ${String(vehicle.vehicle_number)} bandh ki gayi`,
+    });
+    return ok(res, { deactivated: true });
+  }),
+);
 
 const supplierCrud = makeCrudRouter({
   table: 'suppliers',
