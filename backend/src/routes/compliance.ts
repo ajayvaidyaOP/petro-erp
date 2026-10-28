@@ -170,6 +170,7 @@ export function complianceAlerts(stationId: string) {
     );
     const what = shaped.dispenserCode ? ` (${String(shaped.dispenserCode)})` : shaped.tankCode ? ` (${String(shaped.tankCode)})` : '';
     return {
+      to: '/compliance',
       level: daysLeft < 0 ? 'error' : 'warning',
       message: daysLeft < 0
         ? `Compliance EXPIRED: ${String(shaped.title)}${what} ${Math.abs(daysLeft)} din pehle khatm ho gaya — turant renew karo.`

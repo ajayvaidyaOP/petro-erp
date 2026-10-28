@@ -102,3 +102,17 @@ export function initials(name: string) {
     .map((p) => p[0]?.toUpperCase())
     .join('');
 }
+
+const timeFormatter = new Intl.DateTimeFormat('en-IN', {
+  timeZone: 'Asia/Kolkata',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: true,
+});
+
+/** Clock time in IST for a timestamp in milliseconds (e.g. React Query's dataUpdatedAt). */
+export function formatClockTime(ms: number | null | undefined) {
+  if (!ms || !Number.isFinite(ms)) return '—';
+  return timeFormatter.format(new Date(ms));
+}
