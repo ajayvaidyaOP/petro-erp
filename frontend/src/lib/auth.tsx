@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ApiError, apiGet, apiPost } from './api';
+import { ApiError, apiGet, apiPost, setPreviewSessionToken } from './api';
 
 export interface Station {
   id: string;
@@ -63,12 +63,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (email: string, password: string) => {
-      await apiPost('/auth/login', { email, password });
+      // Clear a stale fallback before authenticating a new user.
+      setPreviewSessionToken(null);
+      const loginResult = await apiPost<{ sessionToken?: string }>('/auth/login', { email, password });
       try {
-        return await queryClient.fetchQuery({ queryKey: ['me'], queryFn: () => apiGet<Me>('/auth/me') });
+        const me = await queryClient.fetchQuery({ queryKey: ['me'], queryFn: () => apiGet<Me>('/auth/me') });
+        setPreviewSessionToken(null);
+        return me;
       } catch (error) {
+        if (error instanceof ApiError && error.status === 401 && loginResult.sessionToken) {
+          // Some embedded browsers reject even partitioned cookies. Retry once
+          // with a tab-scoped bearer session issued only for the dev preview.
+          setPreviewSessionToken(loginResult.sessionToken, true);
+          try {
+            const me = await apiGet<Me>('/auth/me');
+            queryClient.setQueryData(['me'], me);
+            return me;
+          } catch (fallbackError) {
+            setPreviewSessionToken(null);
+            throw fallbackError;
+          }
+        }
         if (error instanceof ApiError && error.status === 401) {
-          throw new Error('Sign-in succeeded, but your browser blocked the session cookie. Open the preview in a new tab or allow site cookies.');
+          throw new Error('Sign-in succeeded, but the session could not be established. Please retry signing in.');
         }
         throw error;
       }
@@ -80,6 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await apiPost('/auth/logout');
     } finally {
+      setPreviewSessionToken(null);
       queryClient.clear();
       window.location.href = '/login';
     }

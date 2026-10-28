@@ -26,6 +26,29 @@ export class ApiError extends Error {
 }
 
 const BASE = '/api/v1';
+const PREVIEW_SESSION_KEY = 'petroflow.previewSession';
+let previewSessionToken: string | null | undefined;
+
+function getPreviewSessionToken() {
+  if (previewSessionToken !== undefined) return previewSessionToken;
+  try {
+    previewSessionToken = window.sessionStorage.getItem(PREVIEW_SESSION_KEY);
+  } catch {
+    previewSessionToken = null;
+  }
+  return previewSessionToken;
+}
+
+/** Keep the cookie-block fallback scoped to this browser tab and preview. */
+export function setPreviewSessionToken(token: string | null, persist = false) {
+  previewSessionToken = token;
+  try {
+    if (persist && token) window.sessionStorage.setItem(PREVIEW_SESSION_KEY, token);
+    else window.sessionStorage.removeItem(PREVIEW_SESSION_KEY);
+  } catch {
+    // In-memory fallback still works for this page if storage is disabled.
+  }
+}
 
 interface ApiResponse<T> {
   data: T;
@@ -33,12 +56,14 @@ interface ApiResponse<T> {
 }
 
 async function requestWithMeta<T>(path: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
+  const previewToken = getPreviewSessionToken();
   const res = await fetch(`${BASE}${path}`, {
     credentials: 'include',
     ...options,
     headers: {
       'content-type': 'application/json',
       ...(options.headers ?? {}),
+      ...(previewToken ? { authorization: `Bearer ${previewToken}` } : {}),
     },
   });
 
