@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, Download, PackageCheck, Plus, Scale, Truck } from 'lucide-react';
 import { apiGet, apiList, apiPost, type ListMeta } from '../lib/api';
@@ -66,12 +67,23 @@ export default function Deliveries() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  const [searchParams, setSearchParams] = useSearchParams();
   const [status, setStatus] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
   const [receiveDelivery, setReceiveDelivery] = useState<Delivery | null>(null);
   const [disputeDelivery, setDisputeDelivery] = useState<Delivery | null>(null);
+  useEffect(() => {
+    if (searchParams.get('new') === 'delivery' && can('deliveries.write')) setCreateOpen(true);
+  }, [searchParams, can]);
+  const closeCreate = () => {
+    setCreateOpen(false);
+    if (searchParams.has('new')) {
+      const next = new URLSearchParams(searchParams); next.delete('new');
+      setSearchParams(next, { replace: true });
+    }
+  };
 
   const list = useQuery({
     queryKey: ['deliveries', stationId, status, search, page],
@@ -107,7 +119,7 @@ export default function Deliveries() {
 
   const create = useMutation({
     mutationFn: (payload: Record<string, unknown>) => apiPost('/inventory/deliveries', payload),
-    onSuccess: () => { toast('Delivery recorded'); setCreateOpen(false); invalidate(); },
+    onSuccess: () => { toast('Delivery recorded'); closeCreate(); invalidate(); },
     onError: (e) => toast('Could not record delivery', { tone: 'danger', description: (e as Error).message }),
   });
 
@@ -262,7 +274,7 @@ export default function Deliveries() {
 
       <DeliveryModal
         open={createOpen}
-        onClose={() => setCreateOpen(false)}
+        onClose={closeCreate}
         stationId={stationId}
         tanks={tanks.data ?? []}
         suppliers={suppliers.data ?? []}

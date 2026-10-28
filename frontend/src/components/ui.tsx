@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useId,
   useRef,
   useState,
   type ButtonHTMLAttributes,
@@ -36,7 +37,7 @@ const buttonVariants: Record<ButtonVariant, string> = {
   primary:
     // `text-onaccent` (not `text-navy-950`): navy is the surface ramp and inverts
     // with the theme, which would render light-on-light text in light mode.
-    'brand-gradient text-onaccent font-semibold shadow-glow border border-accent/40 hover:brightness-110 active:scale-[.98]',
+    'bg-accent text-onaccent font-semibold shadow-glow border border-accent hover:bg-accent-soft active:scale-[.98]',
   secondary:
     'bg-navy-750/80 text-ink-100 border border-navy-600/70 hover:bg-navy-700 hover:border-navy-600 active:scale-[.98]',
   ghost: 'text-ink-300 hover:bg-accent/[0.08] hover:text-ink-100 border border-transparent',
@@ -48,9 +49,9 @@ const buttonVariants: Record<ButtonVariant, string> = {
 };
 
 const buttonSizes: Record<ButtonSize, string> = {
-  sm: 'h-8 px-2.5 text-xs gap-1.5',
-  md: 'h-9.5 px-3.5 text-sm gap-2',
-  lg: 'h-11 px-5 text-sm gap-2',
+  sm: 'h-9 px-3 text-xs gap-1.5',
+  md: 'h-10 px-4 text-sm gap-2',
+  lg: 'h-12 px-5 text-sm gap-2',
 };
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -111,7 +112,7 @@ export function CardHeader({
   return (
     <div className={cn('flex flex-wrap items-start justify-between gap-3 border-b border-navy-700/50 px-4 py-3.5', className)}>
       <div className="min-w-0">
-        <h2 className="font-display text-sm font-bold tracking-tight text-ink-100">{title}</h2>
+        <h2 className="font-display text-[15px] font-bold tracking-tight text-ink-100">{title}</h2>
         {subtitle && <p className="mt-0.5 text-xs text-ink-500">{subtitle}</p>}
       </div>
       {action && <div className="flex min-w-0 flex-wrap items-center gap-2 max-sm:w-full">{action}</div>}
@@ -391,6 +392,11 @@ export function EmptyState({
 }
 
 /* ------------------------------------------------------------------- modal */
+// A stack keeps nested dialogs accessible: only the top dialog handles Escape,
+// and the page scroll lock is released only after the last dialog closes.
+const modalStack: symbol[] = [];
+let bodyOverflowBeforeModal = '';
+
 export function Modal({
   open,
   onClose,
@@ -409,24 +415,56 @@ export function Modal({
   size?: 'sm' | 'md' | 'lg' | 'xl';
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const titleId = useMemo(() => `modal-${Math.random().toString(36).slice(2)}`, []);
+  const titleId = useId();
+  const descriptionId = useId();
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+    const id = Symbol('modal');
+    const previousFocus = document.activeElement as HTMLElement | null;
+    if (modalStack.length === 0) {
+      bodyOverflowBeforeModal = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+    }
+    modalStack.push(id);
+    const focusable = () => Array.from(ref.current?.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ) ?? []).filter((element) => element.getClientRects().length > 0);
+    const timer = window.setTimeout(() => {
+      const firstField = focusable().find((element) => !element.hasAttribute('data-close'));
+      (firstField ?? ref.current)?.focus();
+    }, 50);
+    const onKey = (event: KeyboardEvent) => {
+      if (modalStack[modalStack.length - 1] !== id) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeRef.current();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const items = focusable();
+      if (items.length === 0) { event.preventDefault(); ref.current?.focus(); return; }
+      const first = items[0], last = items[items.length - 1];
+      if (!ref.current?.contains(document.activeElement)) {
+        event.preventDefault(); (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault(); last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault(); first.focus();
+      }
     };
     document.addEventListener('keydown', onKey);
-    const timer = setTimeout(() => {
-      const focusable = ref.current?.querySelector<HTMLElement>(
-        'input, select, textarea, button:not([data-close])',
-      );
-      focusable?.focus();
-    }, 50);
     return () => {
+      window.clearTimeout(timer);
       document.removeEventListener('keydown', onKey);
-      clearTimeout(timer);
+      const index = modalStack.indexOf(id);
+      if (index >= 0) modalStack.splice(index, 1);
+      if (modalStack.length === 0) document.body.style.overflow = bodyOverflowBeforeModal;
+      if (previousFocus?.isConnected) previousFocus.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
   const widths = { sm: 'max-w-md', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl' };
@@ -438,26 +476,25 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        aria-describedby={description ? descriptionId : undefined}
+        tabIndex={-1}
         className={cn(
-          'animate-scale-in my-auto flex max-h-[92dvh] w-full flex-col rounded-t-3xl border border-navy-700/70 bg-navy-850 shadow-pop sm:max-h-[88dvh] sm:rounded-3xl',
+          'animate-scale-in my-auto flex max-h-[92dvh] w-full flex-col rounded-t-3xl border border-navy-700/70 bg-navy-850 shadow-pop outline-none sm:max-h-[88dvh] sm:rounded-3xl',
           widths[size],
         )}
       >
         <div className="flex shrink-0 items-start justify-between gap-4 border-b border-navy-700/60 px-4 py-4 sm:px-5">
           <div>
-            <h2 id={titleId} className="font-display text-base font-bold tracking-tight text-ink-100">
-              {title}
-            </h2>
-            {description && <p className="mt-0.5 text-xs text-ink-500">{description}</p>}
+            <h2 id={titleId} className="font-display text-base font-bold tracking-tight text-ink-100">{title}</h2>
+            {description && <p id={descriptionId} className="mt-1 text-xs leading-relaxed text-ink-400">{description}</p>}
           </div>
           <button
+            type="button"
             data-close
             onClick={onClose}
-            className="rounded-md p-1 text-ink-400 transition hover:bg-navy-800 hover:text-ink-100"
+            className="btn-touch -mr-1 grid h-9 w-9 shrink-0 place-items-center rounded-lg text-ink-400 transition hover:bg-navy-800 hover:text-ink-100"
             aria-label="Close dialog"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          ><X className="h-4 w-4" /></button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 scroll-thin sm:px-5">{children}</div>
         {footer && (
@@ -558,7 +595,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <div
         aria-live="polite"
-        className="pointer-events-none fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-[60] flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-2"
+        className="pointer-events-none fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-5 right-4 z-[60] flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-2"
       >
         {toasts.map((t) => (
           <div
@@ -648,14 +685,14 @@ export function PageHeader({
   breadcrumb?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
       <div className="min-w-0">
         {breadcrumb && <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-accent">{breadcrumb}</div>}
         <div className="flex items-center gap-3">
-          <span className="brand-gradient hidden h-9 w-1.5 shrink-0 rounded-full sm:block" aria-hidden />
+
           <h1 className="font-display text-2xl font-bold tracking-tight text-ink-100 sm:text-[28px] sm:leading-9">{title}</h1>
         </div>
-        {description && <p className="mt-1.5 max-w-2xl text-sm text-ink-400 sm:pl-[18px]">{description}</p>}
+        {description && <p className="mt-1.5 max-w-2xl text-sm text-ink-400">{description}</p>}
       </div>
       {actions && <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">{actions}</div>}
     </div>
@@ -686,16 +723,16 @@ export function StatCard({
   };
   const iconTones = {
     default: 'bg-navy-800 text-ink-400',
-    accent: 'brand-gradient text-onaccent shadow-glow',
+    accent: 'bg-accent/10 text-accent',
     success: 'bg-emerald-500/12 text-ok',
     warning: 'bg-amber-500/12 text-warn',
     danger: 'bg-rose-500/12 text-danger',
   };
   return (
-    <div className="card card-hover relative overflow-hidden p-4">
-      <span className="brand-gradient absolute inset-x-0 top-0 h-0.5 opacity-70" aria-hidden />
+    <div className="card relative overflow-hidden p-5">
+
       <div className="flex items-start justify-between gap-2">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-500">{label}</p>
+        <p className="text-xs font-medium text-ink-400">{label}</p>
         {icon && <div className={cn('rounded-xl p-2', iconTones[tone])}>{icon}</div>}
       </div>
       <p className={cn('mt-1.5 break-words font-display text-[22px] font-bold leading-tight tracking-tight sm:text-2xl', tones[tone])}>{value}</p>
@@ -725,7 +762,7 @@ export function Tabs({
           className={cn(
             'whitespace-nowrap rounded-xl px-3.5 py-2 text-sm font-medium transition-all',
             active === tab.key
-              ? 'brand-gradient text-onaccent shadow-glow'
+              ? 'bg-accent text-onaccent shadow-glow'
               : 'text-ink-400 hover:bg-navy-800 hover:text-ink-100',
           )}
         >

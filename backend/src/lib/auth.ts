@@ -6,6 +6,7 @@ import { forbidden, unauthorized } from './errors.js';
 import { addHoursIso, nowIso } from './time.js';
 import { sha256, verifyPassword } from './security.js';
 import { newId } from './ids.js';
+import { permissionsForRole } from '@petroflow/shared';
 
 export interface PublicUser {
   id: string;
@@ -30,17 +31,6 @@ export interface AuthContext {
   /** True for tenant-wide roles (owner) — station scoping is not applied. */
   allStations: boolean;
   stationIds: Set<string>;
-}
-
-function permissionsOfRole(roleKey: string): string[] {
-  const row = get<{ permissions: string; scope: string }>('SELECT permissions, scope FROM roles WHERE key = ?', [roleKey]);
-  if (!row) return [];
-  try {
-    const parsed = JSON.parse(row.permissions);
-    return Array.isArray(parsed) ? parsed.map(String) : [];
-  } catch {
-    return [];
-  }
 }
 
 function roleScopeOf(roleKey: string): string {
@@ -101,7 +91,8 @@ function buildContext(userId: string, sessionId: string): AuthContext | null {
   const user = publicUser(userId);
   if (!user || user.status !== 'ACTIVE') return null;
   const scope = roleScopeOf(user.roleKey);
-  const permissions = new Set(permissionsOfRole(user.roleKey));
+  const rolePermissions = new Set<string>(permissionsForRole(user.roleKey));
+  const permissions = new Set(rolePermissions);
   const access = user.tenantId
     ? all<{ station_id: string; permissions: string }>(
         'SELECT station_id, permissions FROM user_station_access WHERE user_id = ?',
@@ -111,7 +102,7 @@ function buildContext(userId: string, sessionId: string): AuthContext | null {
   for (const row of access) {
     try {
       const extra = JSON.parse(row.permissions);
-      if (Array.isArray(extra)) for (const perm of extra) permissions.add(String(perm));
+      if (Array.isArray(extra)) for (const perm of extra) if (rolePermissions.has(String(perm))) permissions.add(String(perm));
     } catch {
       /* ignore malformed override list */
     }

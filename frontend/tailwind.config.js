@@ -67,10 +67,9 @@ export default {
       },
       fontFamily: {
         // Sora for headings/brand/numbers — geometric, "instrument panel" feel.
-        display: ['Sora', 'Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        display: ['Manrope Variable', 'Inter Variable', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         sans: [
-          'Inter',
-          'Inter var',
+          'Inter Variable', 'Inter',
           'ui-sans-serif',
           'system-ui',
           '-apple-system',

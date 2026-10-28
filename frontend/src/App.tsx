@@ -1,8 +1,8 @@
 import { lazy, Suspense, type ReactNode } from 'react';
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from './lib/auth';
 import { Layout } from './components/Layout';
-import { EmptyState, PageLoader } from './components/ui';
+import { Button, EmptyState, PageLoader } from './components/ui';
 
 // Route-level code splitting: the shell (auth, layout, routing) loads up front and
 // each screen is fetched on demand, which keeps the first paint fast on forecourt
@@ -61,6 +61,27 @@ function AdminOnly({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+function PermissionOnly({ permission, children }: { permission: string; children: ReactNode }) {
+  const { can } = useAuth();
+  if (!can(permission)) return <CardAccessDenied />;
+  return <>{children}</>;
+}
+function CardAccessDenied() {
+  return <EmptyState title="Owner access required" description="This section is managed by the owner. Your manager workspace has the tools for daily operations." action={<Link to="/"><Button variant="outline">Back to overview</Button></Link>} />;
+}
+const pages = [
+  ['shifts', Shifts, 'shifts.read'], ['readings', Readings, 'readings.read'],
+  ['sales', Sales, 'sales.read'], ['tanks', Tanks, 'stock.read'],
+  ['deliveries', Deliveries, 'deliveries.read'], ['density', Density, 'density.read'],
+  ['lubricants', Lubricants, 'lubricants.read'], ['compliance', Compliance, 'compliance.read'],
+  ['devices', Devices, 'devices.read'], ['customers', Customers, 'customers.read'],
+  ['suppliers', Suppliers, 'suppliers.read'], ['finance', Finance, 'payments.read'],
+  ['reconciliation', Reconciliation, 'reconciliation.read'], ['reports', Reports, 'reports.read'],
+  ['stations', Stations, 'stations.read'], ['products', Products, 'products.read'],
+  ['dispensers', Dispensers, 'dispensers.read'], ['employees', Employees, 'employees.read'],
+  ['audit', Audit, 'audit.read'], ['billing', Billing, 'billing.read'], ['settings', Settings, 'settings.read'],
+] as const;
+
 function TenantHome() {
   const { can } = useAuth();
   if (can('reports.read')) return <Dashboard />;
@@ -95,27 +116,7 @@ export default function App() {
               </TenantOnly>
             }
           />
-          <Route path="shifts" element={<TenantOnly><Shifts /></TenantOnly>} />
-          <Route path="readings" element={<TenantOnly><Readings /></TenantOnly>} />
-          <Route path="sales" element={<TenantOnly><Sales /></TenantOnly>} />
-          <Route path="tanks" element={<TenantOnly><Tanks /></TenantOnly>} />
-          <Route path="deliveries" element={<TenantOnly><Deliveries /></TenantOnly>} />
-          <Route path="density" element={<TenantOnly><Density /></TenantOnly>} />
-          <Route path="lubricants" element={<TenantOnly><Lubricants /></TenantOnly>} />
-          <Route path="compliance" element={<TenantOnly><Compliance /></TenantOnly>} />
-          <Route path="devices" element={<TenantOnly><Devices /></TenantOnly>} />
-          <Route path="customers" element={<TenantOnly><Customers /></TenantOnly>} />
-          <Route path="suppliers" element={<TenantOnly><Suppliers /></TenantOnly>} />
-          <Route path="finance" element={<TenantOnly><Finance /></TenantOnly>} />
-          <Route path="reconciliation" element={<TenantOnly><Reconciliation /></TenantOnly>} />
-          <Route path="reports" element={<TenantOnly><Reports /></TenantOnly>} />
-          <Route path="stations" element={<TenantOnly><Stations /></TenantOnly>} />
-          <Route path="products" element={<TenantOnly><Products /></TenantOnly>} />
-          <Route path="dispensers" element={<TenantOnly><Dispensers /></TenantOnly>} />
-          <Route path="employees" element={<TenantOnly><Employees /></TenantOnly>} />
-          <Route path="audit" element={<TenantOnly><Audit /></TenantOnly>} />
-          <Route path="billing" element={<TenantOnly><Billing /></TenantOnly>} />
-          <Route path="settings" element={<TenantOnly><Settings /></TenantOnly>} />
+          {pages.map(([path, Page, permission]) => <Route key={path} path={path} element={<TenantOnly><PermissionOnly permission={permission}><Page /></PermissionOnly></TenantOnly>} />)}
 
           <Route path="admin" element={<AdminOnly><AdminDashboard /></AdminOnly>} />
           <Route path="admin/tenants" element={<AdminOnly><Tenants /></AdminOnly>} />

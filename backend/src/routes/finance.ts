@@ -44,7 +44,7 @@ financeRouter.get(
   '/customer-ledger',
   asyncHandler((req, res) => {
     const auth = req.auth as AuthContext;
-    if (!can(auth, 'customers.read') || (auth.user.roleKey === 'STAFF' && !auth.allStations)) throw forbidden();
+    if (!can(auth, 'customers.read')) throw forbidden();
     const customerId = typeof req.query.customerId === 'string' ? req.query.customerId : null;
     if (!customerId) throw unprocessable('customerId is required');
     const customer = customerInTenant(auth, customerId);
@@ -93,7 +93,7 @@ financeRouter.get(
   '/customer-statement',
   asyncHandler((req, res) => {
     const auth = req.auth as AuthContext;
-    if (!can(auth, 'customers.read') || (auth.user.roleKey === 'STAFF' && !auth.allStations)) throw forbidden();
+    if (!can(auth, 'customers.read')) throw forbidden();
     const customerId = typeof req.query.customerId === 'string' ? req.query.customerId : null;
     const month = typeof req.query.month === 'string' ? req.query.month : null;
     if (!customerId) throw unprocessable('customerId is required');
@@ -257,7 +257,7 @@ financeRouter.get(
   '/receivables',
   asyncHandler((req, res) => {
     const auth = req.auth as AuthContext;
-    if (!can(auth, 'customers.read') || auth.user.roleKey === 'STAFF') throw forbidden();
+    if (!can(auth, 'customers.read')) throw forbidden();
     const rows = all<Record<string, unknown>>(
       `SELECT c.id, c.code, c.name, c.phone, c.balance, c.credit_limit, c.credit_days,
               (SELECT MAX(due_date) FROM credit_entries ce
@@ -286,7 +286,7 @@ financeRouter.get(
   '/supplier-ledger',
   asyncHandler((req, res) => {
     const auth = req.auth as AuthContext;
-    if (!can(auth, 'suppliers.read') || auth.user.roleKey === 'STAFF') throw forbidden();
+    if (!can(auth, 'suppliers.read')) throw forbidden();
     const supplierId = typeof req.query.supplierId === 'string' ? req.query.supplierId : null;
     if (!supplierId) throw unprocessable('supplierId is required');
     const supplier = supplierInTenant(auth, supplierId);

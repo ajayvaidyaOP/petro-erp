@@ -17,9 +17,6 @@ export default function NotFound() {
           <Link to="/">
             <Button variant="primary">Back to dashboard</Button>
           </Link>
-          <Link to="/admin">
-            <Button variant="outline">Platform console</Button>
-          </Link>
         </div>
       </div>
     </div>

@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { CASH_DENOMINATIONS } from '@petroflow/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarDays, CheckCircle2, Clock, Download, Plus, RefreshCw, SlidersHorizontal, Undo2 } from 'lucide-react';
@@ -122,11 +123,22 @@ export default function Shifts() {
   const [to, setTo] = useState('');
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [openModal, setOpenModal] = useState(false);
   const [closeModal, setCloseModal] = useState(false);
   const [reverseModal, setReverseModal] = useState(false);
   const [editNozzle, setEditNozzle] = useState<ShiftNozzle | null>(null);
   const [capturePreview, setCapturePreview] = useState<CapturePreview | null>(null);
+  useEffect(() => {
+    if (searchParams.get('new') === 'shift' && can('shifts.open')) setOpenModal(true);
+  }, [searchParams, can]);
+  const closeOpenModal = () => {
+    setOpenModal(false);
+    if (searchParams.has('new')) {
+      const next = new URLSearchParams(searchParams); next.delete('new');
+      setSearchParams(next, { replace: true });
+    }
+  };
 
   const list = useQuery({
     queryKey: ['shifts', stationId, status, from, to, page],
@@ -169,7 +181,7 @@ export default function Shifts() {
       if (shift.warnings?.length) {
         toast('Opening warnings', { tone: 'warning', description: shift.warnings[0] });
       }
-      setOpenModal(false);
+      closeOpenModal();
       setSelectedId(shift.id);
       invalidate(shift.id);
     },
@@ -574,7 +586,7 @@ export default function Shifts() {
 
       <OpenShiftModal
         open={openModal}
-        onClose={() => setOpenModal(false)}
+        onClose={closeOpenModal}
         stationId={stationId}
         employees={employees.data ?? []}
         canPickOperator={can('employees.read')}
