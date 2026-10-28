@@ -12,6 +12,8 @@ import {
   ChevronRight,
   CreditCard,
   Database,
+  Droplets,
+  FlaskConical,
   Fuel,
   Gauge,
   HardDrive,
@@ -79,6 +81,7 @@ function tenantNav(can: (p: string) => boolean): NavGroup[] {
         { to: '/shifts', label: 'Shifts', icon: <ListChecks className="h-4 w-4" />, permission: 'shifts.read' },
         { to: '/readings', label: 'Live Readings', icon: <Gauge className="h-4 w-4" />, permission: 'readings.read' },
         { to: '/sales', label: 'Nozzle Sales', icon: <Fuel className="h-4 w-4" />, permission: 'sales.read' },
+        { to: '/density', label: 'Density Register', icon: <FlaskConical className="h-4 w-4" />, permission: 'density.read' },
         { to: '/devices', label: 'Gateways & Devices', icon: <HardDrive className="h-4 w-4" />, permission: 'devices.read' },
       ],
     },
@@ -87,6 +90,7 @@ function tenantNav(can: (p: string) => boolean): NavGroup[] {
       items: [
         { to: '/tanks', label: 'Tanks & Stock', icon: <Database className="h-4 w-4" />, permission: 'stock.read' },
         { to: '/deliveries', label: 'Deliveries', icon: <Truck className="h-4 w-4" />, permission: 'deliveries.read' },
+        { to: '/lubricants', label: 'Lubricants & Oil', icon: <Droplets className="h-4 w-4" />, permission: 'lubricants.read' },
       ],
     },
     {
@@ -106,6 +110,7 @@ function tenantNav(can: (p: string) => boolean): NavGroup[] {
         { to: '/products', label: 'Products & Prices', icon: <Package className="h-4 w-4" />, permission: 'products.read' },
         { to: '/dispensers', label: 'Dispensers & Nozzles', icon: <Fuel className="h-4 w-4" />, permission: 'dispensers.read' },
         { to: '/employees', label: 'Employees & Roles', icon: <Users className="h-4 w-4" />, permission: 'employees.read' },
+        { to: '/compliance', label: 'Licences & Compliance', icon: <ShieldCheck className="h-4 w-4" />, permission: 'compliance.read' },
         { to: '/audit', label: 'Audit Log', icon: <ScrollText className="h-4 w-4" />, permission: 'audit.read' },
         { to: '/billing', label: 'Subscription', icon: <CreditCard className="h-4 w-4" />, permission: 'billing.read' },
         { to: '/settings', label: 'Settings & Diagnostics', icon: <Settings className="h-4 w-4" />, permission: 'settings.read' },

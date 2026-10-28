@@ -151,6 +151,18 @@ bina har page chhuye. Kal ko IndianOil/BPCL/HP ke rang chahiye to sirf CSS varia
 
 ## 7. Aage kaise karenge — Roadmap (priority order)
 
+> ### ✅ STATUS UPDATE — 28 Oct 2026: Phase 1, 2 aur 3 (audit ke hisaab se) IMPLEMENT HO GAYE
+> Upar ki checklist ke items 1–11 ban chuke hain aur test-cover hain (55 backend tests pass):
+> nozzle→tank fix mapping (+auto-migration, pro-rata khatam), testing litres, denomination-wise cash
+> ginti, mode-wise settlement + short/excess, day-closing lock (reopen sirf karan ke saath),
+> density register (@15°C + spec flag), TT decantation full record (dip/seal/sample/chamber),
+> monthly stock loss-vs-norm report, water dip, indent suggestion (days-of-cover), gaadi-wise credit
+> slips + mahine ki customer statement + FIFO ageing, lubricant SKU stock/sales (GST register export),
+> compliance expiry alerts (dashboard par bhi), staff attendance (payable days), aur 4 CA-ready CSV
+> exports. Sirf Phase 4 (asli hardware pilot, WhatsApp automation, offline PWA) baki hai — wo vendor
+> protocol aur live pump ke bina sach me test nahi ho sakta, isliye jhuthi "integration" nahi banayi.
+> Naye screens owner ke demo login par ready-made data ke saath khulte hain.
+
 **Phase 1 — Roz ka hisaab pakka (2–3 hafte)**
 1. Nozzle→Tank fix mapping (+ migration, pro-rata khatam)
 2. Testing quantity + cash denomination + filler-wise shift settlement (short/excess auto)

@@ -36,11 +36,51 @@ export function getDb(): DatabaseSync {
   return database;
 }
 
+/**
+ * Additive column migrations for databases created by older schema versions.
+ * schema.sql uses CREATE TABLE IF NOT EXISTS, so new *tables* appear on their
+ * own — but new *columns* on existing tables need an explicit ALTER TABLE.
+ * Each entry is only applied when the column is missing (idempotent).
+ */
+const COLUMN_MIGRATIONS: [table: string, column: string, ddl: string][] = [
+  ['nozzles', 'tank_id', 'ALTER TABLE nozzles ADD COLUMN tank_id TEXT REFERENCES tanks(id) ON DELETE SET NULL'],
+  ['tank_measurements', 'water_dip_cm', 'ALTER TABLE tank_measurements ADD COLUMN water_dip_cm TEXT'],
+  ['shifts', 'cash_counted', 'ALTER TABLE shifts ADD COLUMN cash_counted TEXT'],
+  ['shifts', 'short_excess', 'ALTER TABLE shifts ADD COLUMN short_excess TEXT'],
+  ['shift_nozzle_readings', 'testing_litres', "ALTER TABLE shift_nozzle_readings ADD COLUMN testing_litres TEXT NOT NULL DEFAULT '0'"],
+  ['shift_nozzle_readings', 'operator_id', 'ALTER TABLE shift_nozzle_readings ADD COLUMN operator_id TEXT REFERENCES users(id) ON DELETE SET NULL'],
+  ['deliveries', 'dip_before_cm', 'ALTER TABLE deliveries ADD COLUMN dip_before_cm TEXT'],
+  ['deliveries', 'dip_after_cm', 'ALTER TABLE deliveries ADD COLUMN dip_after_cm TEXT'],
+  ['deliveries', 'density_invoice', 'ALTER TABLE deliveries ADD COLUMN density_invoice TEXT'],
+  ['deliveries', 'density_observed', 'ALTER TABLE deliveries ADD COLUMN density_observed TEXT'],
+  ['deliveries', 'temp_observed_c', 'ALTER TABLE deliveries ADD COLUMN temp_observed_c TEXT'],
+  ['deliveries', 'density_at_15c', 'ALTER TABLE deliveries ADD COLUMN density_at_15c TEXT'],
+  ['deliveries', 'tt_seal_numbers', 'ALTER TABLE deliveries ADD COLUMN tt_seal_numbers TEXT'],
+  ['deliveries', 'sample_seal_no', 'ALTER TABLE deliveries ADD COLUMN sample_seal_no TEXT'],
+  ['deliveries', 'chamber_details', 'ALTER TABLE deliveries ADD COLUMN chamber_details TEXT'],
+  ['credit_entries', 'slip_number', 'ALTER TABLE credit_entries ADD COLUMN slip_number TEXT'],
+  ['credit_entries', 'vehicle_number', 'ALTER TABLE credit_entries ADD COLUMN vehicle_number TEXT'],
+  ['credit_entries', 'driver_name', 'ALTER TABLE credit_entries ADD COLUMN driver_name TEXT'],
+  ['credit_entries', 'product_id', 'ALTER TABLE credit_entries ADD COLUMN product_id TEXT REFERENCES fuel_products(id) ON DELETE SET NULL'],
+  ['credit_entries', 'quantity_litres', 'ALTER TABLE credit_entries ADD COLUMN quantity_litres TEXT'],
+  ['credit_entries', 'rate_per_litre', 'ALTER TABLE credit_entries ADD COLUMN rate_per_litre TEXT'],
+];
+
+function applyColumnMigrations() {
+  const db = getDb();
+  for (const [table, column, ddl] of COLUMN_MIGRATIONS) {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+    if (cols.length === 0) continue; // table not created yet — schema.sql handles it
+    if (!cols.some((c) => c.name === column)) db.exec(ddl);
+  }
+}
+
 /** Execute a migration script (used at boot and by tests). */
 export function migrate(schemaPath?: string) {
   const file = schemaPath ?? path.join(env.ROOT_DIR, 'db', 'schema.sql');
   const sql = fs.readFileSync(file, 'utf8');
   getDb().exec(sql);
+  applyColumnMigrations();
 }
 
 function bind(params: unknown[]): SqlValue[] {

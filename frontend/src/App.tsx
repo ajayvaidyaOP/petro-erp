@@ -14,6 +14,9 @@ const Products = lazy(() => import('./pages/Products'));
 const Dispensers = lazy(() => import('./pages/Dispensers'));
 const Tanks = lazy(() => import('./pages/Tanks'));
 const Deliveries = lazy(() => import('./pages/Deliveries'));
+const Density = lazy(() => import('./pages/Density'));
+const Lubricants = lazy(() => import('./pages/Lubricants'));
+const Compliance = lazy(() => import('./pages/Compliance'));
 const Devices = lazy(() => import('./pages/Devices'));
 const Readings = lazy(() => import('./pages/Readings'));
 const Shifts = lazy(() => import('./pages/Shifts'));
@@ -97,6 +100,9 @@ export default function App() {
           <Route path="sales" element={<TenantOnly><Sales /></TenantOnly>} />
           <Route path="tanks" element={<TenantOnly><Tanks /></TenantOnly>} />
           <Route path="deliveries" element={<TenantOnly><Deliveries /></TenantOnly>} />
+          <Route path="density" element={<TenantOnly><Density /></TenantOnly>} />
+          <Route path="lubricants" element={<TenantOnly><Lubricants /></TenantOnly>} />
+          <Route path="compliance" element={<TenantOnly><Compliance /></TenantOnly>} />
           <Route path="devices" element={<TenantOnly><Devices /></TenantOnly>} />
           <Route path="customers" element={<TenantOnly><Customers /></TenantOnly>} />
           <Route path="suppliers" element={<TenantOnly><Suppliers /></TenantOnly>} />

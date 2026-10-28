@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Download, Printer, ReceiptText } from 'lucide-react';
-import { apiGet } from '../lib/api';
+import { apiDownload, apiGet } from '../lib/api';
 import { useStations } from '../lib/auth';
 import { formatDate, formatDateTime, formatINR, formatNumber, todayIst } from '../lib/format';
 import { downloadCsv } from '../lib/utils';
@@ -300,6 +300,250 @@ export default function Reports() {
           </div>
         </div>
       ) : null}
+
+      <StockLossCard stationId={stationId} />
+      <AgeingCard stationId={stationId} />
+      <ExportsCard stationId={stationId} />
     </>
+  );
+}
+
+interface StockLossRow {
+  productName: string;
+  productCode: string;
+  openingLitres: string;
+  receiptsLitres: string;
+  dispensedLitres: string;
+  adjustmentsLitres: string;
+  closingBookLitres: string;
+  physicalLitres: string | null;
+  /** physical − book: positive = gain (zyada mila), negative = loss (kam mila). */
+  lossGainLitres: string | null;
+  lossGainPctOfSales: string | null;
+  normPct: string;
+  status: 'WITHIN_NORM' | 'BEYOND_NORM' | 'GAIN_CHECK' | 'NO_DIP';
+}
+
+function StockLossCard({ stationId }: { stationId: string }) {
+  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const report = useQuery<{ month: string; rows: StockLossRow[] }>({
+    queryKey: ['stock-loss', stationId, month],
+    queryFn: () => apiGet(`/reports/stock-loss?stationId=${stationId}&month=${month}`),
+    enabled: Boolean(stationId),
+  });
+  const rows = report.data?.rows ?? [];
+  const tone = (status: StockLossRow['status']) => (status === 'BEYOND_NORM' ? 'danger' : status === 'GAIN_CHECK' ? 'warning' : status === 'NO_DIP' ? 'neutral' : 'success');
+  const label = (status: StockLossRow['status']) => ({ WITHIN_NORM: 'Norm ke andar', BEYOND_NORM: 'Loss norm se zyada!', GAIN_CHECK: 'Gain zyada — check karo', NO_DIP: 'Dip nahi mila' })[status];
+
+  return (
+    <Card className="mt-3">
+      <CardHeader
+        title="Mahine ka Stock Loss / Gain"
+        subtitle="Book stock vs actual dip — oil-company norm: MS 0.75% · HSD 0.25% (bikri par). Yahi report chori/leakage pakadti hai."
+        action={(
+          <Field label="Mahina" className="mb-0 w-44">
+            <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
+          </Field>
+        )}
+      />
+      <TableScrollHint />
+      {report.isLoading ? (
+        <LoadingBlock rows={3} />
+      ) : report.isError ? (
+        <div className="p-4"><ErrorState error={report.error} onRetry={() => void report.refetch()} /></div>
+      ) : rows.length === 0 ? (
+        <EmptyState title="Koi product data nahi" description="Is mahine ke liye stock movement nahi mila." />
+      ) : (
+        <div className="table-wrap">
+          <table className="data-table min-w-[880px]">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th className="text-right">Opening (L)</th>
+                <th className="text-right">Aaya (L)</th>
+                <th className="text-right">Bika (L)</th>
+                <th className="text-right">Kitabi closing (L)</th>
+                <th className="text-right">Dip closing (L)</th>
+                <th className="text-right">Loss / Gain (L)</th>
+                <th className="text-right">% of sale</th>
+                <th>Haalat</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.productCode}>
+                  <td className="font-medium text-ink-100">{row.productName}</td>
+                  <td className="num text-right">{formatNumber(row.openingLitres, 0)}</td>
+                  <td className="num text-right">{formatNumber(row.receiptsLitres, 0)}</td>
+                  <td className="num text-right">{formatNumber(row.dispensedLitres, 0)}</td>
+                  <td className="num text-right">{formatNumber(row.closingBookLitres, 0)}</td>
+                  <td className="num text-right">{row.physicalLitres ? formatNumber(row.physicalLitres, 0) : '—'}</td>
+                  <td className={`num text-right ${row.lossGainLitres && Number(row.lossGainLitres) < 0 ? 'font-semibold text-danger' : row.lossGainLitres && Number(row.lossGainLitres) > 0 ? 'text-warn' : 'text-ink-300'}`}>
+                    {row.lossGainLitres
+                      ? `${Number(row.lossGainLitres) >= 0 ? '+' : ''}${formatNumber(row.lossGainLitres, 0)}${Number(row.lossGainLitres) >= 0 ? ' gain' : ' loss'}`
+                      : '—'}
+                  </td>
+                  <td className="num text-right">{row.lossGainPctOfSales ? `${formatNumber(row.lossGainPctOfSales, 2)}%` : '—'}<span className="block text-[9px] text-ink-600">norm ±{row.normPct}%</span></td>
+                  <td><Badge tone={tone(row.status)}>{label(row.status)}</Badge></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="border-t border-navy-700/60 px-4 py-2 text-[11px] text-ink-500">
+        Loss norm se zyada aaye to: nozzle calibration test karo, decantation ki dip milao, aur shift-wise variance check karo — leakage ka sabse pehla saket yahi hai.
+      </p>
+    </Card>
+  );
+}
+
+interface AgeingRow {
+  customerId: string;
+  code: string;
+  name: string;
+  creditLimit: string;
+  outstanding: string;
+  bucket0To30: string;
+  bucket31To60: string;
+  bucket61To90: string;
+  bucket90Plus: string;
+  oldestUnpaidAt: string | null;
+  overLimit: boolean;
+}
+
+type AgeingTotals = { outstanding: string; bucket0To30: string; bucket31To60: string; bucket61To90: string; bucket90Plus: string };
+
+function AgeingCard({ stationId }: { stationId: string }) {
+  const report = useQuery<{ asOf: string; rows: AgeingRow[]; totals: AgeingTotals }>({
+    queryKey: ['ageing', stationId],
+    queryFn: () => apiGet(`/reports/ageing?stationId=${stationId}`),
+    enabled: Boolean(stationId),
+  });
+  const rows = report.data?.rows ?? [];
+  const bucketCell = (value: string, hot = false) => (
+    <span className={Number(value) > 0 ? (hot ? 'font-semibold text-danger' : 'text-ink-200') : 'text-ink-600'}>
+      {Number(value) > 0 ? formatINR(value) : '—'}
+    </span>
+  );
+
+  return (
+    <Card className="mt-3">
+      <CardHeader
+        title="Udhaar ki umar — Ageing report"
+        subtitle="Kaun kitna purana udhaar (purani sale pehle — FIFO) dabaye baitha hai. 90+ wala sabse pehle call karo."
+      />
+      <TableScrollHint />
+      {report.isLoading ? (
+        <LoadingBlock rows={3} />
+      ) : report.isError ? (
+        <div className="p-4"><ErrorState error={report.error} onRetry={() => void report.refetch()} /></div>
+      ) : rows.length === 0 ? (
+        <EmptyState title="Kisi par bakaya nahi" description="Saara udhaar clear hai — shaleen!" />
+      ) : (
+        <div className="table-wrap">
+          <table className="data-table min-w-[780px]">
+            <thead>
+              <tr>
+                <th>Party</th>
+                <th className="text-right">Kul bakaya</th>
+                <th className="text-right">0–30 din</th>
+                <th className="text-right">31–60 din</th>
+                <th className="text-right">61–90 din</th>
+                <th className="text-right">90+ din</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.customerId}>
+                  <td>
+                    <span className="font-medium text-ink-100">{row.name}</span>
+                    {row.overLimit && <Badge tone="danger" className="ml-2">Limit paar</Badge>}
+                    <span className="block text-[10px] text-ink-500">{row.code} · limit {formatINR(row.creditLimit)}{row.oldestUnpaidAt ? ` · Sabse purani unpaid ${formatDate(row.oldestUnpaidAt)}` : ''}</span>
+                  </td>
+                  <td className="num text-right font-medium text-ink-100">{formatINR(row.outstanding)}</td>
+                  <td className="num text-right">{bucketCell(row.bucket0To30)}</td>
+                  <td className="num text-right">{bucketCell(row.bucket31To60)}</td>
+                  <td className="num text-right">{bucketCell(row.bucket61To90, true)}</td>
+                  <td className="num text-right">{bucketCell(row.bucket90Plus, true)}</td>
+                </tr>
+              ))}
+              {report.data && (
+                <tr className="border-t border-navy-600">
+                  <td className="font-semibold text-ink-100">Kul</td>
+                  <td className="num text-right font-semibold text-ink-100">{formatINR(report.data.totals.outstanding)}</td>
+                  <td className="num text-right font-semibold">{formatINR(report.data.totals.bucket0To30)}</td>
+                  <td className="num text-right font-semibold">{formatINR(report.data.totals.bucket31To60)}</td>
+                  <td className="num text-right font-semibold">{formatINR(report.data.totals.bucket61To90)}</td>
+                  <td className="num text-right font-semibold text-danger">{formatINR(report.data.totals.bucket90Plus)}</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function ExportsCard({ stationId }: { stationId: string }) {
+  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [busy, setBusy] = useState('');
+  const filenameOf = (name: string) => `${name}-${month}.csv`;
+
+  const download = async (slug: string, filename: string) => {
+    setBusy(slug);
+    const [year, monthStr] = month.split('-');
+    const from = `${month}-01`;
+    const lastDay = new Date(Number(year), Number(monthStr), 0).getDate();
+    const to = `${month}-${String(lastDay).padStart(2, '0')}`;
+    const query = slug === 'sales-register' || slug === 'lubricants-gst'
+      ? `stationId=${stationId}&from=${from}&to=${to}`
+      : slug === 'stock-statement' ? `stationId=${stationId}&month=${month}` : `stationId=${stationId}`;
+    try {
+      await apiDownload(`/reports/export/${slug}?${query}`, filename);
+    } catch (error) {
+      window.alert((error as Error).message);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const items = [
+    { slug: 'sales-register', name: 'Sales Register', detail: 'Mahine ki sahi bikri — product, mode wise (CA ke liye)' },
+    { slug: 'stock-statement', name: 'Stock Statement', detail: 'Tank-wise opening/aavak/bikri/closing — oil company format' },
+    { slug: 'ageing', name: 'Udhaar Ageing', detail: 'Party-wise purana bakaya buckets me' },
+    { slug: 'lubricants-gst', name: 'Lubricants GST Register', detail: 'Oil bikri GST alag karke — GSTR filing ready' },
+  ];
+
+  return (
+    <Card className="mt-3">
+      <CardHeader
+        title="Exports — CA ko dene ke liye"
+        subtitle="Mahina chuno aur ek-click me CSV lo (Excel me seedha khulti hai)."
+        action={(
+          <Field label="Mahina" className="mb-0 w-44">
+            <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
+          </Field>
+        )}
+      />
+      <div className="grid gap-2 p-4 sm:grid-cols-2">
+        {items.map((item) => (
+          <button
+            key={item.slug}
+            type="button"
+            disabled={busy === item.slug}
+            onClick={() => void download(item.slug, filenameOf(item.slug))}
+            className="flex items-start gap-3 rounded-2xl border border-navy-700/70 bg-navy-800/40 p-3 text-left transition hover:border-teal-400/40 hover:bg-navy-800 disabled:opacity-60"
+          >
+            <span className="rounded-xl bg-teal-400/10 p-2 text-teal-300"><Download className="h-4 w-4" /></span>
+            <span>
+              <span className="block text-sm font-semibold text-ink-100">{item.name}</span>
+              <span className="mt-0.5 block text-[11px] text-ink-500">{item.detail}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </Card>
   );
 }

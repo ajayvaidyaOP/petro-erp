@@ -7,7 +7,8 @@ import { can, requireAuth, type AuthContext } from '../lib/auth.js';
 import { getStationOrThrow, tenantIdOf } from '../lib/tenant.js';
 import { audit } from '../lib/audit.js';
 import { newId } from '../lib/ids.js';
-import { istDayEnd, istDayStart, isIsoDate, nowIso, todayIst } from '../lib/time.js';
+import { istDayEnd, istDayStart, isIsoDate, nowIso, todayIst, businessDateOf, addDays } from '../lib/time.js';
+import { assertDayOpen } from '../lib/dayclose.js';
 import { D, money } from '../lib/decimal.js';
 import { idempotent } from '../lib/idempotency.js';
 
@@ -48,10 +49,11 @@ financeRouter.get(
     if (!customerId) throw unprocessable('customerId is required');
     const customer = customerInTenant(auth, customerId);
     const entries = all<Record<string, unknown>>(
-      `SELECT ce.*, st.name AS station_name, u.name AS created_by_name
+      `SELECT ce.*, st.name AS station_name, u.name AS created_by_name, p.name AS product_name
          FROM credit_entries ce
          LEFT JOIN stations st ON st.id = ce.station_id
          LEFT JOIN users u ON u.id = ce.created_by
+         LEFT JOIN products p ON p.id = ce.product_id
         WHERE ce.customer_id = ? AND ce.status = 'POSTED'
         ORDER BY ce.occurred_at ASC, ce.created_at ASC`,
       [customerId],
@@ -86,6 +88,74 @@ financeRouter.get(
   }),
 );
 
+// Mahine-bhar ka khata: customer ko bhejne/print karne layak statement.
+financeRouter.get(
+  '/customer-statement',
+  asyncHandler((req, res) => {
+    const auth = req.auth as AuthContext;
+    if (!can(auth, 'customers.read')) throw forbidden();
+    const customerId = typeof req.query.customerId === 'string' ? req.query.customerId : null;
+    const month = typeof req.query.month === 'string' ? req.query.month : null;
+    if (!customerId) throw unprocessable('customerId is required');
+    if (!month || !/^\d{4}-\d{2}$/.test(month)) throw unprocessable('month (YYYY-MM) is required');
+    const customer = customerInTenant(auth, customerId);
+    const monthStart = `${month}-01`;
+    const nextMonthStart = addDays(`${month}-28`, 4).slice(0, 8) + '01';
+    const fromIso = istDayStart(monthStart);
+    const toIso = istDayStart(nextMonthStart);
+    const signed = (row: Record<string, unknown>) => {
+      const amt = D(String(row.amount));
+      return row.type === 'PAYMENT' ? amt.negated() : amt;
+    };
+    const openingRows = all<Record<string, unknown>>(
+      "SELECT type, amount FROM credit_entries WHERE customer_id = ? AND status = 'POSTED' AND occurred_at < ?",
+      [customerId, fromIso],
+    );
+    const opening = openingRows.reduce((acc, row) => acc.plus(signed(row)), D(0));
+    const entries = all<Record<string, unknown>>(
+      `SELECT ce.*, st.name AS station_name, p.name AS product_name
+         FROM credit_entries ce
+         LEFT JOIN stations st ON st.id = ce.station_id
+         LEFT JOIN fuel_products p ON p.id = ce.product_id
+        WHERE ce.customer_id = ? AND ce.status = 'POSTED' AND ce.occurred_at >= ? AND ce.occurred_at < ?
+        ORDER BY ce.occurred_at ASC, ce.created_at ASC`,
+      [customerId, fromIso, toIso],
+    );
+    let running = opening;
+    let totalSales = D(0);
+    let totalPayments = D(0);
+    const lines = entries.map((entry) => {
+      const delta = signed(entry);
+      running = running.plus(delta);
+      if (entry.type === 'CREDIT_SALE') totalSales = totalSales.plus(D(String(entry.amount)));
+      if (entry.type === 'PAYMENT') totalPayments = totalPayments.plus(D(String(entry.amount)));
+      return {
+        ...shape(entry),
+        debit: entry.type === 'CREDIT_SALE' ? money(D(String(entry.amount))) : '0.00',
+        credit: entry.type === 'PAYMENT' ? money(D(String(entry.amount))) : '0.00',
+        runningBalance: money(running),
+      };
+    });
+    const vehicles = all(
+      'SELECT * FROM customer_vehicles WHERE customer_id = ? AND is_active = 1 ORDER BY vehicle_number',
+      [customerId],
+    );
+    const tenant = get<Record<string, unknown>>('SELECT * FROM tenants WHERE id = ?', [tenantIdOf(auth)]);
+    return ok(res, {
+      tenant: tenant ? { name: tenant.name, legalName: tenant.legal_name, gstin: tenant.gstin, address: tenant.address } : null,
+      customer: shape(customer),
+      vehicles: shapeAll(vehicles),
+      month,
+      openingBalance: money(opening),
+      closingBalance: money(running),
+      totalSales: money(totalSales),
+      totalPayments: money(totalPayments),
+      lines,
+      generatedAt: nowIso(),
+    });
+  }),
+);
+
 financeRouter.post(
   '/credit-sales',
   asyncHandler((req, res) => {
@@ -95,7 +165,14 @@ financeRouter.post(
       z.object({
         stationId: z.string().min(3),
         customerId: z.string().min(3),
-        amount: z.union([z.string(), z.number()]).transform(String),
+        // amount na diya ho to litres x rate se banta hai (p slips par aisa hi hota hai).
+        amount: z.union([z.string(), z.number()]).transform(String).optional(),
+        slipNumber: z.string().max(40).optional().nullable(),
+        vehicleNumber: z.string().trim().toUpperCase().pipe(z.string().max(20)).optional().nullable(),
+        driverName: z.string().max(80).optional().nullable(),
+        productId: z.string().min(3).optional().nullable(),
+        quantityLitres: z.union([z.string(), z.number()]).transform(String).optional(),
+        ratePerLitre: z.union([z.string(), z.number()]).transform(String).optional(),
         reference: z.string().max(80).optional().nullable(),
         occurredAt: isoDateTime.optional(),
         dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
@@ -105,7 +182,26 @@ financeRouter.post(
     );
     const station = getStationOrThrow(auth, body.stationId);
     const customer = customerInTenant(auth, body.customerId);
-    const amount = D(body.amount);
+    const occurredAt = body.occurredAt ?? nowIso();
+    assertDayOpen(station.id, businessDateOf(occurredAt));
+    const derivedAmount = body.amount
+      ? D(body.amount)
+      : body.quantityLitres && body.ratePerLitre
+        ? D(body.quantityLitres).mul(D(body.ratePerLitre))
+        : null;
+    if (!derivedAmount) throw unprocessable('Amount do, ya litres + rate do — dono me se ek zaroori hai');
+    const amount = derivedAmount;
+    if (body.productId) {
+      const product = get('SELECT id FROM fuel_products WHERE id = ? AND tenant_id = ?', [body.productId, tenantIdOf(auth)]);
+      if (!product) throw notFound('Fuel product not found');
+    }
+    // Slip number khali ho to station ke hisaab se khud banao: SUN-BAN-20261028-007
+    const slipDate = businessDateOf(occurredAt).replace(/-/g, '');
+    const slipSeq = (get<{ count: number }>(
+      "SELECT COUNT(*) AS count FROM credit_entries WHERE station_id = ? AND type = 'CREDIT_SALE'",
+      [station.id],
+    )?.count ?? 0) + 1;
+    const slipNumber = body.slipNumber ?? `${station.code}-${slipDate}-${String(slipSeq).padStart(3, '0')}`;
     if (amount.lte(0)) throw unprocessable('Credit sale amount must be greater than zero');
     const balance = customerBalance(String(customer.id));
     const limit = D(customer.credit_limit as string);
@@ -122,11 +218,17 @@ financeRouter.post(
       tx(() => {
         run(
           `INSERT INTO credit_entries
-            (id, tenant_id, station_id, customer_id, type, amount, reference, occurred_at, due_date, note,
+            (id, tenant_id, station_id, customer_id, type, amount, slip_number, vehicle_number, driver_name,
+             product_id, quantity_litres, rate_per_litre, reference, occurred_at, due_date, note,
              status, created_by, created_at)
-           VALUES (?, ?, ?, ?, 'CREDIT_SALE', ?, ?, ?, ?, ?, 'POSTED', ?, ?)`,
-          [entryId, tenantIdOf(auth), station.id, customer.id, money(amount), body.reference ?? null,
-            body.occurredAt ?? nowIso(), dueDate, body.note ?? null, auth.user.id, nowIso()],
+           VALUES (?, ?, ?, ?, 'CREDIT_SALE', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'POSTED', ?, ?)`,
+          [entryId, tenantIdOf(auth), station.id, customer.id, money(amount),
+            slipNumber, body.vehicleNumber?.replace(/\s+/g, '') ?? null, body.driverName ?? null,
+            body.productId ?? null,
+            body.quantityLitres ? D(body.quantityLitres).toFixed(3) : null,
+            body.ratePerLitre ? D(body.ratePerLitre).toFixed(2) : null,
+            body.reference ?? null,
+            occurredAt, dueDate, body.note ?? null, auth.user.id, nowIso()],
         );
         run('UPDATE customers SET balance = ?, updated_at = ? WHERE id = ?', [
           money(balance.plus(amount)), nowIso(), customer.id,
@@ -140,6 +242,7 @@ financeRouter.post(
       return {
         id: entryId,
         customerId: customer.id,
+        slipNumber,
         amount: money(amount),
         dueDate,
         newBalance: money(balance.plus(amount)),
@@ -322,6 +425,7 @@ financeRouter.post(
       req.body,
     );
     const station = getStationOrThrow(auth, body.stationId);
+    assertDayOpen(station.id, businessDateOf(body.occurredAt ?? nowIso()));
     const amount = D(body.amount);
     if (amount.lte(0)) throw unprocessable('Payment amount must be greater than zero');
     if (body.direction === 'RECEIPT' && !body.customerId) throw unprocessable('A receipt requires a customer');
@@ -518,6 +622,7 @@ financeRouter.post(
       req.body,
     );
     const station = getStationOrThrow(auth, body.stationId);
+    assertDayOpen(station.id, businessDateOf(body.occurredAt ?? nowIso()));
     const amount = D(body.amount);
     if (amount.lte(0)) throw unprocessable('Expense amount must be greater than zero');
     let categoryName = body.categoryName ?? 'General';

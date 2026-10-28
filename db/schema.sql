@@ -215,6 +215,7 @@ CREATE TABLE IF NOT EXISTS tank_measurements (
   tank_id TEXT NOT NULL REFERENCES tanks(id) ON DELETE RESTRICT,
   measured_at TEXT NOT NULL,
   dip_cm TEXT,
+  water_dip_cm TEXT,
   measured_litres TEXT NOT NULL,
   book_stock_litres TEXT NOT NULL,
   variance_litres TEXT NOT NULL,
@@ -248,6 +249,7 @@ CREATE TABLE IF NOT EXISTS nozzles (
   station_id TEXT NOT NULL REFERENCES stations(id) ON DELETE RESTRICT,
   dispenser_id TEXT NOT NULL REFERENCES dispensers(id) ON DELETE RESTRICT,
   product_id TEXT NOT NULL REFERENCES fuel_products(id) ON DELETE RESTRICT,
+  tank_id TEXT REFERENCES tanks(id) ON DELETE SET NULL,
   number INTEGER NOT NULL,
   label TEXT NOT NULL,
   totalizer_unit TEXT NOT NULL DEFAULT 'L',
@@ -372,6 +374,8 @@ CREATE TABLE IF NOT EXISTS shifts (
   total_value TEXT NOT NULL DEFAULT '0',
   opening_cash TEXT NOT NULL DEFAULT '0',
   closing_cash TEXT NOT NULL DEFAULT '0',
+  cash_counted TEXT,
+  short_excess TEXT,
   notes TEXT,
   close_notes TEXT,
   approved_by TEXT REFERENCES users(id) ON DELETE SET NULL,
@@ -394,6 +398,8 @@ CREATE TABLE IF NOT EXISTS shift_nozzle_readings (
   opening_source TEXT,
   closing_source TEXT,
   litres_sold TEXT,
+  testing_litres TEXT NOT NULL DEFAULT '0',
+  operator_id TEXT REFERENCES users(id) ON DELETE SET NULL,
   rate TEXT,
   sales_value TEXT,
   variance_litres TEXT,
@@ -474,6 +480,15 @@ CREATE TABLE IF NOT EXISTS deliveries (
   received_at TEXT,
   vehicle_number TEXT,
   driver_name TEXT,
+  dip_before_cm TEXT,
+  dip_after_cm TEXT,
+  density_invoice TEXT,
+  density_observed TEXT,
+  temp_observed_c TEXT,
+  density_at_15c TEXT,
+  tt_seal_numbers TEXT,
+  sample_seal_no TEXT,
+  chamber_details TEXT,
   notes TEXT,
   is_demo INTEGER NOT NULL DEFAULT 0,
   created_by TEXT,
@@ -529,6 +544,12 @@ CREATE TABLE IF NOT EXISTS credit_entries (
   customer_id TEXT NOT NULL REFERENCES customers(id) ON DELETE RESTRICT,
   type TEXT NOT NULL,                             -- CREDIT_SALE | PAYMENT | ADJUSTMENT
   amount TEXT NOT NULL,
+  slip_number TEXT,
+  vehicle_number TEXT,
+  driver_name TEXT,
+  product_id TEXT REFERENCES fuel_products(id) ON DELETE SET NULL,
+  quantity_litres TEXT,
+  rate_per_litre TEXT,
   reference TEXT,
   occurred_at TEXT NOT NULL,
   due_date TEXT,
@@ -670,3 +691,169 @@ CREATE TABLE IF NOT EXISTS platform_errors (
   resolved_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_platform_errors_created ON platform_errors(created_at);
+
+
+-- ------------------------------------------------ pump operations pack -----
+-- Daily density register: subah ki density check jo OMC inspection me
+-- sabse pehle mangi jati hai. Density values kg/m3 me (e.g. 742.5).
+CREATE TABLE IF NOT EXISTS density_checks (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+  station_id TEXT NOT NULL REFERENCES stations(id) ON DELETE RESTRICT,
+  tank_id TEXT NOT NULL REFERENCES tanks(id) ON DELETE RESTRICT,
+  product_id TEXT NOT NULL REFERENCES fuel_products(id) ON DELETE RESTRICT,
+  business_date TEXT NOT NULL,
+  checked_at TEXT NOT NULL,
+  observed_density TEXT NOT NULL,
+  observed_temp_c TEXT NOT NULL,
+  density_at_15c TEXT NOT NULL,
+  spec_min TEXT,
+  spec_max TEXT,
+  within_spec INTEGER NOT NULL DEFAULT 1,
+  source TEXT NOT NULL DEFAULT 'NOZZLE',          -- NOZZLE | TANK | TT_SAMPLE
+  checked_by TEXT,
+  note TEXT,
+  is_demo INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_density_station_date ON density_checks(station_id, business_date);
+
+-- Shift closing cash denomination count (₹500 x n, ₹200 x n, ...).
+CREATE TABLE IF NOT EXISTS shift_cash_denominations (
+  id TEXT PRIMARY KEY,
+  shift_id TEXT NOT NULL REFERENCES shifts(id) ON DELETE CASCADE,
+  denomination INTEGER NOT NULL,
+  count INTEGER NOT NULL DEFAULT 0,
+  amount TEXT NOT NULL DEFAULT '0',
+  UNIQUE (shift_id, denomination)
+);
+
+-- Shift paise ka milaan: mode-wise expected (system) vs received (galla).
+CREATE TABLE IF NOT EXISTS shift_settlements (
+  id TEXT PRIMARY KEY,
+  shift_id TEXT NOT NULL REFERENCES shifts(id) ON DELETE CASCADE,
+  tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+  station_id TEXT NOT NULL REFERENCES stations(id) ON DELETE RESTRICT,
+  mode TEXT NOT NULL,                             -- CASH | UPI | CARD | BANK | CREDIT
+  expected_amount TEXT NOT NULL DEFAULT '0',
+  received_amount TEXT,
+  difference_amount TEXT,
+  note TEXT,
+  created_at TEXT NOT NULL,
+  UNIQUE (shift_id, mode)
+);
+CREATE INDEX IF NOT EXISTS idx_shift_settlements_shift ON shift_settlements(shift_id);
+
+-- Roznamcha: din band hone ke baad purani date ki entries lock.
+CREATE TABLE IF NOT EXISTS day_closings (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+  station_id TEXT NOT NULL REFERENCES stations(id) ON DELETE RESTRICT,
+  business_date TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'CLOSED',          -- CLOSED | REOPENED
+  closed_by TEXT,
+  closed_at TEXT NOT NULL,
+  reopened_by TEXT,
+  reopened_at TEXT,
+  reopen_reason TEXT,
+  notes TEXT,
+  created_at TEXT NOT NULL,
+  UNIQUE (station_id, business_date)
+);
+CREATE INDEX IF NOT EXISTS idx_day_closings_station ON day_closings(station_id, business_date);
+
+-- Credit customer ki gaadiyan (fleet) — slip par gaadi number ke liye.
+CREATE TABLE IF NOT EXISTS customer_vehicles (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+  customer_id TEXT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  vehicle_number TEXT NOT NULL,
+  vehicle_type TEXT,
+  driver_name TEXT,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (customer_id, vehicle_number)
+);
+CREATE INDEX IF NOT EXISTS idx_vehicles_customer ON customer_vehicles(customer_id);
+
+-- Licence / stamping / NOC expiry tracking.
+CREATE TABLE IF NOT EXISTS compliance_documents (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+  station_id TEXT NOT NULL REFERENCES stations(id) ON DELETE RESTRICT,
+  dispenser_id TEXT REFERENCES dispensers(id) ON DELETE SET NULL,
+  tank_id TEXT REFERENCES tanks(id) ON DELETE SET NULL,
+  doc_type TEXT NOT NULL,                         -- PESO_LICENCE | WM_STAMPING | FIRE_NOC | ...
+  title TEXT NOT NULL,
+  doc_number TEXT,
+  authority TEXT,
+  issued_on TEXT,
+  expires_on TEXT NOT NULL,
+  renewal_lead_days INTEGER NOT NULL DEFAULT 30,
+  notes TEXT,
+  is_demo INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_compliance_station ON compliance_documents(station_id, expires_on);
+
+-- Lubricants / NFR: pack-wise items (engine oil, 2T, coolant, grease...).
+CREATE TABLE IF NOT EXISTS lube_products (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+  code TEXT NOT NULL,
+  name TEXT NOT NULL,
+  brand TEXT,
+  pack_size TEXT NOT NULL DEFAULT '1 L',
+  hsn_code TEXT,
+  gst_rate_pct TEXT NOT NULL DEFAULT '18',
+  purchase_rate TEXT NOT NULL DEFAULT '0',
+  sale_rate TEXT NOT NULL DEFAULT '0',
+  is_active INTEGER NOT NULL DEFAULT 1,
+  is_demo INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (tenant_id, code)
+);
+
+CREATE TABLE IF NOT EXISTS lube_movements (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+  station_id TEXT NOT NULL REFERENCES stations(id) ON DELETE RESTRICT,
+  product_id TEXT NOT NULL REFERENCES lube_products(id) ON DELETE RESTRICT,
+  type TEXT NOT NULL,                             -- OPENING | PURCHASE | SALE | ADJUSTMENT
+  quantity TEXT NOT NULL,                         -- signed: + andar, - bahar
+  rate TEXT NOT NULL DEFAULT '0',
+  amount TEXT NOT NULL DEFAULT '0',
+  payment_mode TEXT,                              -- CASH | UPI | CARD | BANK | CREDIT (SALE par)
+  customer_id TEXT REFERENCES customers(id) ON DELETE SET NULL,
+  vehicle_number TEXT,
+  supplier_id TEXT REFERENCES suppliers(id) ON DELETE SET NULL,
+  reference TEXT,
+  occurred_at TEXT NOT NULL,
+  note TEXT,
+  created_by TEXT,
+  is_demo INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_lube_movements_station ON lube_movements(station_id, occurred_at);
+CREATE INDEX IF NOT EXISTS idx_lube_movements_product ON lube_movements(product_id, occurred_at);
+
+-- Staff haaziri (users hi employees hain is system me).
+CREATE TABLE IF NOT EXISTS attendance_records (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+  station_id TEXT NOT NULL REFERENCES stations(id) ON DELETE RESTRICT,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  attendance_date TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'PRESENT',         -- PRESENT | ABSENT | HALF_DAY | leave | WEEK_OFF
+  in_time TEXT,
+  out_time TEXT,
+  note TEXT,
+  marked_by TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (user_id, attendance_date)
+);
+CREATE INDEX IF NOT EXISTS idx_attendance_station_date ON attendance_records(station_id, attendance_date);

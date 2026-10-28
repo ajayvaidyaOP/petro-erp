@@ -13,6 +13,7 @@ import { evaluateReading, latestCountableReading, lastReading } from '../lib/met
 import { priceAt } from '../lib/pricing.js';
 import { allocateAcrossTanks, recordMovement } from '../lib/stock.js';
 import { settingsValue } from '../lib/settings.js';
+import { assertDayOpen } from '../lib/dayclose.js';
 
 export const shiftRouter = Router();
 shiftRouter.use(requireAuth);
@@ -31,6 +32,8 @@ interface ShiftRow {
   total_value: string;
   opening_cash: string;
   closing_cash: string;
+  cash_counted: string | null;
+  short_excess: string | null;
   notes: string | null;
   close_notes: string | null;
   opened_by: string | null;
@@ -92,6 +95,14 @@ function shiftDetail(shift: ShiftRow) {
     [shift.id],
   );
   const station = get<{ name: string; code: string }>('SELECT name, code FROM stations WHERE id = ?', [shift.station_id]);
+  const settlements = all<Record<string, unknown>>(
+    'SELECT * FROM shift_settlements WHERE shift_id = ? ORDER BY mode',
+    [shift.id],
+  );
+  const denominations = all<Record<string, unknown>>(
+    'SELECT * FROM shift_cash_denominations WHERE shift_id = ? ORDER BY denomination DESC',
+    [shift.id],
+  );
   return {
     ...(shape(shift as unknown as Row) as Record<string, unknown>),
     stationName: station?.name ?? null,
@@ -102,9 +113,12 @@ function shiftDetail(shift: ShiftRow) {
     approvedByName: operatorName(shift.approved_by),
     nozzleReadings: shapeAll(nozzles),
     nozzles: shapeAll(nozzles),
+    settlements: shapeAll(settlements),
+    denominations: shapeAll(denominations),
     totals: {
       litres: shift.total_litres,
       value: shift.total_value,
+      testingLitres: nozzles.reduce((acc, n) => acc.plus(D(String(n.testing_litres ?? '0'))), D(0)).toFixed(3),
       nozzleCount: nozzles.length,
       flaggedNozzles: nozzles.filter((n) => String(n.status) === 'FLAGGED').length,
     },
@@ -186,6 +200,116 @@ shiftRouter.get(
   }),
 );
 
+// ------------------------------------------------------------- day closing
+// NOTE: ye routes '/:id' se PEHLE rehne chahiye, warna 'day-closings' ko
+// Express ek shift id samajh lega.
+
+shiftRouter.get(
+  '/day-closings',
+  asyncHandler((req, res) => {
+    const auth = req.auth as AuthContext;
+    if (!can(auth, 'shifts.read')) throw forbidden();
+    const stationId = typeof req.query.stationId === 'string' ? req.query.stationId : null;
+    if (!stationId) throw unprocessable('stationId is required');
+    const station = getStationOrThrow(auth, stationId);
+    const month = typeof req.query.month === 'string' && /^\d{4}-\d{2}$/.test(req.query.month) ? req.query.month : null;
+    const rows = all<Record<string, unknown>>(
+      `SELECT dc.*, uc.name AS closed_by_name, ur.name AS reopened_by_name
+         FROM day_closings dc
+         LEFT JOIN users uc ON uc.id = dc.closed_by
+         LEFT JOIN users ur ON ur.id = dc.reopened_by
+        WHERE dc.station_id = ? ${month ? "AND dc.business_date LIKE ?" : ''}
+        ORDER BY dc.business_date DESC LIMIT 93`,
+      month ? [station.id, `${month}%`] : [station.id],
+    );
+    return ok(res, shapeAll(rows));
+  }),
+);
+
+shiftRouter.post(
+  '/day-close',
+  asyncHandler((req, res) => {
+    const auth = req.auth as AuthContext;
+    if (!can(auth, 'dayclose.manage')) throw forbidden();
+    const body = parse(
+      z.object({
+        stationId: z.string().min(3),
+        businessDate: z.string().refine(isIsoDate, 'Enter a valid YYYY-MM-DD date'),
+        notes: z.string().max(500).optional().nullable(),
+      }),
+      req.body,
+    );
+    const station = getStationOrThrow(auth, body.stationId);
+    if (body.businessDate > todayIst()) throw unprocessable('A future business date cannot be closed');
+    const openShift = get<{ id: string; shift_number: number; business_date: string }>(
+      "SELECT id, shift_number, business_date FROM shifts WHERE station_id = ? AND status = 'OPEN' AND business_date <= ? ORDER BY opened_at ASC LIMIT 1",
+      [station.id, body.businessDate],
+    );
+    if (openShift) {
+      throw conflict(`Shift #${openShift.shift_number} (${openShift.business_date}) is still open — close it before closing the day.`);
+    }
+    const existing = get<{ id: string; status: string }>(
+      'SELECT id, status FROM day_closings WHERE station_id = ? AND business_date = ?',
+      [station.id, body.businessDate],
+    );
+    if (existing?.status === 'CLOSED') throw conflict(`Business date ${body.businessDate} is already closed`);
+    const id = existing?.id ?? newId('dcl');
+    tx(() => {
+      if (existing) {
+        run(
+          "UPDATE day_closings SET status = 'CLOSED', closed_by = ?, closed_at = ?, notes = COALESCE(?, notes) WHERE id = ?",
+          [auth.user.id, nowIso(), body.notes ?? null, existing.id],
+        );
+      } else {
+        run(
+          `INSERT INTO day_closings (id, tenant_id, station_id, business_date, status, closed_by, closed_at, notes, created_at)
+           VALUES (?, ?, ?, ?, 'CLOSED', ?, ?, ?, ?)`,
+          [id, station.tenant_id, station.id, body.businessDate, auth.user.id, nowIso(), body.notes ?? null, nowIso()],
+        );
+      }
+    });
+    audit(req, {
+      action: 'DAY_CLOSED', entity: 'DayClosing', entityId: id, stationId: station.id,
+      summary: `Business date ${body.businessDate} closed (din band)`,
+      after: { businessDate: body.businessDate },
+    });
+    return created(res, shape(get('SELECT * FROM day_closings WHERE id = ?', [id])));
+  }),
+);
+
+shiftRouter.post(
+  '/day-close/reopen',
+  asyncHandler((req, res) => {
+    const auth = req.auth as AuthContext;
+    if (!can(auth, 'dayclose.manage')) throw forbidden();
+    const body = parse(
+      z.object({
+        stationId: z.string().min(3),
+        businessDate: z.string().refine(isIsoDate, 'Enter a valid YYYY-MM-DD date'),
+        reason: z.string().min(10).max(500),
+      }),
+      req.body,
+    );
+    const station = getStationOrThrow(auth, body.stationId);
+    const existing = get<{ id: string; status: string }>(
+      'SELECT id, status FROM day_closings WHERE station_id = ? AND business_date = ?',
+      [station.id, body.businessDate],
+    );
+    if (!existing || existing.status !== 'CLOSED') throw conflict(`Business date ${body.businessDate} is not closed`);
+    run(
+      "UPDATE day_closings SET status = 'REOPENED', reopened_by = ?, reopened_at = ?, reopen_reason = ? WHERE id = ?",
+      [auth.user.id, nowIso(), body.reason, existing.id],
+    );
+    audit(req, {
+      action: 'DAY_REOPENED', entity: 'DayClosing', entityId: existing.id, stationId: station.id,
+      summary: `Business date ${body.businessDate} reopened: ${body.reason}`,
+      before: { status: 'CLOSED' },
+      after: { businessDate: body.businessDate, reason: body.reason },
+    });
+    return ok(res, shape(get('SELECT * FROM day_closings WHERE id = ?', [existing.id])));
+  }),
+);
+
 shiftRouter.get(
   '/:id',
   asyncHandler((req, res) => {
@@ -242,6 +366,7 @@ shiftRouter.post(
       }
     }
     const businessDate = body.businessDate ?? todayIst();
+    assertDayOpen(station.id, businessDate);
     const open = get<{ id: string; shift_number: number }>(
       "SELECT id, shift_number FROM shifts WHERE station_id = ? AND status IN ('OPEN','FLAGGED') ORDER BY opened_at DESC LIMIT 1",
       [station.id],
@@ -351,16 +476,23 @@ shiftRouter.patch(
       [shift.id, req.params.nozzleId],
     );
     if (!row) throw notFound('Nozzle reading not found for this shift');
+    assertDayOpen(shift.station_id, shift.business_date);
     const body = parse(
       z.object({
         openingReading: nonNegativeDecimal.optional(),
         closingReading: nonNegativeDecimal.optional(),
+        testingLitres: nonNegativeDecimal.optional(),
+        operatorId: z.string().min(3).optional().nullable(),
         adjustmentLitres: signedDecimal.optional(),
         adjustmentReason: z.string().max(300).optional().nullable(),
         note: z.string().max(300).optional().nullable(),
       }),
       req.body,
     );
+    if (body.operatorId) {
+      const operator = get('SELECT id FROM users WHERE id = ? AND tenant_id = ?', [body.operatorId, shift.tenant_id]);
+      if (!operator) throw notFound('Operator not found');
+    }
     if ((body.openingReading !== undefined || body.closingReading !== undefined)
       && !settingsValue('hardware.allowManualFallback', shift.tenant_id, shift.station_id, 1)) {
       throw forbidden('Manual reading entry is disabled in station settings');
@@ -388,6 +520,14 @@ shiftRouter.patch(
       sets.push('adjustment_reason = ?');
       params.push(body.adjustmentReason);
     }
+    if (body.testingLitres !== undefined) {
+      sets.push('testing_litres = ?');
+      params.push(fmtRate(D(body.testingLitres)));
+    }
+    if (body.operatorId !== undefined) {
+      sets.push('operator_id = ?');
+      params.push(body.operatorId);
+    }
     if (body.note !== undefined) {
       sets.push('note = ?');
       params.push(body.note);
@@ -404,8 +544,11 @@ shiftRouter.patch(
       const opening = updated.opening_reading as string | null;
       const closing = updated.closing_reading as string | null;
       const adjustment = D(updated.adjustment_litres as string);
+      // Testing fuel (5L calibration/sample) nozzle se nikal kar tank me wapas
+      // jata hai — wo sale nahi hai, isliye net litres se minus hota hai.
+      const testing = D((updated.testing_litres as string | null) ?? '0');
       if (opening && closing) {
-        const candidate = D(closing).minus(D(opening)).plus(adjustment);
+        const candidate = D(closing).minus(D(opening)).plus(adjustment).minus(testing);
         const nozzleProduct = get<{ product_id: string }>('SELECT product_id FROM nozzles WHERE id = ?', [req.params.nozzleId]);
         const price = nozzleProduct ? priceAt(shift.tenant_id, nozzleProduct.product_id, shift.station_id) : null;
         if (candidate.lt(0)) {
@@ -439,7 +582,7 @@ function captureClosings(
   options: { commit: boolean },
 ) {
   const rows = all<Record<string, unknown>>(
-    `SELECT snr.*, n.label, n.product_id, n.station_id, n.dispenser_id
+    `SELECT snr.*, n.label, n.product_id, n.station_id, n.dispenser_id, n.tank_id
        FROM shift_nozzle_readings snr JOIN nozzles n ON n.id = snr.nozzle_id
       WHERE snr.shift_id = ? ORDER BY snr.nozzle_id`,
     [shift.id],
@@ -466,6 +609,9 @@ function captureClosings(
     status: string;
     note: string | null;
     adjustment: string;
+    testing: string;
+    grossLitres: string | null;
+    tankId: string | null;
   }[] = [];
 
   for (const row of rows) {
@@ -523,8 +669,10 @@ function captureClosings(
 
     const opening = row.opening_reading as string | null;
     const adjustment = String(row.adjustment_litres ?? '0');
+    const testing = D(String(row.testing_litres ?? '0'));
     const rate = priceAt(shift.tenant_id, String(row.product_id), shift.station_id);
     let litres: string | null = null;
+    let grossLitres: string | null = null;
     let variance = '0';
     let status = 'CAPTURED';
     if (!opening) {
@@ -536,14 +684,19 @@ function captureClosings(
     } else {
       const raw = D(closing).minus(D(opening));
       const adjusted = raw.plus(D(adjustment));
-      if (raw.lt(0) || adjusted.lt(0)) {
+      grossLitres = adjusted.gte(0) ? adjusted.toFixed(3) : null;
+      // Net billable litres = metered - testing (testing fuel tank me wapas jata hai).
+      const net = adjusted.minus(testing);
+      if (raw.lt(0) || adjusted.lt(0) || net.lt(0)) {
         status = 'FLAGGED';
-        variance = (raw.lt(0) ? raw : adjusted).toFixed(3);
+        variance = (raw.lt(0) ? raw : net).toFixed(3);
         note = note ?? (raw.lt(0)
           ? 'Closing totalizer is lower than the opening value — reading reset or meter replacement suspected'
-          : 'The adjustment would make net litres negative');
+          : net.lt(0)
+            ? 'Testing quantity exceeds the metered litres for this nozzle'
+            : 'The adjustment would make net litres negative');
       } else {
-        litres = adjusted.toFixed(3);
+        litres = net.toFixed(3);
       }
       if (manual && deviceValue) {
         variance = D(closing).minus(D(deviceValue.reading_value)).toFixed(3);
@@ -565,6 +718,9 @@ function captureClosings(
       status,
       note,
       adjustment,
+      testing: testing.toFixed(3),
+      grossLitres,
+      tankId: (row.tank_id as string | null) ?? null,
     });
   }
   return operations;
@@ -601,6 +757,8 @@ shiftRouter.post(
         closing: op.closing,
         source: op.source,
         litres: op.litres,
+        grossLitres: op.grossLitres,
+        testingLitres: op.testing,
         rate: op.rate,
         value: op.value,
         variance: op.variance,
@@ -621,6 +779,7 @@ shiftRouter.post(
     if (!can(auth, 'shifts.close')) throw forbidden();
     const shift = loadShift(auth, req.params.id);
     if (shift.status !== 'OPEN') throw conflict('This shift is not open');
+    assertDayOpen(shift.station_id, shift.business_date);
     const body = parse(
       z.object({
         closingCash: nonNegativeDecimal.optional(),
@@ -634,6 +793,20 @@ shiftRouter.post(
             }),
           )
           .max(50)
+          .optional(),
+        // Galle ki ginti note-wise (₹500 x n ...) — cash counted isse banta hai.
+        denominations: z
+          .array(z.object({ denomination: z.coerce.number().int().positive(), count: z.coerce.number().int().min(0).max(100000) }))
+          .max(12)
+          .optional(),
+        // Mode-wise mila hua paisa (UPI/Card machine totals, credit slips...).
+        settlements: z
+          .array(z.object({
+            mode: z.enum(['CASH', 'UPI', 'CARD', 'BANK', 'CREDIT']),
+            received: nonNegativeDecimal,
+            note: z.string().max(200).optional().nullable(),
+          }))
+          .max(8)
           .optional(),
       }),
       req.body ?? {},
@@ -671,11 +844,36 @@ shiftRouter.post(
         );
       }
 
-      // Stock movements are posted only on close, from countable litres. When a
-      // grade is stored in more than one tank the volume is shared by book stock.
-      for (const [productId, total] of productTotals) {
-        if (total.litres.lte(0)) continue;
-        for (const allocation of allocateAcrossTanks(shift.station_id, productId, total.litres)) {
+      // Stock movements are posted only on close, from countable net litres
+      // (metered - testing). Har nozzle apne FIX tank se fuel khinchta hai:
+      // tank mapped hai to movement seedha usi tank par; unmapped nozzle ka
+      // volume hi purane pro-rata pool se banta hai (backward compatibility).
+      void productTotals;
+      const pool = new Map<string, Decimal>();
+      for (const op of operations) {
+        if (!op.litres || D(op.litres).lte(0)) continue;
+        if (op.tankId) {
+          recordMovement({
+            tenantId: shift.tenant_id,
+            stationId: shift.station_id,
+            tankId: op.tankId,
+            productId: op.productId,
+            type: 'DISPENSED',
+            quantityLitres: D(op.litres).toFixed(3),
+            occurredAt: nowIso(),
+            referenceType: 'SHIFT',
+            referenceId: shift.id,
+            note: `Dispensed during shift #${shift.shift_number} via ${op.label}${D(op.testing).gt(0) ? ` (net of ${op.testing} L testing returned)` : ''}`,
+            createdBy: auth.user.id,
+            isDemo: Boolean(shift.is_demo),
+          });
+        } else {
+          pool.set(op.productId, (pool.get(op.productId) ?? D(0)).plus(D(op.litres)));
+        }
+      }
+      for (const [productId, litres] of pool) {
+        if (litres.lte(0)) continue;
+        for (const allocation of allocateAcrossTanks(shift.station_id, productId, litres)) {
           if (allocation.litres.lte(0)) continue;
           recordMovement({
             tenantId: shift.tenant_id,
@@ -687,19 +885,74 @@ shiftRouter.post(
             occurredAt: nowIso(),
             referenceType: 'SHIFT',
             referenceId: shift.id,
-            note: `Dispensed during shift #${shift.shift_number} (aggregate totalizer litres)`,
+            note: `Dispensed during shift #${shift.shift_number} (unmapped nozzle — pooled by book stock)`,
             createdBy: auth.user.id,
             isDemo: Boolean(shift.is_demo),
           });
         }
       }
 
+      // ----- Paise ka milaan: expected (system) vs received (galla) -----
+      const denomRows = body.denominations ?? [];
+      const denomTotal = denomRows.reduce((acc, d) => acc.plus(D(d.denomination).mul(d.count)), D(0));
+      run('DELETE FROM shift_cash_denominations WHERE shift_id = ?', [shift.id]);
+      for (const d of denomRows) {
+        if (d.count <= 0) continue;
+        run(
+          'INSERT INTO shift_cash_denominations (id, shift_id, denomination, count, amount) VALUES (?, ?, ?, ?, ?)',
+          [newId('sdn'), shift.id, d.denomination, d.count, money(D(d.denomination).mul(d.count))],
+        );
+      }
+      const recorded = all<{ payment_mode: string; amount: string }>(
+        'SELECT payment_mode, amount FROM fuel_transactions WHERE shift_id = ? AND voided_at IS NULL',
+        [shift.id],
+      );
+      const expectedByMode = new Map<string, Decimal>();
+      for (const row of recorded) {
+        expectedByMode.set(row.payment_mode, (expectedByMode.get(row.payment_mode) ?? D(0)).plus(D(row.amount)));
+      }
+      const recordedTotal = [...expectedByMode.values()].reduce((acc, v) => acc.plus(v), D(0));
+      const remainder = totalValue.minus(recordedTotal);
+      // Totalizer-aggregate duniya me jo bikri transaction-wise record nahi hui
+      // wo aam taur par cash hoti hai — remainder CASH expected me jodte hain.
+      if (remainder.gt(0)) {
+        expectedByMode.set('CASH', (expectedByMode.get('CASH') ?? D(0)).plus(remainder));
+      }
+      const receivedByMode = new Map<string, { received: Decimal; note?: string | null }>();
+      for (const entry of body.settlements ?? []) {
+        receivedByMode.set(entry.mode, { received: D(entry.received), note: entry.note });
+      }
+      const cashReceived = receivedByMode.get('CASH')?.received
+        ?? (denomRows.length > 0 ? denomTotal : null);
+      run('DELETE FROM shift_settlements WHERE shift_id = ?', [shift.id]);
+      let shortExcess = D(0);
+      let anyReceived = false;
+      for (const mode of ['CASH', 'UPI', 'CARD', 'BANK', 'CREDIT'] as const) {
+        const expected = expectedByMode.get(mode) ?? D(0);
+        const received = mode === 'CASH' ? cashReceived : receivedByMode.get(mode)?.received ?? null;
+        if (expected.isZero() && received === null) continue;
+        const difference = received !== null ? received.minus(expected) : null;
+        if (difference !== null) { shortExcess = shortExcess.plus(difference); anyReceived = true; }
+        run(
+          `INSERT INTO shift_settlements
+            (id, shift_id, tenant_id, station_id, mode, expected_amount, received_amount, difference_amount, note, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [newId('sst'), shift.id, shift.tenant_id, shift.station_id, mode, money(expected),
+            received !== null ? money(received) : null, difference !== null ? money(difference) : null,
+            receivedByMode.get(mode)?.note ?? null, nowIso()],
+        );
+      }
+      const cashCounted = denomRows.length > 0 ? denomTotal : cashReceived;
+
       const status = flagged ? 'FLAGGED' : 'CLOSED';
       run(
         `UPDATE shifts SET status = ?, closed_at = ?, closed_by = ?, total_litres = ?, total_value = ?,
-                closing_cash = ?, close_notes = ?, updated_at = ? WHERE id = ?`,
+                closing_cash = ?, cash_counted = ?, short_excess = ?, close_notes = ?, updated_at = ? WHERE id = ?`,
         [status, nowIso(), auth.user.id, totalLitres.toFixed(3), money(totalValue),
-          fmtRate(D(body.closingCash ?? 0)), body.notes ?? null, nowIso(), shift.id],
+          fmtRate(D(body.closingCash ?? (cashCounted !== null ? money(cashCounted) : 0))),
+          cashCounted !== null ? money(cashCounted) : null,
+          anyReceived ? money(shortExcess) : null,
+          body.notes ?? null, nowIso(), shift.id],
       );
       return { status, totalLitres: totalLitres.toFixed(3), totalValue: money(totalValue), operations };
     });
@@ -765,6 +1018,7 @@ shiftRouter.post(
     const auth = req.auth as AuthContext;
     if (!can(auth, 'shifts.approve')) throw forbidden();
     const shift = loadShift(auth, req.params.id);
+    assertDayOpen(shift.station_id, shift.business_date);
     if (!['CLOSED', 'FLAGGED'].includes(shift.status)) throw conflict('Only closed or flagged shifts can be reversed');
     const body = parse(z.object({ reason: z.string().min(10).max(1000) }), req.body);
     // Reverse the actual posted movements, not a fresh allocation based on

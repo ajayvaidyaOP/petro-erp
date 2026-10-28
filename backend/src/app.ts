@@ -19,6 +19,10 @@ import { inventoryRouter } from './routes/inventory.js';
 import { financeRouter } from './routes/finance.js';
 import { reportsRouter } from './routes/reports.js';
 import { settingsRouter } from './routes/settings.js';
+import { densityRouter } from './routes/density.js';
+import { complianceRouter } from './routes/compliance.js';
+import { lubricantsRouter } from './routes/lubricants.js';
+import { attendanceRouter } from './routes/attendance.js';
 import { newId } from './lib/ids.js';
 import { nowIso } from './lib/time.js';
 import { logger } from './lib/logger.js';
@@ -138,6 +142,10 @@ export function createApp() {
   v1.use('/reports', requireAuth, reportsRouter);
   v1.use('/audit', requireAuth, auditRouter);
   v1.use('/settings', requireAuth, settingsRouter);
+  v1.use('/density', requireAuth, densityRouter);
+  v1.use('/compliance', requireAuth, complianceRouter);
+  v1.use('/lubricants', requireAuth, lubricantsRouter);
+  v1.use('/attendance', requireAuth, attendanceRouter);
   // Device endpoints authenticate with device credentials, not session cookies.
   v1.use('/', deviceRouter);
 

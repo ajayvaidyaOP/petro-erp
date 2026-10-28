@@ -40,6 +40,7 @@ interface Tank {
   lastMeasuredLitres: string | null;
   lastVarianceLitres: string | null;
   lastMeasuredAt: string | null;
+  lastWaterDipCm: string | null;
   calibrationReference: string | null;
   status: string;
   stationId: string;
@@ -278,6 +279,12 @@ export default function Tanks() {
                       <dt className="text-ink-500">Last dip</dt>
                       <dd className="text-ink-300">{tank.lastMeasuredAt ? formatDateTime(tank.lastMeasuredAt) : '—'}</dd>
                     </div>
+                    <div>
+                      <dt className="text-ink-500">Water dip (paste)</dt>
+                      <dd className={tank.lastWaterDipCm && Number(tank.lastWaterDipCm) > 2 ? 'font-semibold text-danger' : 'text-ink-300'}>
+                        {tank.lastWaterDipCm ? `${formatNumber(tank.lastWaterDipCm, 1)} cm${Number(tank.lastWaterDipCm) > 2 ? ' — water zyada!' : ''}` : '—'}
+                      </dd>
+                    </div>
                   </dl>
 
                   <div className="mt-3 flex flex-wrap gap-1.5 border-t border-navy-700/60 pt-3">
@@ -295,6 +302,8 @@ export default function Tanks() {
               ))
             )}
           </div>
+
+          <IndentCard stationId={stationId} />
 
           <Card className="mt-3">
             <CardHeader title="Book stock by product" subtitle="Derived from tank movement ledgers" />
@@ -492,9 +501,83 @@ function TankFormModal({
   );
 }
 
+interface IndentRow {
+  tankId: string;
+  tankCode: string;
+  productName: string;
+  bookStockLitres: string;
+  capacityLitres: string;
+  fillPct: string;
+  ullageLitres: string;
+  avgDailySalesLitres: string;
+  daysOfCover: string | null;
+  suggestedOrderLitres: string;
+  priority: string;
+}
+
+function IndentCard({ stationId }: { stationId: string }) {
+  const indent = useQuery<{ rows: IndentRow[]; basedOnDays: number }>({
+    queryKey: ['indent', stationId],
+    queryFn: () => apiGet(`/reports/indent?stationId=${stationId}`),
+    enabled: Boolean(stationId),
+  });
+  const rows = indent.data?.rows ?? [];
+  const priorityNote = (row: IndentRow) => {
+    if (row.priority === 'ORDER_NOW') return { tone: 'danger' as const, text: 'Abhi order karo' };
+    if (row.priority === 'ORDER_SOON') return { tone: 'warning' as const, text: '2-3 din me order karo' };
+    return { tone: 'success' as const, text: 'Stock theek hai' };
+  };
+  if (indent.isLoading) return <Card className="mt-3"><LoadingBlock rows={2} /></Card>;
+  if (indent.isError || rows.length === 0) return null;
+  return (
+    <Card className="mt-3">
+      <CardHeader
+        title="Indent suggestion — order kab?"
+        subtitle={`Pichle ${indent.data?.basedOnDays ?? 14} din ki avg bikri se: kitne din chalega aur UL rate kitna mangwana hai (safe ulach samet).`}
+      />
+      <TableScrollHint />
+      <div className="table-wrap">
+        <table className="data-table min-w-[680px]">
+          <thead>
+            <tr>
+              <th>Tank</th>
+              <th>Product</th>
+              <th className="text-right">Stock (L)</th>
+              <th className="text-right">Roz ki bikri (L)</th>
+              <th className="text-right">Kitne din chalega</th>
+              <th className="text-right">Mangwana (L)</th>
+              <th>Salah</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const days = row.daysOfCover === null ? null : Number(row.daysOfCover);
+              const tip = priorityNote(row);
+              return (
+                <tr key={row.tankId}>
+                  <td className="font-medium text-ink-100">{row.tankCode}</td>
+                  <td className="text-xs">{row.productName}</td>
+                  <td className="num text-right">{formatNumber(row.bookStockLitres, 0)}<span className="block text-[9px] text-ink-600">{formatNumber(row.fillPct, 0)}% bhara · khaali jaga (ullage) {formatNumber(row.ullageLitres, 0)} L</span></td>
+                  <td className="num text-right">{formatNumber(row.avgDailySalesLitres, 0)}</td>
+                  <td className={`num text-right ${days !== null && days < 2 ? 'font-bold text-danger' : days !== null && days < 4 ? 'font-semibold text-warn' : 'text-ink-300'}`}>
+                    {days === null ? '—' : `${formatNumber(days, 1)} din`}
+                  </td>
+                  <td className="num text-right font-medium text-ink-100">{formatNumber(row.suggestedOrderLitres, 0)}</td>
+                  <td><Badge tone={tip.tone}>{tip.text}</Badge></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
 function DipModal({ tank, onClose, loading, onSubmit }: { tank: Tank; onClose: () => void; loading: boolean; onSubmit: (payload: Record<string, unknown>) => void }) {
   const [dipCm, setDipCm] = useState('');
   const [measuredLitres, setMeasuredLitres] = useState('');
+  const [waterDipCm, setWaterDipCm] = useState('');
   const [note, setNote] = useState('');
   return (
     <Modal
@@ -505,7 +588,7 @@ function DipModal({ tank, onClose, loading, onSubmit }: { tank: Tank; onClose: (
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button variant="primary" loading={loading} disabled={!dipCm && !measuredLitres} onClick={() => onSubmit({ dipCm: dipCm || undefined, measuredLitres: measuredLitres || undefined, note: note || undefined, method: dipCm ? 'DIP' : 'MANUAL' })}>
+          <Button variant="primary" loading={loading} disabled={!dipCm && !measuredLitres} onClick={() => onSubmit({ dipCm: dipCm || undefined, measuredLitres: measuredLitres || undefined, waterDipCm: waterDipCm || undefined, note: note || undefined, method: dipCm ? 'DIP' : 'MANUAL' })}>
             Record dip
           </Button>
         </>
@@ -514,6 +597,9 @@ function DipModal({ tank, onClose, loading, onSubmit }: { tank: Tank; onClose: (
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Dip reading (cm)" hint="Converted using the tank calibration table"><Input inputMode="decimal" value={dipCm} onChange={(e) => setDipCm(e.target.value)} /></Field>
         <Field label="Or measured litres" hint="Directly measured volume"><Input inputMode="decimal" value={measuredLitres} onChange={(e) => setMeasuredLitres(e.target.value)} /></Field>
+        <Field label="Water dip (cm)" hint="Water-finding paste se niche ki paani-kat (cm). 2 cm se zyada = subah hi saaf karna hota hai.">
+          <Input inputMode="decimal" value={waterDipCm} onChange={(e) => setWaterDipCm(e.target.value)} placeholder="0" />
+        </Field>
         <Field label="Note" className="sm:col-span-2"><Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Dip taken by, time, conditions" /></Field>
       </div>
     </Modal>

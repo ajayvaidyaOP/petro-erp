@@ -5,9 +5,11 @@ import { badRequest, forbidden, notFound, unprocessable } from '../lib/errors.js
 import { can, requireAuth, type AuthContext } from '../lib/auth.js';
 import { accessibleStationIds, getStationOrThrow, tenantIdOf } from '../lib/tenant.js';
 import { addDays, istDayEnd, istDayStart, isIsoDate, todayIst } from '../lib/time.js';
-import { D, money } from '../lib/decimal.js';
+import { D, Decimal, money } from '../lib/decimal.js';
 import { tankSummary, signedLitres, tankBookStock } from '../lib/stock.js';
-import { ACCOUNTING_DISCLAIMER, HARDWARE_DISCLAIMER, STOCK_VARIANCE_TOLERANCE_LITRES } from '@petroflow/shared';
+import { ACCOUNTING_DISCLAIMER, HARDWARE_DISCLAIMER, STOCK_VARIANCE_TOLERANCE_LITRES, STOCK_LOSS_NORM_PCT } from '@petroflow/shared';
+import { complianceAlerts } from './compliance.js';
+import { isDayClosed } from '../lib/dayclose.js';
 
 export const reportsRouter = Router();
 reportsRouter.use(requireAuth);
@@ -150,6 +152,17 @@ reportsRouter.get(
         alerts.push({ level: 'error', message: `${tank.code}: negative book stock — review deliveries and dispensed entries.` });
       } else if (D(tank.capacityLitres).gt(0) && D(tank.fillPct).lt(15)) {
         alerts.push({ level: 'warning', message: `${tank.code}: low stock at ${tank.fillPct}% of capacity.` });
+      }
+    }
+    alerts.push(...complianceAlerts(station.id));
+    const yesterday = addDays(todayIst(), -1);
+    if (!isDayClosed(station.id, yesterday)) {
+      const hadShifts = get<{ count: number }>(
+        'SELECT COUNT(*) AS count FROM shifts WHERE station_id = ? AND business_date = ?',
+        [station.id, yesterday],
+      )?.count ?? 0;
+      if (hadShifts > 0) {
+        alerts.push({ level: 'warning', message: `Kal (${yesterday}) ka din band nahi hua hai — Shifts → Day closing se roznamcha band karo.` });
       }
     }
 
@@ -462,6 +475,347 @@ reportsRouter.get(
         ACCOUNTING_DISCLAIMER,
       ],
     });
+  }),
+);
+
+// ------------------------------------------------------- stock loss/gain
+function monthRange(month: string) {
+  const start = `${month}-01`;
+  const next = addDays(`${month}-28`, 4).slice(0, 8) + '01';
+  return { fromIso: istDayStart(start), toIso: istDayStart(next), start, next };
+}
+
+function monthParam(req: { query: Record<string, unknown> }): string {
+  const month = typeof req.query.month === 'string' ? req.query.month : todayIst().slice(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(month)) throw badRequest('month must be YYYY-MM');
+  return month;
+}
+
+function stockLossRows(stationId: string, month: string) {
+  const { fromIso, toIso } = monthRange(month);
+  const products = all<{ id: string; name: string; code: string; category: string; color: string }>(
+    `SELECT DISTINCT p.id, p.name, p.code, p.category, p.color
+       FROM fuel_products p JOIN tanks t ON t.product_id = p.id
+      WHERE t.station_id = ? ORDER BY p.code`,
+    [stationId],
+  );
+  const movements = all<{ product_id: string; type: string; quantity_litres: string; occurred_at: string }>(
+    'SELECT product_id, type, quantity_litres, occurred_at FROM stock_movements WHERE station_id = ? AND occurred_at < ?',
+    [stationId, toIso],
+  );
+  const tanks = all<{ id: string; product_id: string; code: string }>(
+    'SELECT id, product_id, code FROM tanks WHERE station_id = ?',
+    [stationId],
+  );
+  const dips = all<{ tank_id: string; measured_litres: string; measured_at: string }>(
+    `SELECT tank_id, measured_litres, measured_at FROM tank_measurements
+      WHERE station_id = ? AND measured_at >= ? AND measured_at < ? ORDER BY measured_at ASC`,
+    [stationId, fromIso, toIso],
+  );
+
+  return products.map((product) => {
+    let opening = D(0); let receipts = D(0); let dispensed = D(0); let adjustments = D(0); let closingBook = D(0);
+    for (const movement of movements) {
+      if (movement.product_id !== product.id) continue;
+      const signed = signedLitres(movement.type, movement.quantity_litres);
+      closingBook = closingBook.plus(signed);
+      if (movement.occurred_at < fromIso) { opening = opening.plus(signed); continue; }
+      if (movement.type === 'DELIVERY' || movement.type === 'TRANSFER_IN') receipts = receipts.plus(signed.abs());
+      else if (movement.type === 'DISPENSED') dispensed = dispensed.plus(signed.abs());
+      else if (movement.type === 'ADJUSTMENT') adjustments = adjustments.plus(signed);
+    }
+    // Physical stock: mahine ki aakhri dip per tank. Ek bhi tank ki dip na ho to statement adhuri.
+    const productTanks = tanks.filter((t) => t.product_id === product.id);
+    let physicalSum = D(0);
+    let dipMissing = false;
+    for (const tank of productTanks) {
+      const tankDips = dips.filter((d) => d.tank_id === tank.id);
+      if (tankDips.length === 0) { dipMissing = true; break; }
+      physicalSum = physicalSum.plus(D(tankDips[tankDips.length - 1]!.measured_litres));
+    }
+    const physical: Decimal | null = dipMissing || productTanks.length === 0 ? null : physicalSum;
+    const lossGain = physical !== null ? physical.minus(closingBook) : null;
+    const lossPct = lossGain !== null && dispensed.gt(0) ? lossGain.div(dispensed).mul(100) : null;
+    const normPct = STOCK_LOSS_NORM_PCT[product.category] ?? 0;
+    let status = 'NO_DIP';
+    if (lossGain !== null && lossPct !== null) {
+      if (lossPct.lt(-normPct)) status = 'BEYOND_NORM';
+      else if (lossPct.gt(normPct)) status = 'GAIN_CHECK';
+      else status = 'WITHIN_NORM';
+    } else if (lossGain !== null) status = 'WITHIN_NORM';
+    return {
+      productId: product.id,
+      productName: product.name,
+      productCode: product.code,
+      category: product.category,
+      color: product.color,
+      openingLitres: opening.toFixed(3),
+      receiptsLitres: receipts.toFixed(3),
+      dispensedLitres: dispensed.toFixed(3),
+      adjustmentsLitres: adjustments.toFixed(3),
+      closingBookLitres: closingBook.toFixed(3),
+      physicalLitres: physical !== null ? physical.toFixed(3) : null,
+      lossGainLitres: lossGain !== null ? lossGain.toFixed(3) : null,
+      lossGainPctOfSales: lossPct !== null ? lossPct.toFixed(3) : null,
+      normPct: String(normPct),
+      status,
+    };
+  });
+}
+
+reportsRouter.get(
+  '/stock-loss',
+  asyncHandler((req, res) => {
+    const auth = req.auth as AuthContext;
+    if (!can(auth, 'reports.read')) throw forbidden();
+    const station = getStationOrThrow(auth, stationParam(req));
+    const month = monthParam(req);
+    return ok(res, {
+      station: { id: station.id, name: station.name, code: station.code },
+      month,
+      rows: stockLossRows(station.id, month),
+      note: 'Loss/gain = aakhri dip (physical) − book stock. Norm % OMC guidance hai (petrol 0.75%, diesel 0.25% sales par); isse zyada loss par jaanch zaroori hai.',
+      toleranceLitres: STOCK_VARIANCE_TOLERANCE_LITRES,
+    });
+  }),
+);
+
+// ------------------------------------------------------------ indent plan
+reportsRouter.get(
+  '/indent',
+  asyncHandler((req, res) => {
+    const auth = req.auth as AuthContext;
+    if (!can(auth, 'reports.read')) throw forbidden();
+    const station = getStationOrThrow(auth, stationParam(req));
+    const since = istDayStart(addDays(todayIst(), -14));
+    const rows = tankSummary(station.id).map((tank) => {
+      const movements = all<{ quantity_litres: string }>(
+        "SELECT quantity_litres FROM stock_movements WHERE tank_id = ? AND type = 'DISPENSED' AND occurred_at >= ?",
+        [tank.id, since],
+      );
+      const dispensed14 = movements.reduce((acc, m) => acc.plus(D(m.quantity_litres).abs()), D(0));
+      const daily = dispensed14.div(14);
+      const book = D(tank.bookStockLitres);
+      const usable = book.minus(D(tank.deadStockLitres));
+      const capacity = D(tank.capacityLitres);
+      const daysCover = daily.gt(0) ? usable.div(daily) : null;
+      let suggestion = D(0);
+      let priority = 'OK';
+      if (daysCover !== null && daysCover.lt(4)) {
+        priority = daysCover.lt(2) ? 'HIGH' : 'MEDIUM';
+        const target = capacity.mul(0.9).minus(book);
+        const ullage = capacity.minus(book);
+        const raw = target.lt(ullage) ? target : ullage;
+        suggestion = raw.gt(0) ? raw.div(500).floor().mul(500) : D(0);
+      } else if (D(tank.fillPct).lt(20)) {
+        priority = 'MEDIUM';
+      }
+      return {
+        tankId: tank.id,
+        tankCode: tank.code,
+        productName: tank.productName,
+        productColor: tank.productColor,
+        bookStockLitres: tank.bookStockLitres,
+        capacityLitres: tank.capacityLitres,
+        fillPct: tank.fillPct,
+        ullageLitres: capacity.minus(book).toFixed(3),
+        avgDailySalesLitres: daily.toFixed(1),
+        daysOfCover: daysCover !== null ? daysCover.toFixed(1) : null,
+        suggestedOrderLitres: suggestion.toFixed(0),
+        priority,
+      };
+    });
+    return ok(res, {
+      station: { id: station.id, name: station.name, code: station.code },
+      basedOnDays: 14,
+      rows,
+      note: 'Days of cover = (book − dead stock) ÷ pichhle 14 din ki average bikri. 4 din se kam bache to indent ka sujhau (500 L ke round figure me, tank 90% tak).',
+    });
+  }),
+);
+
+// ------------------------------------------------------------ credit ageing
+function ageingRows(tenantId: string) {
+  const customers = all<{ id: string; code: string; name: string; phone: string | null; credit_limit: string }>(
+    "SELECT id, code, name, phone, credit_limit FROM customers WHERE tenant_id = ? AND status = 'ACTIVE' ORDER BY name",
+    [tenantId],
+  );
+  const todayMs = new Date(`${todayIst()}T12:00:00+05:30`).getTime();
+  const result: Record<string, unknown>[] = [];
+  for (const customer of customers) {
+    const sales = all<{ amount: string; occurred_at: string }>(
+      "SELECT amount, occurred_at FROM credit_entries WHERE customer_id = ? AND type = 'CREDIT_SALE' AND status = 'POSTED' ORDER BY occurred_at ASC, created_at ASC",
+      [customer.id],
+    );
+    if (sales.length === 0) continue;
+    let paidPool = all<{ amount: string }>(
+      "SELECT amount FROM credit_entries WHERE customer_id = ? AND type = 'PAYMENT' AND status = 'POSTED'",
+      [customer.id],
+    ).reduce((acc, row) => acc.plus(D(row.amount)), D(0));
+    // FIFO: sabse purani udhaar pehle bhari gayi maano.
+    const buckets = { d0_30: D(0), d31_60: D(0), d61_90: D(0), d90plus: D(0) };
+    let outstanding = D(0);
+    let oldestUnpaidAt: string | null = null;
+    for (const sale of sales) {
+      let remaining = D(sale.amount);
+      if (paidPool.gt(0)) {
+        const used = remaining.lt(paidPool) ? remaining : paidPool;
+        remaining = remaining.minus(used);
+        paidPool = paidPool.minus(used);
+      }
+      if (remaining.lte(0)) continue;
+      outstanding = outstanding.plus(remaining);
+      if (!oldestUnpaidAt) oldestUnpaidAt = sale.occurred_at;
+      const ageDays = Math.floor((todayMs - new Date(sale.occurred_at).getTime()) / 86_400_000);
+      if (ageDays <= 30) buckets.d0_30 = buckets.d0_30.plus(remaining);
+      else if (ageDays <= 60) buckets.d31_60 = buckets.d31_60.plus(remaining);
+      else if (ageDays <= 90) buckets.d61_90 = buckets.d61_90.plus(remaining);
+      else buckets.d90plus = buckets.d90plus.plus(remaining);
+    }
+    if (outstanding.lte(0)) continue;
+    result.push({
+      customerId: customer.id,
+      code: customer.code,
+      name: customer.name,
+      phone: customer.phone,
+      creditLimit: customer.credit_limit,
+      outstanding: money(outstanding),
+      bucket0To30: money(buckets.d0_30),
+      bucket31To60: money(buckets.d31_60),
+      bucket61To90: money(buckets.d61_90),
+      bucket90Plus: money(buckets.d90plus),
+      oldestUnpaidAt,
+      overLimit: D(customer.credit_limit).gt(0) && outstanding.gt(D(customer.credit_limit)),
+    });
+  }
+  return result;
+}
+
+reportsRouter.get(
+  '/ageing',
+  asyncHandler((req, res) => {
+    const auth = req.auth as AuthContext;
+    if (!can(auth, 'reports.read')) throw forbidden();
+    const rows = ageingRows(tenantIdOf(auth)).sort((a, b) => Number(b.bucket90Plus) - Number(a.bucket90Plus) || Number(b.outstanding) - Number(a.outstanding));
+    const totals: Record<'outstanding' | 'bucket0To30' | 'bucket31To60' | 'bucket61To90' | 'bucket90Plus', Decimal> = {
+      outstanding: D(0), bucket0To30: D(0), bucket31To60: D(0), bucket61To90: D(0), bucket90Plus: D(0),
+    };
+    for (const row of rows) {
+      totals.outstanding = totals.outstanding.plus(D(String(row.outstanding)));
+      totals.bucket0To30 = totals.bucket0To30.plus(D(String(row.bucket0To30)));
+      totals.bucket31To60 = totals.bucket31To60.plus(D(String(row.bucket31To60)));
+      totals.bucket61To90 = totals.bucket61To90.plus(D(String(row.bucket61To90)));
+      totals.bucket90Plus = totals.bucket90Plus.plus(D(String(row.bucket90Plus)));
+    }
+    return ok(res, {
+      asOf: todayIst(),
+      rows,
+      totals: {
+        outstanding: money(totals.outstanding), bucket0To30: money(totals.bucket0To30),
+        bucket31To60: money(totals.bucket31To60), bucket61To90: money(totals.bucket61To90),
+        bucket90Plus: money(totals.bucket90Plus),
+      },
+      note: 'Payments FIFO tareeke se sabse purani udhaar me lage mane gaye hain.',
+    });
+  }),
+);
+
+// ---------------------------------------------------------------- exports
+function csvCell(value: unknown): string {
+  const text = value === null || value === undefined ? '' : String(value);
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function sendCsv(res: { setHeader: (k: string, v: string) => void; send: (b: string) => unknown }, filename: string, header: string[], rows: unknown[][]) {
+  const body = [header, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  return res.send(body);
+}
+
+reportsRouter.get(
+  '/export/sales-register.csv',
+  asyncHandler((req, res) => {
+    const auth = req.auth as AuthContext;
+    if (!can(auth, 'reports.read')) throw forbidden();
+    const station = getStationOrThrow(auth, stationParam(req));
+    const month = monthParam(req);
+    const { fromIso, toIso } = monthRange(month);
+    const rows = all<Record<string, unknown>>(
+      `SELECT ft.occurred_at, p.name AS product_name, p.code AS product_code, n.label AS nozzle_label,
+              s.shift_number, ft.quantity_litres, ft.rate, ft.amount, ft.payment_mode,
+              c.name AS customer_name, ft.reference, ft.source
+         FROM fuel_transactions ft
+         JOIN fuel_products p ON p.id = ft.product_id
+         LEFT JOIN nozzles n ON n.id = ft.nozzle_id
+         LEFT JOIN shifts s ON s.id = ft.shift_id
+         LEFT JOIN customers c ON c.id = ft.customer_id
+        WHERE ft.station_id = ? AND ft.occurred_at >= ? AND ft.occurred_at < ? AND ft.voided_at IS NULL
+        ORDER BY ft.occurred_at ASC`,
+      [station.id, fromIso, toIso],
+    );
+    return sendCsv(res as never, `sales-register-${station.code}-${month}.csv`,
+      ['DateTime (UTC)', 'Product', 'Code', 'Nozzle', 'Shift', 'Litres', 'Rate', 'Amount (INR)', 'Payment Mode', 'Customer', 'Reference', 'Source'],
+      rows.map((r) => [r.occurred_at, r.product_name, r.product_code, r.nozzle_label, r.shift_number, r.quantity_litres, r.rate, r.amount, r.payment_mode, r.customer_name, r.reference, r.source]),
+    );
+  }),
+);
+
+reportsRouter.get(
+  '/export/stock-statement.csv',
+  asyncHandler((req, res) => {
+    const auth = req.auth as AuthContext;
+    if (!can(auth, 'reports.read')) throw forbidden();
+    const station = getStationOrThrow(auth, stationParam(req));
+    const month = monthParam(req);
+    const rows = stockLossRows(station.id, month);
+    return sendCsv(res as never, `stock-statement-${station.code}-${month}.csv`,
+      ['Product', 'Code', 'Opening (L)', 'Receipts (L)', 'Sales (L)', 'Adjustments (L)', 'Closing Book (L)', 'Physical Dip (L)', 'Loss/Gain (L)', 'Loss/Gain % of Sales', 'Norm %', 'Status'],
+      rows.map((r) => [r.productName, r.productCode, r.openingLitres, r.receiptsLitres, r.dispensedLitres, r.adjustmentsLitres, r.closingBookLitres, r.physicalLitres, r.lossGainLitres, r.lossGainPctOfSales, r.normPct, r.status]),
+    );
+  }),
+);
+
+reportsRouter.get(
+  '/export/ageing.csv',
+  asyncHandler((req, res) => {
+    const auth = req.auth as AuthContext;
+    if (!can(auth, 'reports.read')) throw forbidden();
+    const rows = ageingRows(tenantIdOf(auth));
+    return sendCsv(res as never, `credit-ageing-${todayIst()}.csv`,
+      ['Customer Code', 'Customer', 'Phone', 'Credit Limit', 'Outstanding', '0-30 din', '31-60 din', '61-90 din', '90+ din', 'Sabse Purani Udhaar'],
+      rows.map((r) => [r.code, r.name, r.phone, r.creditLimit, r.outstanding, r.bucket0To30, r.bucket31To60, r.bucket61To90, r.bucket90Plus, r.oldestUnpaidAt]),
+    );
+  }),
+);
+
+reportsRouter.get(
+  '/export/lubricants-gst.csv',
+  asyncHandler((req, res) => {
+    const auth = req.auth as AuthContext;
+    if (!can(auth, 'reports.read')) throw forbidden();
+    const station = getStationOrThrow(auth, stationParam(req));
+    const month = monthParam(req);
+    const { fromIso, toIso } = monthRange(month);
+    const rows = all<Record<string, unknown>>(
+      `SELECT m.occurred_at, p.name AS product_name, p.pack_size, p.hsn_code, p.gst_rate_pct,
+              m.quantity, m.rate, m.amount, m.payment_mode, c.name AS customer_name, c.gstin AS customer_gstin, m.vehicle_number
+         FROM lube_movements m
+         JOIN lube_products p ON p.id = m.product_id
+         LEFT JOIN customers c ON c.id = m.customer_id
+        WHERE m.station_id = ? AND m.type = 'SALE' AND m.occurred_at >= ? AND m.occurred_at < ?
+        ORDER BY m.occurred_at ASC`,
+      [station.id, fromIso, toIso],
+    );
+    return sendCsv(res as never, `lubricants-gst-${station.code}-${month}.csv`,
+      ['DateTime (UTC)', 'Item', 'Pack', 'HSN', 'Qty (pack)', 'Rate (incl GST)', 'Amount (incl GST)', 'GST %', 'Taxable Value', 'GST Amount', 'Payment Mode', 'Customer', 'Customer GSTIN', 'Vehicle'],
+      rows.map((r) => {
+        const amount = D(String(r.amount));
+        const gstPct = D(String(r.gst_rate_pct ?? 18));
+        const taxable = amount.mul(100).div(gstPct.plus(100));
+        return [r.occurred_at, r.product_name, r.pack_size, r.hsn_code, D(String(r.quantity)).abs().toFixed(2), r.rate, r.amount, r.gst_rate_pct, money(taxable), money(amount.minus(taxable)), r.payment_mode, r.customer_name, r.customer_gstin, r.vehicle_number];
+      }),
+    );
   }),
 );
 

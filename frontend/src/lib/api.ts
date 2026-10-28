@@ -142,6 +142,34 @@ export function apiDelete<T>(path: string): Promise<T> {
   return request<T>(path, { method: 'DELETE' });
 }
 
+/** Authenticated file download (CSV exports etc.) — same cookie/Bearer rules as request(). */
+export async function apiDownload(path: string, filename: string): Promise<void> {
+  const previewToken = getPreviewSessionToken();
+  const res = await fetch(`${BASE}${path}`, {
+    credentials: 'include',
+    headers: { ...(previewToken ? { authorization: `Bearer ${previewToken}` } : {}) },
+  });
+  if (!res.ok) {
+    let message = 'Download failed';
+    try {
+      const body = (await res.json()) as { error?: { message?: string } };
+      if (body.error?.message) message = body.error.message;
+    } catch {
+      // keep default message
+    }
+    throw new Error(message);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const anchorEl = document.createElement('a');
+  anchorEl.href = url;
+  anchorEl.download = filename;
+  document.body.appendChild(anchorEl);
+  anchorEl.click();
+  anchorEl.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function queryString(params: Record<string, string | number | boolean | null | undefined>) {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {

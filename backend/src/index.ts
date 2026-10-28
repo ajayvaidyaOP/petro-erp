@@ -2,11 +2,12 @@ import { createApp } from './app.js';
 import { assertProductionConfig, env } from './env.js';
 import { get, migrate } from './db/index.js';
 import { logger } from './lib/logger.js';
-import { runSeed } from './db/seed.js';
+import { runSeed, syncRoles } from './db/seed.js';
 
 async function bootstrap() {
   assertProductionConfig();
   migrate();
+  syncRoles();
   const userCount = get<{ count: number }>('SELECT COUNT(*) AS count FROM users')?.count ?? 0;
   if (userCount === 0) {
     if (env.isProd) {
