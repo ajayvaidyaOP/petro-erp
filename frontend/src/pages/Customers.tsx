@@ -118,7 +118,7 @@ export default function Customers() {
   const ledger = useQuery({
     queryKey: ['customer-ledger', ledgerCustomer?.id],
     queryFn: () => apiGet<Ledger>(`/finance/customer-ledger?customerId=${ledgerCustomer!.id}`),
-    enabled: Boolean(ledgerCustomer),
+    enabled: Boolean(ledgerCustomer) && can('reports.read'),
   });
 
   const invalidate = () => {
@@ -239,7 +239,7 @@ export default function Customers() {
                         </td>
                         <td className="text-right">
                           <div className="flex justify-end gap-1">
-                            <Button size="sm" variant="ghost" onClick={() => setLedgerCustomer(customer)}>Ledger</Button>
+                            {can('reports.read') ? <Button size="sm" variant="ghost" onClick={() => setLedgerCustomer(customer)}>Ledger</Button> : can('sales.write') && <Button size="sm" variant="primary" onClick={() => { setLedgerCustomer(customer); setSaleOpen(true); }}>Credit slip</Button>}
                             {can('customers.write') && <Button size="sm" variant="ghost" onClick={() => setEditCustomer({ ...customer })}>Edit</Button>}
                           </div>
                         </td>
@@ -315,7 +315,7 @@ export default function Customers() {
 
       {/* Ledger */}
       <Modal
-        open={Boolean(ledgerCustomer)}
+        open={Boolean(ledgerCustomer) && can('reports.read')}
         onClose={() => setLedgerCustomer(null)}
         title={ledgerCustomer ? `${ledgerCustomer.name} · credit ledger` : 'Credit ledger'}
         description={ledger.data ? `Closing balance ${formatINR(ledger.data.closingBalance)} · available credit ${formatINR(ledger.data.availableCredit)}` : undefined}
@@ -355,7 +355,7 @@ export default function Customers() {
             <div className="table-wrap rounded-b-lg border border-t-0 border-navy-700/60">
               <table className="data-table min-w-[720px]">
                 <thead>
-                  <tr><th>Date</th><th>Type</th><th>Reference</th><th>Due</th><th className="text-right">Amount</th><th className="text-right">Running</th></tr>
+                  <tr><th>Date</th><th>Pump</th><th>Type</th><th>Reference</th><th>Due</th><th className="text-right">Amount</th><th className="text-right">Running</th></tr>
                 </thead>
                 <tbody>
                   {ledger.data.ledger.length === 0 ? (
@@ -363,7 +363,7 @@ export default function Customers() {
                   ) : (
                     ledger.data.ledger.map((entry) => (
                       <tr key={entry.id}>
-                        <td className="text-xs text-ink-400">{formatDateTime(entry.occurredAt)}</td>
+                        <td className="text-xs text-ink-400">{formatDateTime(entry.occurredAt)}</td><td className="text-xs">{entry.stationName ?? '—'}</td>
                         <td>
                           <Badge tone={entry.type === 'CREDIT_SALE' ? 'warning' : entry.type === 'PAYMENT' ? 'success' : 'neutral'}>
                             {entry.type.replace(/_/g, ' ')}
@@ -398,11 +398,11 @@ export default function Customers() {
         <>
           <CreditSaleModal
             open={saleOpen}
-            onClose={() => setSaleOpen(false)}
+            onClose={() => { setSaleOpen(false); if (!can('reports.read')) setLedgerCustomer(null); }}
             customer={ledgerCustomer}
             stationId={stationId}
             products={products.data ?? []}
-            onDone={() => { setSaleOpen(false); invalidate(); }}
+            onDone={() => { setSaleOpen(false); if (!can('reports.read')) setLedgerCustomer(null); invalidate(); }}
           />
           <ReceiptModal
             open={receiptOpen}
@@ -483,7 +483,7 @@ interface StatementData {
   openingBalance: string;
   lines: {
     id: string; occurredAt: string; type: string; slipNumber: string | null; reference: string | null;
-    vehicleNumber: string | null; driverName: string | null;
+    vehicleNumber: string | null; driverName: string | null; stationName: string | null;
     productName: string | null; quantityLitres: string | null; ratePerLitre: string | null;
     debit: string; credit: string; runningBalance: string;
   }[];
@@ -545,7 +545,7 @@ function StatementModal({ open, onClose, customer }: { open: boolean; onClose: (
               <table className="data-table min-w-[760px]">
                 <thead>
                   <tr>
-                    <th>Tarikh</th><th>Slip no.</th><th>Gaadi</th><th>Product</th>
+                    <th>Tarikh</th><th>Pump</th><th>Slip no.</th><th>Gaadi</th><th>Product</th>
                     <th className="text-right">Litre</th><th className="text-right">Rate</th>
                     <th className="text-right">Udhaar (Dr)</th><th className="text-right">Vasuli (Cr)</th><th className="text-right">Balance</th>
                   </tr>
@@ -555,7 +555,7 @@ function StatementModal({ open, onClose, customer }: { open: boolean; onClose: (
                     <tr><td colSpan={9} className="py-6 text-center text-xs text-ink-500">Is mahine koi lena-dena nahi.</td></tr>
                   ) : data.lines.map((entry) => (
                     <tr key={entry.id}>
-                      <td className="whitespace-nowrap text-xs">{formatDate(entry.occurredAt)}</td>
+                      <td className="whitespace-nowrap text-xs">{formatDate(entry.occurredAt)}</td><td className="text-xs">{entry.stationName ?? '—'}</td>
                       <td className="text-xs">{entry.slipNumber ?? entry.reference ?? (entry.type === 'PAYMENT' ? 'PAYMENT' : '—')}</td>
                       <td className="text-xs">{entry.vehicleNumber ?? '—'}</td>
                       <td className="text-xs">{entry.productName ?? '—'}</td>

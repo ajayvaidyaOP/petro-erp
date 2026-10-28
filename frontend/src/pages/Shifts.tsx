@@ -755,7 +755,7 @@ function CloseShiftModal({
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button variant="primary" loading={loading} onClick={submit}>
+          <Button variant="primary" size="lg" loading={loading} onClick={submit}>
             Close & compute
           </Button>
         </>
@@ -790,7 +790,7 @@ function CloseShiftModal({
 
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Closing cash (INR)" hint={denomUsed ? 'Ginti se auto bhara gaya' : 'Ginti nahi ki to seedha cash daalo'}>
-            <Input inputMode="decimal" value={effectiveCash} onChange={(e) => setClosingCash(e.target.value)} />
+            <Input inputMode="decimal" value={effectiveCash} readOnly={denomUsed} onChange={(e) => setClosingCash(e.target.value)} />
           </Field>
           <Field label="UPI mila (INR)" hint="UPI app/machine ka total">
             <Input inputMode="decimal" value={modes.UPI} onChange={(e) => setModes({ ...modes, UPI: e.target.value })} placeholder="0" />

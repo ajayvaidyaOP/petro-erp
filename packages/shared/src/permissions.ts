@@ -77,6 +77,20 @@ export const ROLE_DEFINITIONS = {
       (p) => p !== P.PLATFORM_MANAGE && p !== P.PLATFORM_AUDIT,
     ) as Permission[],
   },
+  STAFF: {
+    name: 'Pump Staff',
+    scope: 'STATION' as const,
+    description: 'Daily work at the assigned pump only.',
+    permissions: [
+      P.STATIONS_READ, P.PRODUCTS_READ, P.TANKS_READ, P.DISPENSERS_READ,
+      P.EMPLOYEES_READ, P.READINGS_READ, P.READINGS_MANUAL,
+      P.SHIFTS_READ, P.SHIFTS_OPEN, P.SHIFTS_CLOSE, P.SALES_READ, P.SALES_WRITE,
+      P.STOCK_READ, P.STOCK_WRITE, P.DELIVERIES_READ, P.DELIVERIES_WRITE,
+      P.CUSTOMERS_READ, P.SUPPLIERS_READ, P.EXPENSES_READ, P.EXPENSES_WRITE,
+      P.PAYMENTS_READ, P.DENSITY_READ, P.DENSITY_WRITE,
+      P.LUBRICANTS_READ, P.LUBRICANTS_WRITE, P.ATTENDANCE_READ, P.ATTENDANCE_WRITE,
+    ] as Permission[],
+  },
   MANAGER: {
     name: 'Station Manager',
     scope: 'STATION' as const,

@@ -28,7 +28,7 @@ beforeAll(async () => {
   const { migrate } = await import('../src/db/index.js');
   migrate();
   const { runSeed } = await import('../src/db/seed.js');
-  await runSeed({ force: true });
+  await runSeed({ force: true, legacyTestFixtures: true });
   const { createApp } = await import('../src/app.js');
   app = createApp();
 

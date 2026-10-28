@@ -182,7 +182,13 @@ catalogRouter.get(
         ORDER BY fp.effective_from DESC LIMIT 200`,
       productId ? [tenantId, productId] : [tenantId],
     );
-    return ok(res, shapeAll(rows));
+    const requestedStation = typeof req.query.stationId === 'string' ? req.query.stationId : null;
+    if (requestedStation) getStationOrThrow(auth, requestedStation);
+    const visible = rows.filter((row) => {
+      const id = (row as Record<string, unknown>).station_id;
+      return !id || ((auth.allStations || auth.stationIds.has(String(id))) && (!requestedStation || id === requestedStation));
+    });
+    return ok(res, shapeAll(visible));
   }),
 );
 
@@ -756,12 +762,13 @@ catalogRouter.get(
     const tenantId = tenantIdOf(auth);
     const rows = all<Record<string, unknown>>(
       `SELECT u.id, u.name, u.email, u.phone, u.role_key, u.status, u.last_login_at, u.created_at, u.is_demo
-         FROM users u WHERE u.tenant_id = ? AND u.role_key != 'SUPER_ADMIN' ORDER BY u.name`,
-      [tenantId],
+         FROM users u WHERE u.tenant_id = ? AND u.role_key != 'SUPER_ADMIN'
+           AND (? = 1 OR (u.role_key != 'OWNER' AND EXISTS (SELECT 1 FROM user_station_access usa WHERE usa.user_id = u.id AND usa.station_id IN (SELECT station_id FROM user_station_access WHERE user_id = ?)))) ORDER BY u.name`,
+      [tenantId, auth.allStations ? 1 : 0, auth.user.id],
     );
     const employees = rows.map((row) => ({
       ...shape(row),
-      stationIds: employeeStations(String(row.id)),
+      stationIds: employeeStations(String(row.id)).filter((id) => auth.allStations || auth.stationIds.has(id)),
       permissions: permissionsForRole(String(row.role_key)),
     }));
     return ok(res, employees);

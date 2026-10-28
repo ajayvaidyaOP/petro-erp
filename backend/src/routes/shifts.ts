@@ -361,7 +361,8 @@ shiftRouter.post(
         body.operatorId, station.tenant_id,
       ]);
       if (!operator) throw notFound('Operator not found');
-      if (!['OPERATOR', 'CASHIER', 'MANAGER', 'OWNER'].includes(String(operator.role_key))) {
+      if (!auth.allStations && !get('SELECT id FROM user_station_access WHERE user_id = ? AND station_id = ?', [body.operatorId, station.id])) throw forbidden('Operator is not assigned to this station');
+      if (!['OPERATOR', 'CASHIER', 'MANAGER', 'OWNER', 'STAFF'].includes(String(operator.role_key))) {
         throw unprocessable('Selected employee cannot be assigned as a shift operator');
       }
     }
@@ -492,6 +493,7 @@ shiftRouter.patch(
     if (body.operatorId) {
       const operator = get('SELECT id FROM users WHERE id = ? AND tenant_id = ?', [body.operatorId, shift.tenant_id]);
       if (!operator) throw notFound('Operator not found');
+      if (!auth.allStations && !get('SELECT id FROM user_station_access WHERE user_id = ? AND station_id = ?', [body.operatorId, shift.station_id])) throw forbidden('Operator is not assigned to this station');
     }
     if ((body.openingReading !== undefined || body.closingReading !== undefined)
       && !settingsValue('hardware.allowManualFallback', shift.tenant_id, shift.station_id, 1)) {

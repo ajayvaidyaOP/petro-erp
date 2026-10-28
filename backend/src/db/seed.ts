@@ -71,7 +71,9 @@ export function syncRoles() {
   }
 }
 
-export async function runSeed(options: { force?: boolean } = {}) {
+export async function runSeed(options: { force?: boolean; legacyTestFixtures?: boolean } = {}) {
+  // Existing authorization tests explicitly opt into their multi-tenant fixture.
+  const legacyTestFixtures = process.env.NODE_ENV === 'test' && options.legacyTestFixtures === true;
   const existing = get<{ count: number }>('SELECT COUNT(*) AS count FROM tenants')?.count ?? 0;
   if (existing > 0 && !options.force) {
     logger.info('Seed skipped — tenants already exist.');
@@ -140,7 +142,7 @@ export async function runSeed(options: { force?: boolean } = {}) {
                'Demo tenant — multi-station operator', 1, ?, ?)`,
       [tenantA, nowIso(), nowIso()],
     );
-    run(
+    if (legacyTestFixtures) run(
       `INSERT INTO tenants (id, name, slug, legal_name, gstin, contact_email, contact_phone, address, city, state, status, notes, is_demo, created_at, updated_at)
        VALUES (?, 'Highway Energy LLP', 'highway-energy', 'Highway Energy LLP', '27AAEFH9876K1Z2',
                'owner@highwayenergy.in', '+91 97650 44321', 'NH-48, Khed Shivapur', 'Pune', 'Maharashtra', 'ACTIVE',
@@ -156,7 +158,7 @@ export async function runSeed(options: { force?: boolean } = {}) {
       [subA, tenantA, planIds.GROWTH, new Date(Date.now() - 120 * 86_400_000).toISOString(),
         new Date(Date.now() + 245 * 86_400_000).toISOString(), nowIso(), nowIso()],
     );
-    run(
+    if (legacyTestFixtures) run(
       `INSERT INTO subscriptions (id, tenant_id, plan_id, status, starts_at, ends_at, trial_ends_at, seats, auto_renew, created_at, updated_at)
        VALUES (?, ?, ?, 'TRIALING', ?, ?, ?, 8, 1, ?, ?)`,
       [subB, tenantB, planIds.STARTER, new Date(Date.now() - 5 * 86_400_000).toISOString(),
@@ -202,7 +204,7 @@ export async function runSeed(options: { force?: boolean } = {}) {
       { id: newId('stn'), tenant: tenantA, code: 'SUN-HIN', name: 'Sunrise Fuels — Hinjewadi', city: 'Pune', state: 'Maharashtra', address: 'Phase 2, Hinjewadi, Pune' },
       { id: newId('stn'), tenant: tenantB, code: 'HWE-KSP', name: 'Highway Energy — Khed Shivapur', city: 'Pune', state: 'Maharashtra', address: 'NH-48, Khed Shivapur' },
     ];
-    for (const station of stations) {
+    for (const station of stations.filter((s) => legacyTestFixtures || s.tenant === tenantA)) {
       run(
         `INSERT INTO stations (id, tenant_id, code, name, address, city, state, pincode, timezone, status, opening_date, is_demo, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, '411045', 'Asia/Kolkata', 'ACTIVE', ?, 1, ?, ?)`,
@@ -213,7 +215,7 @@ export async function runSeed(options: { force?: boolean } = {}) {
     const [stationA, stationB, stationC] = stations;
 
     // ------------------------------------------------------------- users ----
-    const userSpecs = [
+    const legacyUsers = [
       { id: newId('usr'), tenant: null, email: 'superadmin@petroflow.dev', name: 'Platform Administrator', role: 'SUPER_ADMIN', stations: [] },
       { id: newId('usr'), tenant: tenantA, email: 'owner@sunrisefuels.in', name: 'Rohit Deshmukh', role: 'OWNER', stations: [stationA.id, stationB.id] },
       { id: newId('usr'), tenant: tenantA, email: 'manager@sunrisefuels.in', name: 'Anjali Kulkarni', role: 'MANAGER', stations: [stationA.id] },
@@ -221,6 +223,11 @@ export async function runSeed(options: { force?: boolean } = {}) {
       { id: newId('usr'), tenant: tenantA, email: 'operator@sunrisefuels.in', name: 'Imran Shaikh', role: 'OPERATOR', stations: [stationA.id] },
       { id: newId('usr'), tenant: tenantA, email: 'accounts@sunrisefuels.in', name: 'Meera Joshi', role: 'ACCOUNTANT', stations: [stationA.id, stationB.id] },
       { id: newId('usr'), tenant: tenantB, email: 'owner@highwayenergy.in', name: 'Vikram Patil', role: 'OWNER', stations: [stationC.id] },
+    ];
+    const userSpecs = legacyTestFixtures ? legacyUsers : [
+      legacyUsers[0], legacyUsers[1],
+      { ...legacyUsers[2], email: 'staff1@sunrisefuels.in', name: 'Pump 1 Staff', role: 'STAFF', stations: [stationA.id] },
+      { ...legacyUsers[3], email: 'staff2@sunrisefuels.in', name: 'Pump 2 Staff', role: 'STAFF', stations: [stationB.id] },
     ];
     for (const user of userSpecs) {
       run(
@@ -238,8 +245,8 @@ export async function runSeed(options: { force?: boolean } = {}) {
     }
     const ownerA = userSpecs[1].id;
     const managerA = userSpecs[2].id;
-    const cashierA = userSpecs[3].id;
-    const ownerB = userSpecs[6].id;
+    const cashierA = legacyTestFixtures ? userSpecs[3].id : userSpecs[2].id;
+    const ownerB = legacyUsers[6].id;
 
     // ---------------------------------------------------------- products ----
     const productSpecs = [
@@ -250,7 +257,7 @@ export async function runSeed(options: { force?: boolean } = {}) {
       { tenant: tenantB, code: 'HSD', name: 'Diesel (HSD)', category: 'DIESEL', color: '#34d399', rate: '95.12', prevRate: '94.75' },
     ];
     const productIds: Record<string, string> = {};
-    for (const product of productSpecs) {
+    for (const product of productSpecs.filter((p) => legacyTestFixtures || p.tenant === tenantA)) {
       const id = newId('prd');
       productIds[`${product.tenant}:${product.code}`] = id;
       run(
@@ -288,7 +295,7 @@ export async function runSeed(options: { force?: boolean } = {}) {
       { station: stationC, tenant: tenantB, code: 'T2', name: 'Diesel Tank 1', product: hsB, capacity: '15000', opening: '11000' },
     ];
     const tankIds: Record<string, string> = {};
-    for (const tank of tankSpecs) {
+    for (const tank of tankSpecs.filter((t) => legacyTestFixtures || t.tenant === tenantA)) {
       const id = newId('tnk');
       tankIds[`${tank.station.id}:${tank.code}`] = id;
       run(
@@ -323,7 +330,7 @@ export async function runSeed(options: { force?: boolean } = {}) {
       { station: stationC, code: 'D1', name: 'Dispenser 1', model: 'Wayne Helix', serial: 'WN-2020-00981', protocol: 'SIMULATED' },
     ];
     const dispenserIds: Record<string, string> = {};
-    for (const dispenser of dispenserSpecs) {
+    for (const dispenser of dispenserSpecs.filter((d) => legacyTestFixtures || d.station.tenant === tenantA)) {
       const id = newId('dsp');
       dispenserIds[`${dispenser.station.id}:${dispenser.code}`] = id;
       run(
@@ -345,7 +352,7 @@ export async function runSeed(options: { force?: boolean } = {}) {
       { station: stationC, tenant: tenantB, dispenser: 'D1', number: 2, label: 'N2 · HSD', product: hsB },
     ];
     const nozzles: SeededNozzle[] = [];
-    nozzleSpecs.forEach((spec, index) => {
+    nozzleSpecs.filter((n) => legacyTestFixtures || n.tenant === tenantA).forEach((spec, index) => {
       const dispenserId = dispenserIds[`${spec.station.id}:${spec.dispenser}`];
       const id = newId('noz');
       run(
@@ -378,7 +385,7 @@ export async function runSeed(options: { force?: boolean } = {}) {
       { station: stationC, tenant: tenantB, code: 'GW-KSP-01', name: 'Khed Shivapur Gateway 01', serial: 'PFGW-0003' },
     ];
     const deviceIds: Record<string, string> = {};
-    for (const device of deviceSpecs) {
+    for (const device of deviceSpecs.filter((d) => legacyTestFixtures || d.tenant === tenantA)) {
       const secret = createHash('sha256').update(`${device.code}-${Math.random()}`).digest('base64url').slice(0, 24);
       const prefix = createHash('sha256').update(device.code).digest('hex').slice(0, 12);
       const id = newId('dev');
@@ -461,12 +468,12 @@ export async function runSeed(options: { force?: boolean } = {}) {
     // ------------------------------------------------------------- shifts ---
     const seededOutlets = [
       { station: stationA, tenant: tenantA, operator: cashierA, approver: ownerA },
-      { station: stationB, tenant: tenantA, operator: cashierA, approver: ownerA },
+      { station: stationB, tenant: tenantA, operator: legacyTestFixtures ? cashierA : userSpecs[3].id, approver: ownerA },
       { station: stationC, tenant: tenantB, operator: ownerB, approver: ownerB },
     ];
     for (let dayOffset = 6; dayOffset >= 1; dayOffset -= 1) {
       const date = businessDate(dayOffset);
-      for (const [outletIndex, outlet] of seededOutlets.entries()) {
+      for (const [outletIndex, outlet] of seededOutlets.filter((o) => legacyTestFixtures || o.tenant === tenantA).entries()) {
         const stationRow = outlet.station;
         // Only the first Sunrise outlet carries the demo variance/flag scenario.
         const flagged = dayOffset === 2 && outletIndex === 0;
@@ -548,7 +555,7 @@ export async function runSeed(options: { force?: boolean } = {}) {
 
     // Open shift for today at every seeded outlet
     const today = businessDate(0);
-    for (const outlet of seededOutlets) {
+    for (const outlet of seededOutlets.filter((o) => legacyTestFixtures || o.tenant === tenantA)) {
       const stationRow = outlet.station;
       const openShiftId = newId('shf');
       run(
@@ -575,7 +582,7 @@ export async function runSeed(options: { force?: boolean } = {}) {
       { id: newId('sup'), tenant: tenantA, code: 'BPCL', name: 'Bharat Petroleum Corporation Ltd', gstin: '27AAACB2902M1ZS', phone: '+91 22 2271 3000', opening: '0' },
       { id: newId('sup'), tenant: tenantB, code: 'HPCL', name: 'Hindustan Petroleum Corporation Ltd', gstin: '27AAACH1118B1ZB', phone: '+91 22 2286 3000', opening: '0' },
     ];
-    for (const supplier of suppliers) {
+    for (const supplier of suppliers.filter((s) => legacyTestFixtures || s.tenant === tenantA)) {
       run(
         `INSERT INTO suppliers (id, tenant_id, code, name, gstin, contact_person, phone, email, address, credit_days, opening_balance, is_active, is_demo, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, 'Depot Sales', ?, ?, 'Pune Depot', 15, ?, 1, 1, ?, ?)`,
@@ -626,7 +633,7 @@ export async function runSeed(options: { force?: boolean } = {}) {
       { tenant: tenantB, code: 'CUST-001', name: 'NH-48 Transporters', phone: '+91 97650 33001', limit: '75000', days: 15 },
     ];
     const customers: Record<string, string> = {};
-    for (const customer of customerSpecs) {
+    for (const customer of customerSpecs.filter((c) => legacyTestFixtures || c.tenant === tenantA)) {
       const id = newId('cus');
       customers[customer.code] = id;
       run(
@@ -921,7 +928,7 @@ export async function runSeed(options: { force?: boolean } = {}) {
 
     // Aaj ki attendance (Baner team).
     {
-      const team = [managerA, cashierA, userSpecs[4].id].filter(Boolean) as string[];
+      const team = (legacyTestFixtures ? [managerA, cashierA, userSpecs[4]?.id] : [managerA]).filter(Boolean) as string[];
       for (const userId of team) {
         run(
           `INSERT INTO attendance_records (id, tenant_id, station_id, user_id, attendance_date, status, in_time, note, marked_by, created_at, updated_at)
@@ -953,7 +960,7 @@ export async function runSeed(options: { force?: boolean } = {}) {
 
   logger.info('Demo seed complete.');
   logger.info(
-    { password: DEMO_PASSWORD, accounts: ['superadmin@petroflow.dev', 'owner@sunrisefuels.in', 'manager@sunrisefuels.in', 'cashier@sunrisefuels.in', 'operator@sunrisefuels.in', 'accounts@sunrisefuels.in', 'owner@highwayenergy.in'] },
+    { password: DEMO_PASSWORD, accounts: ['owner@sunrisefuels.in', 'staff1@sunrisefuels.in', 'staff2@sunrisefuels.in'] },
     'Demo login credentials',
   );
   return { seeded: true, demoPassword: DEMO_PASSWORD };
