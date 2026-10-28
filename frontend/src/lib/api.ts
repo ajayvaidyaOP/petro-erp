@@ -27,7 +27,12 @@ export class ApiError extends Error {
 
 const BASE = '/api/v1';
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+interface ApiResponse<T> {
+  data: T;
+  meta?: ListMeta;
+}
+
+async function requestWithMeta<T>(path: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
   const res = await fetch(`${BASE}${path}`, {
     credentials: 'include',
     ...options,
@@ -37,16 +42,28 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     },
   });
 
-  if (res.status === 204) return undefined as T;
+  if (res.status === 204) return { data: undefined as T };
   const text = await res.text();
-  const body = text ? JSON.parse(text) : {};
+  let body: ApiResponse<T> & { error?: ApiErrorShape };
+  try {
+    body = text ? JSON.parse(text) : {};
+  } catch {
+    throw new ApiError(res.status, {
+      code: 'INVALID_RESPONSE',
+      message: res.ok ? 'The server returned an invalid response' : 'The server is unavailable. Please try again.',
+    });
+  }
   if (!res.ok) {
     throw new ApiError(
       res.status,
-      (body.error as ApiErrorShape) ?? { code: 'ERROR', message: 'Request failed' },
+      body.error ?? { code: 'ERROR', message: 'Request failed' },
     );
   }
-  return body.data as T;
+  return body;
+}
+
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  return (await requestWithMeta<T>(path, options)).data;
 }
 
 export interface ListMeta {
@@ -65,13 +82,19 @@ export function apiGet<T>(path: string, signal?: AbortSignal): Promise<T> {
   return request<T>(path, { signal });
 }
 
-export function apiList<T>(path: string, signal?: AbortSignal): Promise<ListResponse<T>> {
-  return request<ListResponse<T> | T[]>(path, { signal }).then((body) => {
-    if (Array.isArray(body)) {
-      return { data: body, meta: { page: 1, pageSize: body.length, total: body.length, totalPages: 1 } };
-    }
-    return body as ListResponse<T>;
-  });
+/** Use this for endpoints whose data contains extra fields alongside a paginated list. */
+export function apiGetWithMeta<T>(path: string, signal?: AbortSignal): Promise<ApiResponse<T>> {
+  return requestWithMeta<T>(path, { signal });
+}
+
+export async function apiList<T>(path: string, signal?: AbortSignal): Promise<ListResponse<T>> {
+  const { data, meta } = await requestWithMeta<T[]>(path, { signal });
+  if (!Array.isArray(data)) {
+    throw new ApiError(200, { code: 'INVALID_RESPONSE', message: 'The server returned an invalid list' });
+  }
+  // Some endpoints return unpaginated arrays; preserve real pagination whenever
+  // the server supplies it instead of mistaking the current page for the total.
+  return { data, meta: meta ?? { page: 1, pageSize: data.length, total: data.length, totalPages: 1 } };
 }
 
 export function apiPost<T>(path: string, body?: unknown, idempotencyKey?: string): Promise<T> {

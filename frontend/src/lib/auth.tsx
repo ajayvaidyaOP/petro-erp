@@ -1,6 +1,6 @@
-import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiGet, apiPost } from './api';
+import { ApiError, apiGet, apiPost } from './api';
 
 export interface Station {
   id: string;
@@ -15,6 +15,7 @@ export interface AuthUser {
   email: string;
   phone?: string | null;
   roleKey: string;
+  roleName: string;
   tenantId: string | null;
   tenantName?: string | null;
 }
@@ -33,7 +34,7 @@ export interface Me {
   } | null;
   stations: Station[];
   permissions: string[];
-  role: string;
+  roleScope: string;
   isSuperAdmin: boolean;
   demoMode: boolean;
 }
@@ -63,8 +64,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(
     async (email: string, password: string) => {
       await apiPost('/auth/login', { email, password });
-      const me = await queryClient.fetchQuery({ queryKey: ['me'], queryFn: () => apiGet<Me>('/auth/me') });
-      return me;
+      try {
+        return await queryClient.fetchQuery({ queryKey: ['me'], queryFn: () => apiGet<Me>('/auth/me') });
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 401) {
+          throw new Error('Sign-in succeeded, but your browser blocked the session cookie. Open the preview in a new tab or allow site cookies.');
+        }
+        throw error;
+      }
     },
     [queryClient],
   );
@@ -91,7 +98,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [meQuery.data, meQuery.isLoading, login, logout, queryClient]);
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      <StationProvider>{children}</StationProvider>
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {
@@ -108,11 +119,18 @@ export function useLoginMutation() {
 }
 
 /* --------------------------------------------------------------- station */
-import { useEffect, useState } from 'react';
-
 const STORAGE_KEY = 'petroflow.station';
 
-export function useStations() {
+interface StationContextValue {
+  stations: Station[];
+  station: Station | null;
+  stationId: string;
+  selectStation: (id: string) => void;
+}
+
+const StationContext = createContext<StationContextValue | null>(null);
+
+function StationProvider({ children }: { children: ReactNode }) {
   const { me } = useAuth();
   const stations = useMemo(() => me?.stations ?? [], [me]);
   const [stationId, setStationId] = useState<string>(() => localStorage.getItem(STORAGE_KEY) ?? '');
@@ -126,13 +144,31 @@ export function useStations() {
     }
   }, [stations, stationId]);
 
+  // Keep another open tab in sync as well as every component in this tab.
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === STORAGE_KEY) setStationId(event.newValue ?? '');
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
   const selectStation = useCallback((id: string) => {
     setStationId(id);
     localStorage.setItem(STORAGE_KEY, id);
-    // Station scoping affects nearly every query.
     window.dispatchEvent(new CustomEvent('petroflow:station-changed', { detail: id }));
   }, []);
 
   const station = stations.find((s) => s.id === stationId) ?? stations[0] ?? null;
-  return { stations, station, stationId: station?.id ?? '', selectStation };
+  const value = useMemo(
+    () => ({ stations, station, stationId: station?.id ?? '', selectStation }),
+    [stations, station, selectStation],
+  );
+  return <StationContext.Provider value={value}>{children}</StationContext.Provider>;
+}
+
+export function useStations() {
+  const context = useContext(StationContext);
+  if (!context) throw new Error('useStations must be used inside AuthProvider');
+  return context;
 }

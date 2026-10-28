@@ -144,7 +144,7 @@ settingsRouter.put(
     const body = parse(
       z.object({
         stationId: z.string().min(3).optional().nullable(),
-        values: z.record(z.union([z.string(), z.number(), z.boolean()])),
+        values: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
       }),
       req.body,
     );

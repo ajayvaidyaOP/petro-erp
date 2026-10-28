@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Fuel, Gauge, ReceiptText } from 'lucide-react';
 import { apiGet } from '../lib/api';
-import { useStations } from '../lib/auth';
+import { useAuth, useStations } from '../lib/auth';
 import { formatDateTime, formatINR, formatLitres, formatNumber, todayIst } from '../lib/format';
 import {
   Badge,
@@ -74,6 +74,7 @@ interface Nozzle {
 }
 
 export default function Sales() {
+  const { can } = useAuth();
   const { stationId } = useStations();
   const [date, setDate] = useState(todayIst());
   const [tab, setTab] = useState('nozzles');
@@ -82,25 +83,92 @@ export default function Sales() {
   const dsr = useQuery({
     queryKey: ['dsr', stationId, date],
     queryFn: () => apiGet<Dsr>(`/reports/dsr?stationId=${stationId}&date=${date}`),
-    enabled: Boolean(stationId),
+    enabled: Boolean(stationId) && can('reports.read'),
   });
 
   const nozzles = useQuery({
     queryKey: ['nozzles', stationId],
-    queryFn: () => apiGet<Nozzle[]>(`/catalog/nozzles?stationId=${stationId}`),
+    queryFn: () => apiGet<Nozzle[]>(`/catalog/nozzles?stationId=${stationId}&pageSize=100`),
     enabled: Boolean(stationId),
   });
 
+  const selectedNozzle = (nozzles.data ?? []).find((n) => n.id === nozzleId) ?? nozzles.data?.[0];
+  const activeNozzleId = selectedNozzle?.id ?? '';
   const history = useQuery({
-    queryKey: ['nozzle-history', nozzleId],
-    queryFn: () => apiGet<MeterReading[]>(`/catalog/nozzles/${nozzleId}/history`),
-    enabled: Boolean(nozzleId),
+    queryKey: ['nozzle-history', activeNozzleId],
+    queryFn: () => apiGet<MeterReading[]>(`/catalog/nozzles/${activeNozzleId}/history`),
+    enabled: Boolean(activeNozzleId) && can('readings.read') && (tab === 'meter' || !can('reports.read')),
   });
 
   if (!stationId) return <EmptyState title="No station assigned" />;
 
   const data = dsr.data;
-  const selectedNozzle = (nozzles.data ?? []).find((n) => n.id === nozzleId) ?? nozzles.data?.[0];
+  const meterHistory = (
+  <Card className="mt-3">
+    <CardHeader
+      title="Meter reading history"
+      subtitle="Raw totalizer snapshots with source and quality — the audit base for shift calculations"
+      action={
+        <Select
+          value={activeNozzleId}
+          onChange={(e) => setNozzleId(e.target.value)}
+          className="h-9 w-full max-w-[11rem] py-1 text-xs sm:h-8 sm:w-44"
+        >
+          {(nozzles.data ?? []).map((n) => <option key={n.id} value={n.id}>{n.label}</option>)}
+        </Select>
+      }
+    />
+    {!can('readings.read') ? (
+    <EmptyState title="Meter history is not available for your role" />
+  ) : nozzles.isLoading || history.isLoading ? (
+      <LoadingBlock rows={5} />
+    ) : history.isError ? (
+      <ErrorState error={history.error} onRetry={() => void history.refetch()} />
+    ) : (history.data ?? []).length === 0 ? (
+      <EmptyState title="No readings for this nozzle" description="Use the simulator or manual entry to capture a totalizer." />
+    ) : (
+      <div className="table-wrap">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Read at</th>
+              <th className="text-right">Totalizer</th>
+              <th className="text-right">Delta</th>
+              <th>Quality</th>
+              <th>Source</th>
+              <th>Sequence</th>
+              <th>Note</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(history.data ?? []).map((reading) => (
+              <tr key={reading.id}>
+                <td className="text-xs text-ink-300">{formatDateTime(reading.readingAt)}</td>
+                <td className="num text-right">{formatNumber(reading.readingValue, 3)} {reading.unit}</td>
+                <td className="num text-right">{reading.deltaLitres ? formatLitres(reading.deltaLitres) : '—'}</td>
+                <td><StatusBadge status={reading.quality} /></td>
+                <td><Badge tone={reading.source === 'SIMULATOR' ? 'warning' : reading.source === 'MANUAL' ? 'info' : 'neutral'}>{reading.source}</Badge></td>
+                <td className="num text-xs text-ink-500">{reading.sequence}</td>
+                <td className="max-w-[260px] text-[11px] text-ink-500">{reading.note ?? '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </Card>
+  );
+
+  // The operator role can read meters but not the financial DSR. Give it the
+  // permitted history screen rather than requesting a forbidden report.
+  if (!can('reports.read')) {
+    return (
+      <>
+        <PageHeader title="Nozzle sales & meter history" description="Meter readings for your assigned station. Financial reports require additional access." />
+        {meterHistory}
+      </>
+    );
+  }
 
   return (
     <>
@@ -197,59 +265,7 @@ export default function Sales() {
             </Card>
           )}
 
-          {tab === 'meter' && (
-            <Card className="mt-3">
-              <CardHeader
-                title="Meter reading history"
-                subtitle="Raw totalizer snapshots with source and quality — the audit base for shift calculations"
-                action={
-                  <Select
-                    value={nozzleId || selectedNozzle?.id || ''}
-                    onChange={(e) => setNozzleId(e.target.value)}
-                    className="h-9 w-full max-w-[11rem] py-1 text-xs sm:h-8 sm:w-44"
-                  >
-                    {(nozzles.data ?? []).map((n) => <option key={n.id} value={n.id}>{n.label}</option>)}
-                  </Select>
-                }
-              />
-              {history.isLoading ? (
-                <LoadingBlock rows={5} />
-              ) : history.isError ? (
-                <ErrorState error={history.error} onRetry={() => void history.refetch()} />
-              ) : (history.data ?? []).length === 0 ? (
-                <EmptyState title="No readings for this nozzle" description="Use the simulator or manual entry to capture a totalizer." />
-              ) : (
-                <div className="table-wrap">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Read at</th>
-                        <th className="text-right">Totalizer</th>
-                        <th className="text-right">Delta</th>
-                        <th>Quality</th>
-                        <th>Source</th>
-                        <th>Sequence</th>
-                        <th>Note</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(history.data ?? []).map((reading) => (
-                        <tr key={reading.id}>
-                          <td className="text-xs text-ink-300">{formatDateTime(reading.readingAt)}</td>
-                          <td className="num text-right">{formatNumber(reading.readingValue, 3)} {reading.unit}</td>
-                          <td className="num text-right">{reading.deltaLitres ? formatLitres(reading.deltaLitres) : '—'}</td>
-                          <td><StatusBadge status={reading.quality} /></td>
-                          <td><Badge tone={reading.source === 'SIMULATOR' ? 'warning' : reading.source === 'MANUAL' ? 'info' : 'neutral'}>{reading.source}</Badge></td>
-                          <td className="num text-xs text-ink-500">{reading.sequence}</td>
-                          <td className="max-w-[260px] text-[11px] text-ink-500">{reading.note ?? '—'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </Card>
-          )}
+          {tab === 'meter' && meterHistory}
 
           {tab === 'products' && (
             <Card className="mt-3">

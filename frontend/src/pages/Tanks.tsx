@@ -92,7 +92,7 @@ export default function Tanks() {
   const overview = useQuery({
     queryKey: ['stock', stationId],
     queryFn: () => apiGet<StockOverview>(`/inventory/stock?stationId=${stationId}`),
-    enabled: Boolean(stationId),
+    enabled: Boolean(stationId) && can('stock.read'),
     refetchInterval: 60_000,
   });
 
@@ -105,7 +105,7 @@ export default function Tanks() {
   const movements = useQuery({
     queryKey: ['stock-movements', stationId, page],
     queryFn: () => apiList<Movement>(`/inventory/movements?stationId=${stationId}&page=${page}&pageSize=15`),
-    enabled: Boolean(stationId),
+    enabled: Boolean(stationId) && can('stock.read'),
   });
 
   const ledger = useQuery({
@@ -158,6 +158,7 @@ export default function Tanks() {
   });
 
   if (!stationId) return <EmptyState title="No station assigned" />;
+  if (!can('stock.read')) return <EmptyState title="Stock access required" description="Ask your organization owner for stock access." />;
 
   const data = overview.data;
   const tanks = data?.tanks ?? [];

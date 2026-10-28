@@ -23,11 +23,13 @@
     "build": "npm run build -w @petroflow/web && npm run build -w @petroflow/server",
     "typecheck": "npm run typecheck -w @petroflow/shared && npm run typecheck -w @petroflow/server && npm run typecheck -w @petroflow/web && npm run typecheck -w @petroflow/gateway",
     "test": "npm run test -w @petroflow/server",
+    "test:e2e": "playwright test",
     "db:reset": "npm run db:reset -w @petroflow/server",
     "db:seed": "npm run db:seed -w @petroflow/server",
     "db:mysql-ddl": "node scripts/generate-mysql-ddl.mjs"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "concurrently": "^9.1.0"
   }
 }

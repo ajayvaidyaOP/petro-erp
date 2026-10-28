@@ -12,6 +12,8 @@ export default defineConfig(({ mode }) => {
   const rootEnv = loadEnv(mode, repositoryRoot, '');
   const apiProxyTarget =
     process.env.PETROFLOW_API_URL || rootEnv.PETROFLOW_API_URL || 'http://127.0.0.1:4000';
+  const hmrClientPort = process.env.PETROFLOW_HMR_CLIENT_PORT || rootEnv.PETROFLOW_HMR_CLIENT_PORT
+    || (process.env.E2B_SANDBOX ? '443' : '');
 
   return {
     root: frontendRoot,
@@ -29,7 +31,9 @@ export default defineConfig(({ mode }) => {
           secure: false,
         },
       },
-      hmr: { clientPort: 443 },
+      // Preview traffic is proxied over HTTPS; ordinary localhost development
+      // should use Vite's own port rather than trying to connect to port 443.
+      hmr: hmrClientPort ? { clientPort: Number(hmrClientPort) } : undefined,
     },
     preview: {
       host: '0.0.0.0',

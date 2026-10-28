@@ -2,7 +2,7 @@ import { lazy, Suspense, type ReactNode } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from './lib/auth';
 import { Layout } from './components/Layout';
-import { PageLoader } from './components/ui';
+import { EmptyState, PageLoader } from './components/ui';
 
 // Route-level code splitting: the shell (auth, layout, routing) loads up front and
 // each screen is fetched on demand, which keeps the first paint fast on forecourt
@@ -58,6 +58,14 @@ function AdminOnly({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+function TenantHome() {
+  const { can } = useAuth();
+  if (can('reports.read')) return <Dashboard />;
+  if (can('shifts.read')) return <Navigate to="/shifts" replace />;
+  if (can('readings.read')) return <Navigate to="/readings" replace />;
+  return <EmptyState title="No permitted screens" description="Ask your organization owner to grant access." />;
+}
+
 export default function App() {
   const { isAuthenticated, me } = useAuth();
 
@@ -80,7 +88,7 @@ export default function App() {
             index
             element={
               <TenantOnly>
-                <Dashboard />
+                <TenantHome />
               </TenantOnly>
             }
           />

@@ -54,18 +54,18 @@ interface Nozzle {
 }
 
 interface Diagnostics {
-  devices: { id: string; name: string; online: boolean; lastSyncAt: string | null; computedStatus: string }[];
+  devices: { id: string; name: string; online: boolean }[];
   eventCounts: Record<string, number>;
   qualityCounts: Record<string, number>;
-  lastSyncAt: string | null;
+  lastEventAt: string | null;
   realHardwareVerified: boolean;
-  note: string;
+  disclaimer: string;
 }
 
 const qualities = ['VALID', 'SUSPICIOUS', 'NEGATIVE', 'STALE', 'RESET', 'GAP'];
 
 export default function Readings() {
-  const { can } = useAuth();
+  const { can, me } = useAuth();
   const { stationId, station } = useStations();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -81,14 +81,14 @@ export default function Readings() {
 
   const nozzles = useQuery({
     queryKey: ['nozzles', stationId],
-    queryFn: () => apiGet<Nozzle[]>(`/catalog/nozzles?stationId=${stationId}`),
+    queryFn: () => apiGet<Nozzle[]>(`/catalog/nozzles?stationId=${stationId}&pageSize=100`),
     enabled: Boolean(stationId),
   });
 
   const diagnostics = useQuery({
     queryKey: ['diagnostics', stationId],
     queryFn: () => apiGet<Diagnostics>(`/hardware/diagnostics?stationId=${stationId}`),
-    enabled: Boolean(stationId),
+    enabled: Boolean(stationId) && can('devices.read'),
     refetchInterval: 20_000,
   });
 
@@ -103,10 +103,10 @@ export default function Readings() {
   });
 
   const simulate = useMutation({
-    mutationFn: () => apiPost<{ results: { status: string; quality?: string }[]; disclaimer: string }>('/demo/simulate', { stationId, count: 5 }),
+    mutationFn: () => apiPost<{ generated: { eventId: string }[] }>('/demo/simulate', { stationId, events: 5 }),
     onSuccess: (result) => {
       toast('Simulated readings ingested', {
-        description: `${result.results.filter((r) => r.status === 'PROCESSED').length} accepted · marked SIMULATED`,
+        description: `${result.generated.length} generated · marked SIMULATED`,
       });
       void queryClient.invalidateQueries({ queryKey: ['readings'] });
       void queryClient.invalidateQueries({ queryKey: ['diagnostics'] });
@@ -148,7 +148,7 @@ export default function Readings() {
         description={`${station?.name ?? ''} · raw device snapshots and validated meter readings with quality status`}
         actions={
           <>
-            <Button size="sm" variant="ghost" icon={<RefreshCw className="h-3.5 w-3.5" />} onClick={() => { void list.refetch(); void diagnostics.refetch(); }}>
+            <Button size="sm" variant="ghost" icon={<RefreshCw className="h-3.5 w-3.5" />} onClick={() => { void list.refetch(); if (can('devices.read')) void diagnostics.refetch(); }}>
               Refresh
             </Button>
             {can('readings.manual') && (
@@ -164,7 +164,7 @@ export default function Readings() {
                 Manual entry
               </Button>
             )}
-            {can('devices.write') && (
+            {me?.demoMode && can('devices.write') && (
               <Button size="sm" variant="primary" icon={<FlaskConical className="h-4 w-4" />} onClick={() => simulate.mutate()} loading={simulate.isPending}>
                 Simulate readings
               </Button>
@@ -180,19 +180,23 @@ export default function Readings() {
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Readings stored" value={list.data?.meta.total ?? 0} hint="Validated meter readings" icon={<Activity className="h-4 w-4" />} />
-        <StatCard label="Quality exceptions" value={invalid} hint="Non-countable or flagged snapshots" icon={<Cpu className="h-4 w-4" />} tone={invalid > 0 ? 'warning' : 'success'} />
-        <StatCard
-          label="Gateways online"
-          value={`${diagnostics.data?.devices.filter((d) => d.online).length ?? 0}/${diagnostics.data?.devices.length ?? 0}`}
-          hint={`Last sync ${timeAgo(diagnostics.data?.lastSyncAt)}`}
-          icon={<Radio className="h-4 w-4" />}
-        />
-        <StatCard
-          label="Raw events (24h window)"
-          value={Object.values(diagnostics.data?.eventCounts ?? {}).reduce((a, b) => a + b, 0)}
-          hint={Object.entries(diagnostics.data?.eventCounts ?? {}).map(([k, v]) => `${k} ${v}`).join(' · ') || 'No events yet'}
-          icon={<Cpu className="h-4 w-4" />}
-        />
+        {can('devices.read') && (
+          <>
+            <StatCard label="Quality exceptions" value={diagnostics.data ? invalid : '—'} hint="Non-countable or flagged snapshots" icon={<Cpu className="h-4 w-4" />} tone={invalid > 0 ? 'warning' : 'success'} />
+            <StatCard
+              label="Gateways online"
+              value={diagnostics.data ? `${diagnostics.data.devices.filter((d) => d.online).length}/${diagnostics.data.devices.length}` : '—'}
+              hint={`Last event ${timeAgo(diagnostics.data?.lastEventAt)}`}
+              icon={<Radio className="h-4 w-4" />}
+            />
+            <StatCard
+              label="Raw events"
+              value={diagnostics.data ? Object.values(diagnostics.data.eventCounts).reduce((a, b) => a + b, 0) : '—'}
+              hint={Object.entries(diagnostics.data?.eventCounts ?? {}).map(([k, v]) => `${k} ${v}`).join(' · ') || 'No events yet'}
+              icon={<Cpu className="h-4 w-4" />}
+            />
+          </>
+        )}
       </div>
 
       <Card className="mt-3">
@@ -227,7 +231,7 @@ export default function Readings() {
           <EmptyState
             title="No readings match the filters"
             description="Use the simulator to generate test events or record a manual fallback reading."
-            action={can('devices.write') ? <Button size="sm" variant="primary" onClick={() => simulate.mutate()}>Simulate readings</Button> : undefined}
+            action={me?.demoMode && can('devices.write') ? <Button size="sm" variant="primary" onClick={() => simulate.mutate()}>Simulate readings</Button> : undefined}
           />
         ) : (
           <>

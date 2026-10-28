@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowDownLeft, ArrowUpRight, Banknote, Plus, Receipt, RotateCcw, Wallet } from 'lucide-react';
-import { apiDelete, apiGet, apiList, apiPatch, apiPost, idempotencyKey, type ListMeta } from '../lib/api';
+import { apiDelete, apiGet, apiGetWithMeta, apiList, apiPatch, apiPost, idempotencyKey, type ListMeta } from '../lib/api';
 import { useAuth, useStations } from '../lib/auth';
 import { formatDate, formatDateTime, formatINR, todayIst } from '../lib/format';
 import {
@@ -108,7 +108,12 @@ export default function Finance() {
 
   const expenses = useQuery({
     queryKey: ['expenses', stationId, date, page],
-    queryFn: () => apiList<Expense>(`/finance/expenses?stationId=${stationId}&from=${date}&to=${date}&page=${page}&pageSize=15`),
+    queryFn: async () => {
+      const response = await apiGetWithMeta<{ expenses: Expense[]; totalAmount: string }>(
+        `/finance/expenses?stationId=${stationId}&from=${date}&to=${date}&page=${page}&pageSize=15`,
+      );
+      return { data: response.data.expenses, meta: response.meta };
+    },
     enabled: Boolean(stationId) && tab === 'expenses',
   });
 

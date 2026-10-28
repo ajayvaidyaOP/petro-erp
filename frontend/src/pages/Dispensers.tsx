@@ -51,8 +51,8 @@ interface Device {
   id: string;
   hardwareCode: string;
   status: string;
+  online: boolean;
   lastHeartbeatAt: string | null;
-  mode: string;
 }
 
 export default function Dispensers() {
@@ -83,7 +83,7 @@ export default function Dispensers() {
   const devices = useQuery<Device[]>({
     queryKey: ['devices', stationId],
     queryFn: () => apiGet<Device[]>(`/devices?stationId=${stationId}&pageSize=100`),
-    enabled: Boolean(stationId),
+    enabled: Boolean(stationId) && can('devices.read'),
   });
 
   const productMap = new Map((products.data ?? []).map((p) => [p.id, p]));
@@ -169,11 +169,13 @@ export default function Dispensers() {
           tone={unmapped ? 'danger' : 'success'}
           hint="A nozzle without a valid product cannot value sales."
         />
-        <StatCard
-          label="Online gateways"
-          value={(devices.data ?? []).filter((d) => d.status === 'ONLINE').length}
-          hint="Gateways push readings; no direct browser-to-hardware calls."
-        />
+        {can('devices.read') && (
+          <StatCard
+            label="Online gateways"
+            value={(devices.data ?? []).filter((d) => d.online).length}
+            hint="Gateways push readings; no direct browser-to-hardware calls."
+          />
+        )}
       </div>
 
       {dispensers.isLoading ? (

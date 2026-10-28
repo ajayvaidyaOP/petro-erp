@@ -22,8 +22,16 @@ import { settingsRouter } from './routes/settings.js';
 import { newId } from './lib/ids.js';
 import { nowIso } from './lib/time.js';
 import { logger } from './lib/logger.js';
+import { isDevelopmentPreviewRequest } from './lib/preview.js';
 
-function originGuard(req: Request, res: Response, next: NextFunction) {
+function isDevelopmentOrigin(origin: string, req: Request) {
+  if (env.NODE_ENV !== 'development') return false;
+  // Development only: allow local dev origins and this sandbox's preview host.
+  return /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin)
+    || isDevelopmentPreviewRequest(req);
+}
+
+function originGuard(req: Request, _res: Response, next: NextFunction) {
   if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
   const origin = req.header('origin');
   if (!origin) return next(); // non-browser client (curl, gateway) — no ambient cookie auth risk
@@ -31,15 +39,8 @@ function originGuard(req: Request, res: Response, next: NextFunction) {
     ...env.ALLOWED_ORIGINS,
     `${req.protocol}://${req.get('host')}`,
   ]);
-  if (!allowed.has(origin)) {
-    if (env.NODE_ENV !== 'development') {
-      return next(new AppError(403, 'BAD_ORIGIN', 'Cross-origin request blocked'));
-    }
-    // Development only: Vite may be reached through a proxied preview host.
-    if (/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin)) return next();
-    if (/^https:\/\/[\w.-]+\.e2b\.app$/.test(origin)) return next();
-  }
-  next();
+  if (allowed.has(origin) || isDevelopmentOrigin(origin, req)) return next();
+  return next(new AppError(403, 'BAD_ORIGIN', 'Cross-origin request blocked'));
 }
 
 export function createApp() {
@@ -62,8 +63,7 @@ export function createApp() {
   app.use((req, res, next) => {
     const origin = req.header('origin');
     if (!origin) return next();
-    const devLike = env.NODE_ENV === 'development' && (origin.startsWith('http://localhost:') || origin.includes('e2b.app'));
-    if (env.ALLOWED_ORIGINS.includes(origin) || devLike) {
+    if (env.ALLOWED_ORIGINS.includes(origin) || isDevelopmentOrigin(origin, req)) {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Access-Control-Allow-Credentials', 'true');
       res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Idempotency-Key, X-Device-Key, X-Request-Id');
@@ -93,11 +93,21 @@ export function createApp() {
     skip: (req) => req.path === '/api/v1/health',
   });
   const loginLimiter = rateLimit({
-    windowMs: 15 * 60_000,
-    limit: env.isTest ? 100_000 : 20,
+    windowMs: env.RATE_LIMIT_WINDOW_MINUTES * 60_000,
+    limit: env.LOGIN_RATE_LIMIT_MAX,
+    // Successful sign-ins must not exhaust the failed-credential limit for
+    // other users who share a preview proxy or station network.
+    skipSuccessfulRequests: true,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     message: { error: { code: 'RATE_LIMITED', message: 'Too many login attempts. Try again later.' } },
+  });
+  const passwordLimiter = rateLimit({
+    windowMs: env.RATE_LIMIT_WINDOW_MINUTES * 60_000,
+    limit: env.LOGIN_RATE_LIMIT_MAX,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error: { code: 'RATE_LIMITED', message: 'Too many password attempts. Try again later.' } },
   });
 
   const v1 = express.Router();
@@ -114,7 +124,11 @@ export function createApp() {
       },
     });
   });
-  v1.use('/auth', loginLimiter, authRouter);
+  // Limit credential attempts, not session reads/logout/demo discovery. Applying
+  // the login limiter to every auth route locked out active users after refreshes.
+  v1.use('/auth/login', loginLimiter);
+  v1.use('/auth/change-password', passwordLimiter);
+  v1.use('/auth', authRouter);
 
   v1.use('/admin', adminRouter);
   v1.use('/catalog', requireAuth, catalogRouter);
