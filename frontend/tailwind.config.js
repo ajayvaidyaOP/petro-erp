@@ -66,6 +66,8 @@ export default {
         9.5: '2.375rem',
       },
       fontFamily: {
+        // Sora for headings/brand/numbers — geometric, "instrument panel" feel.
+        display: ['Sora', 'Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         sans: [
           'Inter',
           'Inter var',
@@ -84,6 +86,7 @@ export default {
         card: 'var(--shadow-card)',
         focus: 'var(--shadow-focus)',
         pop: 'var(--shadow-pop)',
+        glow: 'var(--shadow-glow)',
       },
       borderRadius: {
         '4xl': '1.75rem',

@@ -73,35 +73,38 @@ export default function Login() {
 
   return (
     <div className="grid min-h-dvh lg:grid-cols-[1.05fr_1fr]">
-      <div className="relative hidden flex-col justify-between overflow-hidden border-r border-navy-800 bg-navy-900/40 p-10 lg:flex">
-        <div className="absolute inset-0 opacity-60 [background:radial-gradient(600px_400px_at_20%_10%,rgba(56,189,248,0.12),transparent_60%),radial-gradient(500px_400px_at_80%_90%,rgba(45,212,191,0.08),transparent_60%)]" />
+      <div className="relative hidden flex-col justify-between overflow-hidden border-r border-navy-700/40 bg-gradient-to-br from-navy-900 via-navy-950 to-navy-900 p-10 lg:flex">
+        <div className="absolute inset-0 opacity-70 [background:radial-gradient(640px_420px_at_15%_8%,rgba(249,115,22,0.16),transparent_60%),radial-gradient(520px_420px_at_85%_92%,rgba(245,158,11,0.10),transparent_60%)]" />
         <div className="relative">
           <div className="flex items-center gap-3">
-            <div className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-accent to-accent-teal text-onaccent">
-              <Fuel className="h-5 w-5" strokeWidth={2.5} />
+            <div className="brand-gradient grid h-12 w-12 place-items-center rounded-2xl text-onaccent shadow-glow">
+              <Fuel className="h-6 w-6" strokeWidth={2.5} />
             </div>
             <div>
-              <p className="text-lg font-semibold tracking-tight text-ink-100">PetroFlow ERP</p>
-              <p className="text-[11px] uppercase tracking-[0.2em] text-ink-500">Forecourt operations platform</p>
+              <p className="font-display text-xl font-bold tracking-tight text-ink-100">
+                Petro<span className="text-accent">Flow</span> ERP
+              </p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-ink-500">Petrol Pump Management · India</p>
             </div>
           </div>
-          <h1 className="mt-14 max-w-lg text-4xl font-semibold leading-[1.1] tracking-tight text-ink-100">
-            Run every nozzle, tank and rupee with confidence.
+          <h1 className="mt-14 max-w-lg font-display text-4xl font-bold leading-[1.12] tracking-tight text-ink-100">
+            Har nozzle, har tank,<br />
+            har rupay ka <span className="text-accent">pakka hisaab.</span>
           </h1>
           <p className="mt-4 max-w-md text-sm leading-relaxed text-ink-400">
-            Multi-tenant petrol pump management built for India — totalizer capture, shift controls, stock ledgers,
-            credit accounting and hardware gateway monitoring in one auditable system.
+            Totalizer readings, shift settlement, dip-stock, credit-udhaar aur DSR — pump ka poora din
+            ek hi system me, bina register-ghisi ke. Built for Indian petrol pumps.
           </p>
           <div className="mt-10 grid max-w-lg grid-cols-2 gap-3">
             {[
-              { icon: <Gauge className="h-4 w-4" />, title: 'Totalizer pipeline', text: 'Validated device readings with duplicate protection' },
-              { icon: <Lock className="h-4 w-4" />, title: 'Tenant isolation', text: 'Server-enforced access boundaries' },
-              { icon: <ShieldCheck className="h-4 w-4" />, title: 'Audit trail', text: 'Financial and hardware actions recorded' },
-              { icon: <Sparkles className="h-4 w-4" />, title: 'Variance controls', text: 'Flagged readings need human approval' },
+              { icon: <Gauge className="h-4 w-4" />, title: 'Meter reading control', text: 'Galat totalizer kabhi chup-chaap sale nahi banta' },
+              { icon: <Lock className="h-4 w-4" />, title: 'Role-wise access', text: 'Owner, manager, cashier, operator — sabke alag haq' },
+              { icon: <ShieldCheck className="h-4 w-4" />, title: 'Pura audit trail', text: 'Kisne kya badla — har entry record' },
+              { icon: <Sparkles className="h-4 w-4" />, title: 'Stock variance alert', text: 'Dip aur book-stock ka farak turant pakdo' },
             ].map((item) => (
-              <div key={item.title} className="rounded-xl border border-navy-700/70 bg-navy-850/60 p-3">
-                <div className="mb-1.5 text-accent">{item.icon}</div>
-                <p className="text-xs font-medium text-ink-200">{item.title}</p>
+              <div key={item.title} className="rounded-2xl border border-navy-700/60 bg-navy-850/70 p-3.5 backdrop-blur">
+                <div className="mb-2 grid h-8 w-8 place-items-center rounded-lg bg-accent/12 text-accent">{item.icon}</div>
+                <p className="text-xs font-semibold text-ink-100">{item.title}</p>
                 <p className="mt-0.5 text-[11px] leading-relaxed text-ink-500">{item.text}</p>
               </div>
             ))}
@@ -116,18 +119,20 @@ export default function Login() {
       <div className="flex items-center justify-center px-4 py-10 sm:px-8">
         <div className="w-full max-w-md">
           <div className="mb-6 flex items-center gap-3 lg:hidden">
-            <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-accent to-accent-teal text-onaccent">
+            <div className="brand-gradient grid h-11 w-11 place-items-center rounded-2xl text-onaccent shadow-glow">
               <Fuel className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-base font-semibold text-ink-100">PetroFlow ERP</p>
-              <p className="text-[10px] uppercase tracking-[0.2em] text-ink-500">Forecourt operations</p>
+              <p className="font-display text-lg font-bold text-ink-100">
+                Petro<span className="text-accent">Flow</span> ERP
+              </p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-500">Petrol Pump Management</p>
             </div>
           </div>
 
           <div className="card p-6">
-            <h2 className="text-lg font-semibold text-ink-100">Sign in</h2>
-            <p className="mt-1 text-xs text-ink-500">Use your organization credentials. Sessions are server-side.</p>
+            <h2 className="font-display text-xl font-bold tracking-tight text-ink-100">Sign in</h2>
+            <p className="mt-1 text-xs text-ink-500">Apne pump ke credentials se login karo. Sessions are server-side.</p>
 
             <form onSubmit={submit} className="mt-5 space-y-4">
               <label className="block">

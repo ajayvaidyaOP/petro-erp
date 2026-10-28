@@ -17,9 +17,17 @@ petro-erp/
 └── README.md
 ```
 
+## Petrol-pump audit & roadmap
+
+`docs/PETROL-PUMP-ERP-AUDIT.md` contains a full domain audit of this codebase against how an Indian
+petrol pump actually runs — what is correct, what is risky (e.g. the nozzle→tank allocation), the
+complete feature checklist a pump ERP needs, and the phased roadmap to get there.
+
 ## Theming
 
-The UI ships with dark (default) and light themes. Every colour resolves through CSS
+The UI uses the **Forecourt** design system: fuel orange/amber brand gradient, warm graphite (dark)
+and warm paper (light) surfaces, Sora display type for headings and figures, and a phone-friendly
+bottom navigation for forecourt staff. It ships with dark (default) and light themes. Every colour resolves through CSS
 custom properties defined in `frontend/src/index.css` and exposed to Tailwind in
 `frontend/tailwind.config.js`, so switching `data-theme` on `<html>` re-tints the whole
 app — components only ever reference semantic tokens:
