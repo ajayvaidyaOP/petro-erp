@@ -6,8 +6,7 @@ import type { Express } from 'express';
 let app: Express;
 let ownerAgent: ReturnType<typeof request.agent>;
 let ownerBAgent: ReturnType<typeof request.agent>;
-let cashierAgent: ReturnType<typeof request.agent>;
-let operatorAgent: ReturnType<typeof request.agent>;
+let managerAgent: ReturnType<typeof request.agent>;
 let stationAId: string;
 let stationBId: string;
 let shiftId: string;
@@ -34,8 +33,7 @@ beforeAll(async () => {
 
   ownerAgent = await login('owner@sunrisefuels.in');
   ownerBAgent = await login('owner@highwayenergy.in');
-  cashierAgent = await login('cashier@sunrisefuels.in');
-  operatorAgent = await login('operator@sunrisefuels.in');
+  managerAgent = await login('manager@sunrisefuels.in');
 
   const me = await ownerAgent.get('/api/v1/auth/me');
   const stations = me.body.data.stations as { id: string; code: string }[];
@@ -109,16 +107,17 @@ describe('authentication & authorization', () => {
     expect(res.status).toBe(403);
   });
 
-  it('enforces permission boundaries for cashier and operator roles', async () => {
-    const product = await cashierAgent.post('/api/v1/catalog/products').send({
+  it('enforces owner-only setup boundaries for the manager', async () => {
+    const product = await managerAgent.post('/api/v1/catalog/products').send({
       code: 'HACK', name: 'Unauthorised product', category: 'PETROL',
     });
     expect(product.status).toBe(403);
 
-    const approve = await operatorAgent.post(`/api/v1/shifts/${shiftId}/approve`).send({});
-    expect(approve.status).toBe(403);
+    expect((await managerAgent.post('/api/v1/catalog/prices').send({})).status).toBe(403);
+    expect((await managerAgent.get('/api/v1/settings')).status).toBe(403);
+    expect((await managerAgent.post('/api/v1/catalog/employees').send({})).status).toBe(403);
 
-    const read = await operatorAgent.get('/api/v1/shifts');
+    const read = await managerAgent.get('/api/v1/shifts');
     expect(read.status).toBe(200);
   });
 
@@ -185,8 +184,8 @@ describe('tenant isolation', () => {
     expect([403, 404]).toContain(res.status);
   });
 
-  it('prevents cashier from opening a shift at an unauthorised station', async () => {
-    const res = await cashierAgent.post('/api/v1/shifts').send({ stationId: stationBId });
+  it('prevents manager from opening a shift at an unauthorised station', async () => {
+    const res = await managerAgent.post('/api/v1/shifts').send({ stationId: stationBId });
     expect(res.status).toBe(403);
   });
 
@@ -203,7 +202,7 @@ describe('tenant isolation', () => {
         expect(res.body.data.count).toBeGreaterThan(0);
         expect(res.body.data.alerts.every((row: { stationId: string }) => row.stationId === id)).toBe(true);
       }
-      expect((await cashierAgent.get(`/api/v1/shifts/alerts?stationId=${stationBId}`)).status).toBe(403);
+      expect((await managerAgent.get(`/api/v1/shifts/alerts?stationId=${stationBId}`)).status).toBe(403);
     } finally {
       for (const shift of open) run('UPDATE shifts SET opened_at = ? WHERE id = ?', [shift.opened_at, shift.id]);
     }

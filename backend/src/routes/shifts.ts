@@ -362,7 +362,7 @@ shiftRouter.post(
       ]);
       if (!operator) throw notFound('Operator not found');
       if (!auth.allStations && !get('SELECT id FROM user_station_access WHERE user_id = ? AND station_id = ?', [body.operatorId, station.id])) throw forbidden('Operator is not assigned to this station');
-      if (!['OPERATOR', 'CASHIER', 'MANAGER', 'OWNER', 'STAFF'].includes(String(operator.role_key))) {
+      if (!['MANAGER', 'OWNER'].includes(String(operator.role_key))) {
         throw unprocessable('Selected employee cannot be assigned as a shift operator');
       }
     }

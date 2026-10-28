@@ -2,275 +2,126 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ===========================================================================
-   PetroFlow 2.0 — "Forecourt" design tokens
-   ---------------------------------------------------------------------------
-   Petrol-pump ki pehchan: fuel-orange/amber brand, warm graphite surfaces.
-   Every colour resolves through these custom properties, so dark and light
-   themes are one palette swap apart. Values are space-separated RGB channels
-   to keep Tailwind's `/opacity` modifiers working.
-
-   navy-*  = surfaces (950 page canvas → 600 strongest border)  [warm graphite]
-   ink-*   = text     (100 strongest    → 600 faintest)         [warm ink]
-   accent  = fuel orange · accent-teal = amber (brand gradient pair)
-   on-accent = foreground used on brand-coloured surfaces
-   =========================================================================== */
+/* PetroFlow 2.0: a quiet, light-first workspace with a petrol-green accent.
+   Semantic token names are retained so every existing screen themes correctly. */
 @layer base {
-  :root,
-  [data-theme='dark'] {
-    color-scheme: dark;
-
-    --navy-950: 10 13 18;
-    --navy-900: 14 19 26;
-    --navy-850: 19 26 36;
-    --navy-800: 26 35 48;
-    --navy-750: 33 44 60;
-    --navy-700: 43 57 76;
-    --navy-600: 59 77 102;
-
-    --ink-100: 247 243 239;
-    --ink-200: 228 223 216;
-    --ink-300: 197 191 182;
-    --ink-400: 158 152 145;
-    --ink-500: 126 121 115;
-    --ink-600: 101 97 93;
-
-    --accent: 249 115 22;
-    --accent-soft: 234 88 12;
-    --accent-teal: 245 158 11;
-    --on-accent: 28 14 2;
-    --scrim: 3 5 8;
-    --inset: 7 10 15;
-    --ok: 110 231 183;
-    --warn: 252 211 77;
-    --danger: 253 164 175;
-    --info: 125 211 252;
-
-    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.45), 0 12px 32px -18px rgb(0 0 0 / 0.85),
-      inset 0 1px 0 0 rgb(255 255 255 / 0.04);
-    --shadow-focus: 0 0 0 3px rgb(249 115 22 / 0.25);
-    --shadow-pop: 0 16px 48px -12px rgb(0 0 0 / 0.8), 0 2px 10px -2px rgb(0 0 0 / 0.55);
-    --shadow-glow: 0 10px 32px -10px rgb(249 115 22 / 0.55);
-
-    /* Ambient page glow — forecourt lamp light behind the whole app. */
-    --glow-a: 249 115 22;
-    --glow-b: 245 158 11;
-    --glow-a-strength: 0.09;
-    --glow-b-strength: 0.05;
-  }
-
-  [data-theme='light'] {
+  :root, [data-theme='light'] {
     color-scheme: light;
-
-    --navy-950: 247 245 241;
+    --navy-950: 246 248 247;
     --navy-900: 255 255 255;
     --navy-850: 255 255 255;
-    --navy-800: 243 240 234;
-    --navy-750: 236 231 221;
-    --navy-700: 224 217 203;
-    --navy-600: 199 189 169;
-
-    --ink-100: 24 20 16;
-    --ink-200: 48 42 35;
-    --ink-300: 74 66 57;
-    --ink-400: 100 90 79;
-    --ink-500: 124 112 99;
-    --ink-600: 142 130 115;
-
-    --accent: 234 88 12;
-    --accent-soft: 194 65 12;
-    --accent-teal: 217 119 6;
+    --navy-800: 241 245 243;
+    --navy-750: 232 239 235;
+    --navy-700: 222 231 226;
+    --navy-600: 193 208 200;
+    --ink-100: 24 43 36;
+    --ink-200: 48 66 59;
+    --ink-300: 73 91 82;
+    --ink-400: 99 115 106;
+    --ink-500: 98 116 106;
+    --ink-600: 106 122 112;
+    --accent: 13 124 91;
+    --accent-soft: 9 105 77;
+    --accent-teal: 24 151 108;
     --on-accent: 255 255 255;
-    --scrim: 24 20 16;
-    --inset: 243 240 234;
-    --ok: 4 120 87;
-    --warn: 180 83 9;
-    --danger: 190 18 60;
-    --info: 3 105 161;
-
-    --shadow-card: 0 1px 2px rgb(46 32 14 / 0.05), 0 12px 32px -18px rgb(46 32 14 / 0.18);
-    --shadow-focus: 0 0 0 3px rgb(234 88 12 / 0.18);
-    --shadow-pop: 0 16px 48px -12px rgb(46 32 14 / 0.22), 0 2px 10px -2px rgb(46 32 14 / 0.1);
-    --shadow-glow: 0 10px 32px -10px rgb(234 88 12 / 0.4);
-
-    --glow-a: 234 88 12;
-    --glow-b: 217 119 6;
-    --glow-a-strength: 0.05;
-    --glow-b-strength: 0.04;
+    --scrim: 12 29 23;
+    --inset: 243 246 244;
+    --ok: 16 122 83;
+    --warn: 161 98 7;
+    --danger: 190 40 57;
+    --info: 38 105 160;
+    --shadow-card: 0 2px 4px rgb(20 45 32 / 0.015), 0 5px 18px -12px rgb(20 45 32 / 0.09);
+    --shadow-focus: 0 0 0 3px rgb(13 124 91 / 0.15);
+    --shadow-pop: 0 18px 55px -15px rgb(15 40 28 / 0.2), 0 2px 8px rgb(15 40 28 / 0.04);
+    --shadow-glow: 0 3px 8px -3px rgb(13 124 91 / 0.22);
   }
-
-  html,
-  body,
-  #root {
-    height: 100%;
+  [data-theme='dark'] {
+    color-scheme: dark;
+    --navy-950: 15 23 21;
+    --navy-900: 21 32 28;
+    --navy-850: 25 38 33;
+    --navy-800: 33 48 41;
+    --navy-750: 41 59 50;
+    --navy-700: 51 71 60;
+    --navy-600: 73 96 83;
+    --ink-100: 237 245 240;
+    --ink-200: 213 228 219;
+    --ink-300: 180 201 189;
+    --ink-400: 151 175 161;
+    --ink-500: 133 157 143;
+    --ink-600: 115 139 125;
+    --accent: 83 205 157;
+    --accent-soft: 113 219 177;
+    --accent-teal: 51 184 137;
+    --on-accent: 9 40 28;
+    --scrim: 3 9 6;
+    --inset: 16 26 21;
+    --ok: 103 218 165;
+    --warn: 244 200 104;
+    --danger: 253 153 166;
+    --info: 133 196 242;
+    --shadow-card: 0 2px 8px rgb(0 0 0 / 0.08);
+    --shadow-focus: 0 0 0 3px rgb(83 205 157 / 0.2);
+    --shadow-pop: 0 20px 60px -12px rgb(0 0 0 / 0.5);
+    --shadow-glow: 0 3px 10px -4px rgb(83 205 157 / 0.2);
   }
-
-  body {
-    @apply bg-navy-950 font-sans text-ink-200 antialiased;
-    background-image: radial-gradient(
-        1100px 620px at 100% -10%,
-        rgb(var(--glow-a) / var(--glow-a-strength)),
-        transparent 60%
-      ),
-      radial-gradient(900px 520px at -10% 110%, rgb(var(--glow-b) / var(--glow-b-strength)), transparent 55%);
-    background-attachment: fixed;
-    /* Clip (not hidden) so sticky headers keep working; wide tables own their scroll. */
-    overflow-x: clip;
-  }
-
-  button,
-  a,
-  select,
-  summary {
-    touch-action: manipulation;
-  }
-
-  * {
-    @apply border-navy-700/60;
-  }
-
-  ::selection {
-    background: rgb(var(--accent) / 0.3);
-  }
-
-  :focus-visible {
-    @apply outline-none ring-2 ring-accent/60 ring-offset-2 ring-offset-navy-950;
-  }
-
-  input[type='number']::-webkit-outer-spin-button,
-  input[type='number']::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-  }
-
-  ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
-  }
-
-  ::-webkit-scrollbar-thumb {
-    @apply rounded-full bg-navy-600/80;
-  }
-
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
+  html, body, #root { height: 100%; }
+  body { @apply bg-navy-950 font-sans text-ink-200 antialiased; overflow-x: clip; }
+  button, a, select, summary { touch-action: manipulation; }
+  * { @apply border-navy-700/60; }
+  ::selection { background: rgb(var(--accent) / 0.2); }
+  :focus-visible { @apply outline-none ring-2 ring-accent/60 ring-offset-2 ring-offset-navy-950; }
+  input[type='number']::-webkit-outer-spin-button, input[type='number']::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  ::-webkit-scrollbar { width: 7px; height: 7px; }
+  ::-webkit-scrollbar-thumb { @apply rounded-full bg-navy-600/70; }
+  ::-webkit-scrollbar-track { background: transparent; }
 }
 
 @layer components {
-  .card {
-    @apply min-w-0 rounded-2xl border border-navy-700/60 bg-navy-850/90 shadow-card backdrop-blur-sm;
-  }
-
-  .card-hover {
-    @apply transition-all duration-200 hover:-translate-y-px hover:border-accent/30 hover:shadow-pop;
-  }
-
-  /* Brand gradient surface (fuel orange → amber) for logo tiles, hero bands. */
-  .brand-gradient {
-    background-image: linear-gradient(135deg, rgb(var(--accent)) 0%, rgb(var(--accent-teal)) 100%);
-  }
-
-  .label {
-    @apply mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.09em] text-ink-500;
-  }
-
-  .input {
-    @apply w-full rounded-xl border border-navy-600/70 bg-navy-900/70 px-3 py-2.5 text-sm text-ink-100
-      placeholder:text-ink-500/70 transition focus:border-accent/70 focus:outline-none focus:ring-2
-      focus:ring-accent/20 disabled:cursor-not-allowed disabled:opacity-60;
-  }
-
-  .table-wrap {
-    @apply w-full max-w-full overflow-x-auto overscroll-x-contain;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: thin;
-  }
-
-  /* Tables size to their content: narrow tables fit a phone, wide ones scroll
-     inside their own wrapper (headers never wrap, so columns stay readable). */
-  .data-table {
-    @apply w-full border-collapse text-sm;
-  }
-
-  @media (max-width: 639px) {
-    .data-table thead th {
-      @apply px-3 py-2;
-    }
-
-    .data-table tbody td {
-      @apply px-3 py-2.5;
-    }
-  }
-
-  .data-table thead th {
-    @apply sticky top-0 z-[1] whitespace-nowrap border-b border-navy-700/80 bg-navy-800/70 px-4 py-2.5
-      text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-500 backdrop-blur;
-  }
-
-  .data-table tbody td {
-    @apply border-b border-navy-800/70 px-4 py-3 align-middle text-ink-200;
-  }
-
-  .data-table tbody tr {
-    @apply transition-colors hover:bg-accent/[0.04];
-  }
-
-  .num {
-    @apply font-mono tabular-nums;
-  }
-
-  .link {
-    @apply text-accent underline-offset-4 transition hover:text-accent-teal hover:underline;
-  }
-
-  .scroll-thin {
-    scrollbar-width: thin;
-  }
-
-  /* Shimmering placeholder used while data loads. */
-  .skeleton {
-    @apply relative overflow-hidden rounded-xl bg-navy-800/70;
-  }
-
-  .skeleton::after {
-    @apply absolute inset-0 -translate-x-full animate-shimmer;
-    content: '';
-    background-image: linear-gradient(90deg, transparent, rgb(var(--ink-100) / 0.06), transparent);
-  }
+  .card { @apply min-w-0 rounded-2xl border border-navy-700/70 bg-navy-850 shadow-card; }
+  .card-hover { @apply transition duration-200 hover:-translate-y-0.5 hover:border-accent/30 hover:shadow-pop; }
+  .brand-gradient { background-image: linear-gradient(135deg, rgb(var(--accent)) 0%, rgb(var(--accent-teal)) 100%); }
+  .label { @apply mb-1.5 block text-xs font-semibold text-ink-300; }
+  .input { @apply min-h-10 w-full rounded-xl border border-navy-600/70 bg-navy-900 px-3 py-2.5 text-sm text-ink-100 placeholder:text-ink-500/80 transition focus:border-accent/70 focus:outline-none focus:ring-2 focus:ring-accent/15 disabled:cursor-not-allowed disabled:opacity-60; }
+  .nav-item { @apply flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium text-ink-400 transition-colors hover:bg-navy-800 hover:text-ink-100; }
+  .nav-item-active { @apply bg-accent/10 font-semibold text-accent hover:bg-accent/15 hover:text-accent; }
+  .nav-icon { @apply shrink-0 text-ink-500; }
+  .nav-item-active .nav-icon { @apply text-accent; }
+  .menu-item { @apply flex min-h-10 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-ink-300 transition hover:bg-navy-800; }
+  .table-wrap { @apply w-full max-w-full overflow-x-auto overscroll-x-contain; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+  .data-table { @apply w-full border-collapse text-sm; }
+  .data-table thead th { @apply sticky top-0 z-[1] whitespace-nowrap border-b border-navy-700/70 bg-navy-800/60 px-4 py-3 text-left text-[11px] font-semibold tracking-wide text-ink-400; }
+  .data-table tbody td { @apply border-b border-navy-700/50 px-4 py-3.5 align-middle text-ink-200; }
+  .data-table tbody tr { @apply transition-colors hover:bg-accent/[0.035]; }
+  .data-table tbody tr:last-child td { @apply border-b-0; }
+  .num { @apply font-sans tabular-nums; }
+  .link { @apply text-accent underline-offset-4 transition hover:text-accent-soft hover:underline; }
+  .scroll-thin { scrollbar-width: thin; }
+  .skeleton { @apply relative overflow-hidden rounded-xl bg-navy-800/70; }
+  .skeleton::after { @apply absolute inset-0 -translate-x-full animate-shimmer; content: ''; background-image: linear-gradient(90deg, transparent, rgb(var(--ink-100) / 0.06), transparent); }
+  .eyebrow { @apply text-[10px] font-bold uppercase tracking-[0.14em] text-ink-500; }
+  .quick-action { @apply flex min-h-[76px] items-center gap-3 rounded-xl border border-navy-700/70 bg-navy-900 p-3.5 text-left transition hover:-translate-y-0.5 hover:border-accent/40 hover:bg-accent/[0.035]; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-  }
+@media (max-width: 639px) {
+  .data-table thead th { @apply px-3 py-2.5; }
+  .data-table tbody td { @apply px-3 py-3; }
 }
-
-/* ------------------------------------------------------------------ mobile */
-/* Unlayered so it wins over Tailwind's component classes. */
 @media (max-width: 767px) {
-  /* iOS Safari zooms the whole page when a focused field is under 16px. */
-  input,
-  select,
-  textarea {
-    font-size: 16px;
-    line-height: 1.5rem;
-  }
-
-  /* Comfortable tap targets without changing desktop density. */
-  .btn-touch {
-    min-height: 2.5rem;
-  }
+  input, select, textarea { font-size: 16px; line-height: 1.5rem; }
+  .btn-touch { min-height: 2.75rem; }
+}
+@media (pointer: coarse) { button, [role='tab'], a.link { -webkit-tap-highlight-color: transparent; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
 }
 
-@media (pointer: coarse) {
-  button,
-  [role='tab'],
-  a.link {
-    -webkit-tap-highlight-color: transparent;
-  }
+
+/* Print only the report, not the application chrome or action controls. */
+@media print {
+  aside, header, footer, nav, button, .btn-touch { display: none !important; }
+  main { max-width: none !important; padding: 0 !important; }
+  body { background: white !important; }
+  .card { break-inside: avoid; border-color: #d5ddd8 !important; box-shadow: none !important; }
+  .table-wrap { overflow: visible !important; }
 }

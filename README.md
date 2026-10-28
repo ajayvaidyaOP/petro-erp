@@ -2,6 +2,23 @@
 
 Petrol-pump operations ERP with a React + Vite frontend, Express API, hardware gateway, shared TypeScript package, and SQLite schema/data at the repository root.
 
+## One owner. One manager.
+
+The business workspace now has **two fixed roles and at most one active account per role**:
+
+| Role | Responsibility |
+| --- | --- |
+| **Owner** | Business overview, prices, finance, reports, team access, pump setup and subscription. |
+| **Manager** | Day-to-day shifts/readings, stock/deliveries, sales/credit, payments/expenses, reconciliation and reports for assigned pumps. No team, price or configuration changes. |
+
+The primary navigation is reduced to **Overview, Shifts & readings, Stock & deliveries, Sales & credit, Finance, Reports, Team and Settings**. Specialist screens are contextual tabs inside those sections; the manager sees only the six sections they can use. Advanced setup/diagnostics are collapsed in Settings. The dashboard defaults to the selected pump, with an optional owner-only comparison. Quick actions open the shift/delivery/expense entry forms directly.
+
+The platform administrator is an internal maintenance account, not a third pump role, and has no client demo tile.
+
+### Upgrading an existing database
+
+Boot applies additive migrations and consolidates access without deleting business records. It keeps the earliest active owner and manager, disables surplus active accounts, revokes their sessions and writes `TEAM_ACCESS_CONSOLIDATED` audit entries. Retired role identities and historical references are preserved; old staff are **not** silently promoted. A partial unique index prevents duplicate active owners/managers. If no manager remains, the owner can use **Team → Set up manager**; a disabled manager can be re-enabled instead of creating another account. Back up existing data before upgrading. Station permission overrides cannot grant permissions outside the fixed role.
+
 ## Repository layout
 
 ```text
@@ -34,16 +51,16 @@ implemented** (Oct 2026):
   and indent suggestions (days-of-cover + safe ullage) per tank.
 - **Udhaar control:** vehicle-wise credit slips with auto slip numbers, printable monthly customer
   statements, and a FIFO ageing report (0–30/31–60/61–90/90+).
-- **Counter business:** lubricant SKU stock & sales (GST-ready), staff attendance with payable-days,
+- **Counter business:** lubricant SKU stock & sales (GST-ready), two-person team attendance with payable-days,
   and one-click CSV exports (sales register, stock statement, ageing, lubricants GST).
 
 Existing databases migrate automatically on boot (additive columns/tables + role sync).
 
 ## Theming
 
-The UI uses the **Forecourt** design system: fuel orange/amber brand gradient, warm graphite (dark)
-and warm paper (light) surfaces, Sora display type for headings and figures, and a phone-friendly
-bottom navigation for forecourt staff. It ships with dark (default) and light themes. Every colour resolves through CSS
+The UI uses a quiet petrol-green design system: white/light-green surfaces, locally bundled
+Manrope display type and Inter body text, responsive sidebar/drawer/bottom navigation, and
+keyboard-accessible dialogs. Light is the default; dark mode remains available. Every colour resolves through CSS
 custom properties defined in `frontend/src/index.css` and exposed to Tailwind in
 `frontend/tailwind.config.js`, so switching `data-theme` on `<html>` re-tints the whole
 app — components only ever reference semantic tokens:
@@ -59,8 +76,8 @@ app — components only ever reference semantic tokens:
 | `ok` / `warn` / `danger` / `info` | Status colours (invert with the theme to stay legible) |
 
 Users switch from the sun/moon button in the header. The choice is stored in
-`localStorage` under `petroflow.theme`; with no stored choice the OS
-`prefers-color-scheme` is followed. An inline script in `index.html` applies the theme
+`localStorage` under `petroflow.theme`; with no stored choice the readable
+light workspace is used. An inline script in `index.html` applies the theme
 before first paint so there is no flash of the wrong palette.
 
 Avoid re-introducing fixed Tailwind shades for text on themed surfaces (for example
@@ -109,14 +126,13 @@ On the first non-production start, an empty database is created at `db/petroflow
 
 The demo tenant **Sunrise Fuels** runs two outlets (Baner and Hinjewadi) with separate nozzles, tanks, shifts, deliveries and reconciliations, so multi-station behaviour can be reviewed without any setup. Switch between outlets from the station picker in the header (or the mobile menu) and compare both on the dashboard.
 
-- Owner (both pumps): `owner@sunrisefuels.in`
-- Pump 1 staff (Baner): `staff1@sunrisefuels.in`
-- Pump 2 staff (Hinjewadi): `staff2@sunrisefuels.in`
+- Owner (both pumps): `owner@sunrisefuels.in` — Rohit Deshmukh
+- Manager (both pumps): `manager@sunrisefuels.in` — Anjali Kulkarni
 - Password: `PetroFlow@2025` (or the `DEMO_PASSWORD` in your ignored `.env`)
 
-The platform administrator still exists in the backend, but is not shown among client demo tiles. The owner dashboard defaults to **Dono Pump**; individual pumps can be selected there and in DSR/CSV exports. Sales figures are estimates from closed or flagged shift totalizers, not audited revenue. Customer accounts and balances are company-wide; staff can post a credit slip but the cross-pump ledger and statement are owner-only.
+The dashboard defaults to the pump selected in the header. The owner can choose **Compare both pumps** for a combined overview and select both pumps in DSR/CSV exports. Sales figures are estimates from closed or flagged shift totalizers, not audited revenue. Customer accounts and balances are company-wide; the manager can post credit slips and review the ledger at assigned pumps.
 
-The new demo layout is seeded **only into an empty database**. Existing databases are migrated additively and are never reset or stripped of users/companies automatically. If an old demo database is no longer needed, back it up first; `npm run db:reset` is destructive and is the explicit way to create a fresh demo. Existing customer and accounting data is not deleted on upgrade.
+The new demo layout is seeded **only into an empty database**. Existing databases are never reset or stripped of companies/records automatically; surplus active accounts lose access as described above, and the owner sets up a manager if needed. If an old demo database is no longer needed, back it up first; `npm run db:reset` is destructive and is the explicit way to create a fresh demo. Existing customer and accounting data is not deleted on upgrade.
 
 These are development-only credentials. Do not expose a local/demo instance as a public service.
 
@@ -146,7 +162,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-The browser suite starts its own API and Vite servers on ports **4101** and **5174** and resets only the dedicated ignored `db/e2e-petroflow.db`. It covers login/logout (including an embedded HTTPS preview with third-party cookies blocked), role-based screen navigation, station switching, pagination, customer and expense entry, simulated device events, gateway registration, and shift preview/edit/close. These are automated checks against demo data, not a substitute for production acceptance testing or commissioning real forecourt hardware. In restricted environments, `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` can point to an existing compatible Chromium binary.
+The browser suite starts its own API and Vite servers on ports **4101** and **5174** and resets only the dedicated ignored `db/e2e-petroflow.db`. It covers login/logout (including an embedded HTTPS preview with third-party cookies blocked), two-role navigation, station switching, pagination, customer/credit and expense entry, direct quick actions, keyboard focus in nested dialogs, simulated device events, gateway registration, shift preview/edit/close, combined reports, and mobile layouts in both themes. These are automated checks against demo data, not a substitute for production acceptance testing or commissioning real forecourt hardware. In restricted environments, `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` can point to an existing compatible Chromium binary.
 
 Development HTTPS previews use secure, partitioned session cookies so login works inside an embedded preview without enabling ordinary third-party cookies. Localhost and production sessions retain `SameSite=Lax`. If a browser does not support embedded session cookies, use **Open preview in a new tab** on the sign-in screen.
 

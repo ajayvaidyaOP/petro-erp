@@ -9,7 +9,8 @@ import { hashPassword } from '../lib/security.js';
 import { addDays } from '../lib/time.js';
 import { D, Decimal, money, litres as fmtLitres, rate as fmtRate } from '../lib/decimal.js';
 import { evaluateDensity } from '../lib/density.js';
-import { ROLE_DEFINITIONS, ROLE_KEYS } from '@petroflow/shared';
+import { ROLE_DEFINITIONS, SYSTEM_ROLE_KEYS, RETIRED_ROLE_KEYS, BUSINESS_ROLE_KEYS } from '@petroflow/shared';
+import { audit } from '../lib/audit.js';
 import { logger } from '../lib/logger.js';
 
 const DEMO_PASSWORD = process.env.DEMO_PASSWORD ?? 'PetroFlow@2025';
@@ -55,20 +56,51 @@ interface SeededNozzle {
  * databases without a reset.
  */
 export function syncRoles() {
-  for (const key of ROLE_KEYS) {
-    const def = ROLE_DEFINITIONS[key];
-    const existingRole = get<{ id: string }>('SELECT id FROM roles WHERE key = ?', [key]);
-    if (existingRole) {
-      run('UPDATE roles SET name = ?, description = ?, permissions = ?, scope = ? WHERE key = ?', [
-        def.name, def.description, JSON.stringify(def.permissions), def.scope, key,
-      ]);
-    } else {
+  tx(() => {
+    for (const key of SYSTEM_ROLE_KEYS) {
+      const def = ROLE_DEFINITIONS[key as keyof typeof ROLE_DEFINITIONS] ?? {
+        name: 'Platform Administrator', description: 'Internal platform maintenance.',
+        permissions: ['platform.manage', 'platform.audit', 'settings.read'], scope: 'PLATFORM',
+      };
       run(
-        'INSERT INTO roles (id, key, name, description, permissions, scope, is_system) VALUES (?, ?, ?, ?, ?, ?, 1)',
+        `INSERT INTO roles (id, key, name, description, permissions, scope, is_system)
+         VALUES (?, ?, ?, ?, ?, ?, 1)
+         ON CONFLICT(key) DO UPDATE SET name = excluded.name, description = excluded.description,
+           permissions = excluded.permissions, scope = excluded.scope`,
         [newId('rol'), key, def.name, def.description, JSON.stringify(def.permissions), def.scope],
       );
     }
-  }
+    // Retired roles never retain write access. Historical user/shift references remain intact.
+    for (const key of RETIRED_ROLE_KEYS) {
+      run(`UPDATE roles SET permissions = '[]', name = 'Retired account', description = 'Consolidated into the two-role team model.' WHERE key = ?`, [key]);
+    }
+    // Never promote a legacy operator/cashier into a manager. Retain their original
+    // role on the disabled account so re-enabling cannot silently grant new rights.
+    const tenants = all<{ id: string }>('SELECT id FROM tenants');
+    for (const tenant of tenants) {
+      const users = all<{ id: string; role_key: string; email: string; status: string }>(
+        `SELECT id, role_key, email, status FROM users WHERE tenant_id = ? AND status = 'ACTIVE'
+         ORDER BY created_at, id`, [tenant.id],
+      );
+      const kept = new Set<string>();
+      for (const role of BUSINESS_ROLE_KEYS) {
+        const candidate = users.find((u) => u.role_key === role);
+        if (candidate) kept.add(candidate.id);
+      }
+      for (const user of users) {
+        if (kept.has(user.id)) continue;
+        run(`UPDATE users SET status = 'DISABLED', updated_at = ? WHERE id = ?`, [nowIso(), user.id]);
+        run('UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL', [nowIso(), user.id]);
+        audit(null, {
+          action: 'TEAM_ACCESS_CONSOLIDATED', entity: 'User', entityId: user.id, tenantId: tenant.id,
+          summary: 'Access retired for the one-owner, one-manager team. Historical records preserved.',
+          before: { roleKey: user.role_key, status: user.status }, after: { status: 'DISABLED' },
+        });
+      }
+    }
+    run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_one_active_role_per_tenant
+      ON users(tenant_id, role_key) WHERE status = 'ACTIVE' AND role_key IN ('OWNER', 'MANAGER')`);
+  });
 }
 
 export async function runSeed(options: { force?: boolean; legacyTestFixtures?: boolean } = {}) {
@@ -82,41 +114,28 @@ export async function runSeed(options: { force?: boolean; legacyTestFixtures?: b
   logger.info('Seeding PetroFlow demo data…');
 
   tx(() => {
-    // ------------------------------------------------------------- roles ----
-    for (const key of ROLE_KEYS) {
-      const def = ROLE_DEFINITIONS[key];
-      const existingRole = get<{ id: string }>('SELECT id FROM roles WHERE key = ?', [key]);
-      if (existingRole) {
-        run('UPDATE roles SET name = ?, description = ?, permissions = ?, scope = ? WHERE key = ?', [
-          def.name, def.description, JSON.stringify(def.permissions), def.scope, key,
-        ]);
-      } else {
-        run(
-          'INSERT INTO roles (id, key, name, description, permissions, scope, is_system) VALUES (?, ?, ?, ?, ?, ?, 1)',
-          [newId('rol'), key, def.name, def.description, JSON.stringify(def.permissions), def.scope],
-        );
-      }
-    }
+    // Role definitions and safe access consolidation are shared with boot migrations.
+    syncRoles();
 
     // -------------------------------------------------------------- plans ---
     const planSpecs = [
       {
         code: 'STARTER', name: 'Starter', price: '2999.00', annual: '32389.00',
         desc: 'Single outlet, core operations and hardware gateway.',
-        stations: 1, users: 8, dispensers: 4, trial: 14,
-        features: ['1 station', '8 users', 'Totalizer capture', 'Shift management', 'DSR reports', '1 gateway'],
+        stations: 1, users: 2, dispensers: 4, trial: 14,
+        features: ['1 station', 'Owner + manager', 'Totalizer capture', 'Shift management', 'DSR reports', '1 gateway'],
       },
       {
         code: 'GROWTH', name: 'Growth', price: '7499.00', annual: '80989.00',
         desc: 'Multi-outlet groups with ledgers, credit control and reconciliation.',
-        stations: 3, users: 25, dispensers: 12, trial: 14,
-        features: ['3 stations', '25 users', 'Credit ledger', 'Reconciliation', 'Audit trail', 'Priority support'],
+        stations: 3, users: 2, dispensers: 12, trial: 14,
+        features: ['3 stations', 'Owner + manager', 'Credit ledger', 'Reconciliation', 'Audit trail', 'Priority support'],
       },
       {
         code: 'ENTERPRISE', name: 'Enterprise', price: '18999.00', annual: '205189.00',
         desc: 'Large networks with advanced controls and dedicated onboarding.',
-        stations: 10, users: 100, dispensers: 50, trial: 30,
-        features: ['10 stations', '100 users', 'Advanced roles', 'Hardware fleet monitoring', 'SSO ready', 'Dedicated support'],
+        stations: 10, users: 2, dispensers: 50, trial: 30,
+        features: ['10 stations', 'Owner + manager', 'Simple access control', 'Hardware fleet monitoring', 'SSO ready', 'Dedicated support'],
       },
     ];
     const planIds: Record<string, string> = {};
@@ -154,7 +173,7 @@ export async function runSeed(options: { force?: boolean; legacyTestFixtures?: b
     const subB = newId('sub');
     run(
       `INSERT INTO subscriptions (id, tenant_id, plan_id, status, starts_at, ends_at, trial_ends_at, seats, auto_renew, created_at, updated_at)
-       VALUES (?, ?, ?, 'ACTIVE', ?, ?, NULL, 25, 1, ?, ?)`,
+       VALUES (?, ?, ?, 'ACTIVE', ?, ?, NULL, 2, 1, ?, ?)`,
       [subA, tenantA, planIds.GROWTH, new Date(Date.now() - 120 * 86_400_000).toISOString(),
         new Date(Date.now() + 245 * 86_400_000).toISOString(), nowIso(), nowIso()],
     );
@@ -215,20 +234,11 @@ export async function runSeed(options: { force?: boolean; legacyTestFixtures?: b
     const [stationA, stationB, stationC] = stations;
 
     // ------------------------------------------------------------- users ----
-    const legacyUsers = [
-      { id: newId('usr'), tenant: null, email: 'superadmin@petroflow.dev', name: 'Platform Administrator', role: 'SUPER_ADMIN', stations: [] },
-      { id: newId('usr'), tenant: tenantA, email: 'owner@sunrisefuels.in', name: 'Rohit Deshmukh', role: 'OWNER', stations: [stationA.id, stationB.id] },
-      { id: newId('usr'), tenant: tenantA, email: 'manager@sunrisefuels.in', name: 'Anjali Kulkarni', role: 'MANAGER', stations: [stationA.id] },
-      { id: newId('usr'), tenant: tenantA, email: 'cashier@sunrisefuels.in', name: 'Sagar Pawar', role: 'CASHIER', stations: [stationA.id] },
-      { id: newId('usr'), tenant: tenantA, email: 'operator@sunrisefuels.in', name: 'Imran Shaikh', role: 'OPERATOR', stations: [stationA.id] },
-      { id: newId('usr'), tenant: tenantA, email: 'accounts@sunrisefuels.in', name: 'Meera Joshi', role: 'ACCOUNTANT', stations: [stationA.id, stationB.id] },
-      { id: newId('usr'), tenant: tenantB, email: 'owner@highwayenergy.in', name: 'Vikram Patil', role: 'OWNER', stations: [stationC.id] },
-    ];
-    const userSpecs = legacyTestFixtures ? legacyUsers : [
-      legacyUsers[0], legacyUsers[1],
-      { ...legacyUsers[2], email: 'staff1@sunrisefuels.in', name: 'Pump 1 Staff', role: 'STAFF', stations: [stationA.id] },
-      { ...legacyUsers[3], email: 'staff2@sunrisefuels.in', name: 'Pump 2 Staff', role: 'STAFF', stations: [stationB.id] },
-    ];
+    const ownerUser = { id: newId('usr'), tenant: tenantA, email: 'owner@sunrisefuels.in', name: 'Rohit Deshmukh', role: 'OWNER', stations: [stationA.id, stationB.id] };
+    const managerUser = { id: newId('usr'), tenant: tenantA, email: 'manager@sunrisefuels.in', name: 'Anjali Kulkarni', role: 'MANAGER', stations: legacyTestFixtures ? [stationA.id] : [stationA.id, stationB.id] };
+    const otherOwner = { id: newId('usr'), tenant: tenantB, email: 'owner@highwayenergy.in', name: 'Vikram Patil', role: 'OWNER', stations: [stationC.id] };
+    const platformUser = { id: newId('usr'), tenant: null, email: 'superadmin@petroflow.dev', name: 'Platform Administrator', role: 'SUPER_ADMIN', stations: [] as string[] };
+    const userSpecs = [platformUser, ownerUser, managerUser, ...(legacyTestFixtures ? [otherOwner] : [])];
     for (const user of userSpecs) {
       run(
         `INSERT INTO users (id, tenant_id, email, name, phone, password_hash, role_key, status, must_change_password, is_demo, created_at, updated_at)
@@ -244,9 +254,9 @@ export async function runSeed(options: { force?: boolean; legacyTestFixtures?: b
       }
     }
     const ownerA = userSpecs[1].id;
-    const managerA = userSpecs[2].id;
-    const cashierA = legacyTestFixtures ? userSpecs[3].id : userSpecs[2].id;
-    const ownerB = legacyUsers[6].id;
+    const managerA = managerUser.id;
+    const cashierA = managerA;
+    const ownerB = otherOwner.id;
 
     // ---------------------------------------------------------- products ----
     const productSpecs = [
@@ -468,7 +478,7 @@ export async function runSeed(options: { force?: boolean; legacyTestFixtures?: b
     // ------------------------------------------------------------- shifts ---
     const seededOutlets = [
       { station: stationA, tenant: tenantA, operator: cashierA, approver: ownerA },
-      { station: stationB, tenant: tenantA, operator: legacyTestFixtures ? cashierA : userSpecs[3].id, approver: ownerA },
+      { station: stationB, tenant: tenantA, operator: managerA, approver: ownerA },
       { station: stationC, tenant: tenantB, operator: ownerB, approver: ownerB },
     ];
     for (let dayOffset = 6; dayOffset >= 1; dayOffset -= 1) {
@@ -928,7 +938,7 @@ export async function runSeed(options: { force?: boolean; legacyTestFixtures?: b
 
     // Aaj ki attendance (Baner team).
     {
-      const team = (legacyTestFixtures ? [managerA, cashierA, userSpecs[4]?.id] : [managerA]).filter(Boolean) as string[];
+      const team = [managerA].filter(Boolean) as string[];
       for (const userId of team) {
         run(
           `INSERT INTO attendance_records (id, tenant_id, station_id, user_id, attendance_date, status, in_time, note, marked_by, created_at, updated_at)
@@ -960,7 +970,7 @@ export async function runSeed(options: { force?: boolean; legacyTestFixtures?: b
 
   logger.info('Demo seed complete.');
   logger.info(
-    { password: DEMO_PASSWORD, accounts: ['owner@sunrisefuels.in', 'staff1@sunrisefuels.in', 'staff2@sunrisefuels.in'] },
+    { password: DEMO_PASSWORD, accounts: ['owner@sunrisefuels.in', 'manager@sunrisefuels.in'] },
     'Demo login credentials',
   );
   return { seeded: true, demoPassword: DEMO_PASSWORD };

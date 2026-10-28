@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, RefreshCw, Save, Server, ShieldCheck } from 'lucide-react';
+import { ArrowUpRight, CheckCircle2, ChevronDown, Fuel, RefreshCw, Save, Server, ShieldCheck, Store, Tag } from 'lucide-react';
 import { apiGet, apiPut } from '../lib/api';
 import { useAuth, useStations } from '../lib/auth';
 import { formatDateTime } from '../lib/format';
@@ -89,8 +90,8 @@ export default function Settings() {
   return (
     <div>
       <PageHeader
-        title="Settings & Diagnostics"
-        description="Operational thresholds, hardware ingestion posture and runtime diagnostics. Settings are scoped to the active station unless marked organization-level."
+        title="Pump settings"
+        description="Set up your pump once. Keep advanced tools out of the way of everyday work."
         actions={
           can('settings.write') ? (
             <Button loading={save.isPending} onClick={() => save.mutate()}>
@@ -100,6 +101,18 @@ export default function Settings() {
         }
       />
 
+      <div className="mb-6 grid gap-3 sm:grid-cols-3">
+        {[
+          { to: '/stations', label: 'Pump details', text: 'Names, addresses and outlet information', icon: Store, permission: 'stations.read' },
+          { to: '/products', label: 'Fuel & prices', text: 'Products and effective price revisions', icon: Tag, permission: 'products.read' },
+          { to: '/dispensers', label: 'Dispensers & nozzles', text: 'Nozzle-to-tank mapping and setup', icon: Fuel, permission: 'dispensers.read' },
+          { to: '/compliance', label: 'Licences & compliance', text: 'Documents, expiry dates and reminders', icon: ShieldCheck, permission: 'compliance.read' },
+          { to: '/devices', label: 'Devices & gateways', text: 'Hardware connections and simulator', icon: Server, permission: 'devices.read' },
+          { to: '/audit', label: 'Activity & audit log', text: 'A traceable history of every change', icon: CheckCircle2, permission: 'audit.read' },
+        ].filter((item) => can(item.permission)).map((item) => <Link key={item.to} to={item.to} className="quick-action"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent/10 text-accent"><item.icon className="h-4 w-4" /></span><span><span className="block text-xs font-semibold text-ink-100">{item.label}</span><span className="mt-1 block text-[11px] leading-relaxed text-ink-500">{item.text}</span></span><ArrowUpRight className="ml-auto h-3.5 w-3.5 shrink-0 text-ink-500" /></Link>)}
+      </div>
+      {can('billing.read') && <Link to="/billing" className="mb-5 flex items-center justify-between rounded-xl border border-navy-700/70 px-4 py-3 text-xs text-ink-400"><span>Subscription & plan details</span><ArrowUpRight className="h-4 w-4 text-accent" /></Link>}
+      <details className="card group mb-5"><summary className="flex min-h-14 cursor-pointer list-none items-center justify-between px-5 py-4 text-sm font-semibold text-ink-200">Advanced settings & diagnostics <ChevronDown className="h-4 w-4 transition group-open:rotate-180" /></summary><div className="border-t border-navy-700/60 p-4">
       <div className="mb-4 grid gap-3 sm:grid-cols-4">
         <StatCard label="Environment" value={diagnostics.data?.application.environment ?? '—'} icon={<Server className="h-4 w-4" />} />
         <StatCard label="API version" value={diagnostics.data?.application.apiVersion ?? '—'} hint={diagnostics.data?.application.version} />
@@ -215,6 +228,7 @@ export default function Settings() {
           </Card>
         </div>
       </div>
+      </div></details>
     </div>
   );
 }

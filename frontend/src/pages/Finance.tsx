@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowDownLeft, ArrowUpRight, Banknote, Plus, Receipt, RotateCcw, Wallet } from 'lucide-react';
 import { apiDelete, apiGet, apiGetWithMeta, apiList, apiPatch, apiPost, idempotencyKey, type ListMeta } from '../lib/api';
@@ -79,6 +80,7 @@ export default function Finance() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState('payments');
   const [date, setDate] = useState(todayIst());
   const [page, setPage] = useState(1);
@@ -90,6 +92,18 @@ export default function Finance() {
   const [reversePayment, setReversePayment] = useState<Payment | null>(null);
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [deleteExpense, setDeleteExpense] = useState<Expense | null>(null);
+  useEffect(() => {
+    if (searchParams.get('new') === 'expense' && can('expenses.write')) {
+      setTab('expenses'); setExpenseOpen(true);
+    }
+  }, [searchParams, can]);
+  const closeExpense = () => {
+    setExpenseOpen(false);
+    if (searchParams.has('new')) {
+      const next = new URLSearchParams(searchParams); next.delete('new');
+      setSearchParams(next, { replace: true });
+    }
+  };
 
   const summary = useQuery({
     queryKey: ['finance-summary', stationId, date],
@@ -130,7 +144,7 @@ export default function Finance() {
   const categories = useQuery({
     queryKey: ['expense-categories'],
     queryFn: () => apiGet<Category[]>('/catalog/expense-categories?pageSize=100'),
-    enabled: tab === 'expenses',
+    enabled: tab === 'expenses' || expenseOpen,
   });
 
   const invalidate = () => {
@@ -320,10 +334,10 @@ export default function Finance() {
 
       <ExpenseModal
         open={expenseOpen}
-        onClose={() => setExpenseOpen(false)}
+        onClose={closeExpense}
         stationId={stationId}
         categories={categories.data ?? []}
-        onDone={() => { setExpenseOpen(false); invalidate(); }}
+        onDone={() => { closeExpense(); invalidate(); }}
       />
 
       {settlePayment && <SettleModal payment={settlePayment} onClose={() => setSettlePayment(null)} loading={settleMutation.isPending} onSubmit={(ref) => settleMutation.mutate({ id: settlePayment.id, settlementRef: ref })} />}

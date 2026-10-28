@@ -20,16 +20,11 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-function systemTheme(): Theme {
-  if (typeof window === 'undefined' || !window.matchMedia) return 'dark';
-  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-}
-
-/** Saved choice wins; otherwise follow the OS. */
+/** Saved choice wins; light is the default for a readable daytime workspace. */
 function initialTheme(): Theme {
-  if (typeof window === 'undefined') return 'dark';
+  if (typeof window === 'undefined') return 'light';
   const saved = window.localStorage.getItem(STORAGE_KEY);
-  return saved === 'light' || saved === 'dark' ? saved : systemTheme();
+  return saved === 'light' || saved === 'dark' ? saved : 'light';
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
@@ -41,20 +36,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     root.style.colorScheme = theme;
     // Paints native widgets (date pickers, selects, scrollbars) to match.
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', theme === 'dark' ? '#0a0d12' : '#f7f5f1');
+    if (meta) meta.setAttribute('content', theme === 'dark' ? '#0f1715' : '#f6f8f7');
   }, [theme]);
-
-  // Keep tracking the OS only while the user has not made an explicit choice.
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.matchMedia) return;
-    const mq = window.matchMedia('(prefers-color-scheme: light)');
-    const onChange = (event: MediaQueryListEvent) => {
-      if (window.localStorage.getItem(STORAGE_KEY)) return;
-      setThemeState(event.matches ? 'light' : 'dark');
-    };
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
-  }, []);
 
   const setTheme = useCallback((next: Theme) => {
     setThemeState(next);
@@ -95,23 +78,23 @@ export interface ChartPalette {
 // Recharts paints through SVG attributes, which do not resolve CSS custom
 // properties, so chart colours are supplied per theme from here.
 const CHART_DARK: ChartPalette = {
-  grid: '#2b394c',
-  axis: '#9c968f',
-  tooltipBg: '#131a24',
-  tooltipBorder: '#3b4d66',
-  tooltipLabel: '#e4dfd8',
-  accent: '#fb923c',
-  teal: '#2dd4bf',
+  grid: '#33473c',
+  axis: '#97af9f',
+  tooltipBg: '#192621',
+  tooltipBorder: '#496053',
+  tooltipLabel: '#edf5f0',
+  accent: '#53cd9d',
+  teal: '#e6b665',
 };
 
 const CHART_LIGHT: ChartPalette = {
-  grid: '#e9e3d6',
-  axis: '#7c7063',
+  grid: '#e7eeea',
+  axis: '#73837a',
   tooltipBg: '#ffffff',
-  tooltipBorder: '#d9d0bd',
-  tooltipLabel: '#4a4239',
-  accent: '#ea580c',
-  teal: '#0d9488',
+  tooltipBorder: '#dee7e2',
+  tooltipLabel: '#304239',
+  accent: '#0d7c5b',
+  teal: '#d4a04b',
 };
 
 export function useChartPalette(): ChartPalette {

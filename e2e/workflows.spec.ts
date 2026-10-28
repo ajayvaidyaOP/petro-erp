@@ -111,8 +111,7 @@ test('embedded HTTPS preview keeps its session when third-party cookies are bloc
 
 for (const [role, email] of [
   ['owner', owner],
-  ['pump 1 staff', 'staff1@sunrisefuels.in'],
-  ['pump 2 staff', 'staff2@sunrisefuels.in'],
+  ['manager', 'manager@sunrisefuels.in'],
   ['platform admin', 'superadmin@petroflow.dev'],
 ] as const) {
   test(`${role}: every visible navigation screen loads without browser or API errors`, async ({ page }) => {
@@ -139,7 +138,7 @@ test('station selection follows navigation and drives station-scoped queries', a
   const dashboardResponse = page.waitForResponse((response) => response.url().includes(`/reports/owner-dashboard?stationId=${next.value}`));
   await station.selectOption(next.value);
   expect((await dashboardResponse).status()).toBe(200);
-  await page.getByRole('navigation', { name: 'Primary' }).first().getByRole('link', { name: /Payments & Expenses/i }).click();
+  await page.getByRole('navigation', { name: 'Primary' }).first().getByRole('link', { name: 'Finance', exact: true }).click();
   await waitForPage(page);
   await expect(station).toHaveValue(next.value);
   const response = await page.request.get(`/api/v1/finance/expenses?stationId=${next.value}`);
@@ -202,7 +201,7 @@ test('simulator and device registration work across Devices and Dispensers', asy
   await keyDialog.getByRole('button', { name: 'I have stored this key' }).click();
   const row = page.getByRole('row').filter({ hasText: 'Browser controller' });
   await expect(row).toContainText('REAL · UNVERIFIED');
-  await page.getByRole('navigation', { name: 'Primary' }).first().getByRole('link', { name: 'Dispensers & Nozzles' }).click();
+  await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('link', { name: 'Dispensers', exact: true }).click();
   await waitForPage(page);
 });
 
@@ -238,7 +237,7 @@ test('shift preview, manual edit and close use the saved reading', async ({ page
   await expect(detail.getByText(/closed|flagged/i).first()).toBeVisible();
 });
 
-for (const email of [owner, 'staff1@sunrisefuels.in', 'staff2@sunrisefuels.in']) {
+for (const email of [owner, 'manager@sunrisefuels.in']) {
   test(`${email}: navigation screens fit a 360px phone in both themes`, async ({ page }) => {
     await demoLogin(page, email);
     const paths = await page.getByRole('navigation', { name: 'Primary' }).first().locator('a').evaluateAll((links) => links.map((link) => link.getAttribute('href')).filter((href): href is string => Boolean(href)));
@@ -255,18 +254,28 @@ for (const email of [owner, 'staff1@sunrisefuels.in', 'staff2@sunrisefuels.in'])
   });
 }
 
-test('staff can enter a credit slip without seeing the company ledger', async ({ page }) => {
-  await demoLogin(page, 'staff1@sunrisefuels.in');
+test('manager can enter a credit slip and review the customer ledger', async ({ page }) => {
+  await demoLogin(page, 'manager@sunrisefuels.in');
   await page.goto('/customers');
-  await page.getByRole('button', { name: 'Credit slip' }).first().click();
-  const dialog = page.getByRole('dialog', { name: /Credit sale/ });
+  await page.getByRole('button', { name: 'Ledger', exact: true }).first().click();
+  const ledger = page.getByRole('dialog', { name: /credit ledger/ });
+  await expect(ledger).toBeVisible();
+  await ledger.getByRole('button', { name: 'Credit sale', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: /Credit sale ·/ });
   await expect(dialog.getByRole('button', { name: 'Post credit sale' })).toBeVisible();
-  await expect(page.getByRole('dialog', { name: /credit ledger/ })).toHaveCount(0);
+  await expect(dialog.getByLabel('Product')).toBeVisible();
+  await dialog.getByLabel('Or amount (INR)').fill('250');
+  await dialog.getByRole('button', { name: 'Post credit sale' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByText('Credit sale recorded')).toBeVisible();
+  await expect(ledger).toBeVisible();
+  await expect(ledger.getByRole('cell', { name: '₹250.00', exact: true }).first()).toBeVisible();
 });
 
 test('owner can switch combined DSR and export both pump registers', async ({ page }) => {
   await demoLogin(page);
-  await expect(page.getByText('Dono Pump · Owner overview')).toBeVisible();
+  await page.getByRole('button', { name: 'Compare both pumps' }).click();
+  await expect(page.getByRole('heading', { name: 'Both pumps. One clear picture.' })).toBeVisible();
   await page.goto('/reports');
   await page.getByLabel('Report pump').selectOption('all');
   await expect(page.getByText('Dono Pump · Combined')).toBeVisible();
@@ -275,4 +284,57 @@ test('owner can switch combined DSR and export both pump registers', async ({ pa
     await page.getByRole('button', { name: new RegExp(label) }).click();
     expect((await download).suggestedFilename()).toContain('.csv');
   }
+});
+
+
+test('team shows the fixed two-person team and manager setup is access-controlled', async ({ page }) => {
+  await demoLogin(page);
+  await page.getByRole('navigation', { name: 'Primary' }).first().getByRole('link', { name: 'Team', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Your team' })).toBeVisible();
+  await expect(page.getByText('owner@sunrisefuels.in', { exact: true })).toBeVisible();
+  await expect(page.getByText('manager@sunrisefuels.in', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit access', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Edit manager access' });
+  await expect(dialog.getByRole('checkbox')).toHaveCount(2);
+  await expect(dialog.getByRole('combobox')).toHaveCount(0);
+  await dialog.getByRole('checkbox').first().uncheck();
+  await dialog.getByRole('checkbox').nth(1).uncheck();
+  await expect(dialog.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Edit access', exact: true })).toBeFocused();
+});
+
+test('overview quick actions open entry forms and nested dialogs keep keyboard focus', async ({ page }) => {
+  await demoLogin(page);
+  await page.getByRole('link', { name: /Add expense Keep cash in check/ }).click();
+  const expense = page.getByRole('dialog', { name: 'Record expense' });
+  await expect(expense).toBeVisible();
+  await expect(page).toHaveURL(/new=expense/);
+  await page.keyboard.press('Escape');
+  await expect(expense).toBeHidden();
+  await expect(page).not.toHaveURL(/new=expense/);
+  await page.getByRole('navigation', { name: 'Primary' }).first().getByRole('link', { name: 'Overview', exact: true }).click();
+  await page.getByRole('link', { name: /Record delivery Receive fuel stock/ }).click();
+  const delivery = page.getByRole('dialog', { name: 'Record supplier delivery', exact: true });
+  await expect(delivery).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(delivery).toBeHidden();
+  await page.goto('/shifts?new=shift');
+  const shift = page.getByRole('dialog', { name: 'Open shift', exact: true });
+  await expect(shift).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(shift).toBeHidden();
+  await page.goto('/customers');
+  await page.getByRole('button', { name: 'Ledger', exact: true }).first().click();
+  const ledger = page.getByRole('dialog', { name: /credit ledger/ });
+  await ledger.getByRole('button', { name: 'Credit sale', exact: true }).click();
+  const sale = page.getByRole('dialog', { name: /Credit sale ·/ });
+  await expect(sale).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(sale).toBeHidden();
+  await expect(ledger).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(ledger).toBeHidden();
+  expect(await page.evaluate(() => document.body.style.overflow)).not.toBe('hidden');
 });

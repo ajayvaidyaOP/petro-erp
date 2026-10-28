@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { ROLE_DEFINITIONS, ROLE_KEYS, permissionsForRole } from '@petroflow/shared';
+import { ROLE_DEFINITIONS, BUSINESS_ROLE_KEYS, permissionsForRole } from '@petroflow/shared';
 import { all, get, run, shape, shapeAll, tx } from '../db/index.js';
 import { asyncHandler, created, ok, parse } from '../lib/http.js';
 import { conflict, forbidden, notFound, unprocessable } from '../lib/errors.js';
@@ -745,7 +745,7 @@ catalogRouter.get(
     if (!can(auth, 'employees.read')) throw forbidden();
     return ok(
       res,
-      ROLE_KEYS.filter((key) => key !== 'SUPER_ADMIN').map((key) => ({
+      BUSINESS_ROLE_KEYS.map((key) => ({
         key,
         ...ROLE_DEFINITIONS[key],
       })),
@@ -762,16 +762,22 @@ catalogRouter.get(
     const tenantId = tenantIdOf(auth);
     const rows = all<Record<string, unknown>>(
       `SELECT u.id, u.name, u.email, u.phone, u.role_key, u.status, u.last_login_at, u.created_at, u.is_demo
-         FROM users u WHERE u.tenant_id = ? AND u.role_key != 'SUPER_ADMIN'
+         FROM users u WHERE u.tenant_id = ? AND u.role_key IN ('OWNER', 'MANAGER')
            AND (? = 1 OR (u.role_key != 'OWNER' AND EXISTS (SELECT 1 FROM user_station_access usa WHERE usa.user_id = u.id AND usa.station_id IN (SELECT station_id FROM user_station_access WHERE user_id = ?)))) ORDER BY u.name`,
       [tenantId, auth.allStations ? 1 : 0, auth.user.id],
     );
-    const employees = rows.map((row) => ({
+    const employees = rows.map<Record<string, unknown>>((row) => ({
       ...shape(row),
       stationIds: employeeStations(String(row.id)).filter((id) => auth.allStations || auth.stationIds.has(id)),
       permissions: permissionsForRole(String(row.role_key)),
     }));
-    return ok(res, employees);
+    // Show the fixed active team, plus one recoverable manager if the seat is vacant.
+    const active = employees.filter((employee) => employee.status === 'ACTIVE');
+    if (!active.some((employee) => employee.roleKey === 'MANAGER')) {
+      const inactiveManager = employees.find((employee) => employee.roleKey === 'MANAGER');
+      if (inactiveManager) active.push(inactiveManager);
+    }
+    return ok(res, active);
   }),
 );
 
@@ -780,7 +786,7 @@ const employeeSchema = z.object({
   email: z.string().email().max(200),
   phone: z.string().max(20).optional().nullable(),
   password: z.string().min(10).max(200),
-  roleKey: z.enum(['OWNER', 'MANAGER', 'ACCOUNTANT', 'CASHIER', 'OPERATOR']),
+  roleKey: z.enum(['OWNER', 'MANAGER']),
   stationIds: z.array(z.string().min(3)).max(50).optional(),
   status: z.enum(['ACTIVE', 'DISABLED']).optional(),
 });
@@ -793,12 +799,16 @@ catalogRouter.post(
     if (!can(auth, 'employees.write')) throw forbidden();
     const tenantId = tenantIdOf(auth);
     const body = parse(employeeSchema, req.body);
+    if (body.roleKey !== 'MANAGER') throw conflict('This organization already has one owner. The owner account cannot be duplicated.');
+    if (get(`SELECT id FROM users WHERE tenant_id = ? AND role_key = 'MANAGER'`, [tenantId])) {
+      throw conflict('Only one manager is allowed. Edit or re-enable the existing manager in Team.');
+    }
     assertPasswordStrength(body.password);
     const email = body.email.toLowerCase().trim();
     if (get('SELECT id FROM users WHERE email = ?', [email])) throw conflict('A user with this email already exists');
-    const stationIds = body.roleKey === 'OWNER' ? [] : body.stationIds ?? [];
-    if (body.roleKey !== 'OWNER' && stationIds.length === 0) {
-      throw unprocessable('Station staff must be assigned to at least one station');
+    const stationIds = body.stationIds ?? [];
+    if (stationIds.length === 0) {
+      throw unprocessable('Assign the manager to at least one station');
     }
     for (const stationId of stationIds) getStationOrThrow(auth, stationId);
     const id = newId('usr');
@@ -840,13 +850,23 @@ catalogRouter.patch(
       z.object({
         name: z.string().min(2).max(120).optional(),
         phone: z.string().max(20).optional().nullable(),
-        roleKey: z.enum(['OWNER', 'MANAGER', 'ACCOUNTANT', 'CASHIER', 'OPERATOR']).optional(),
+        roleKey: z.enum(['OWNER', 'MANAGER']).optional(),
         status: z.enum(['ACTIVE', 'DISABLED']).optional(),
         stationIds: z.array(z.string().min(3)).max(50).optional(),
       }),
       req.body,
     );
-    const stationIds = body.stationIds ?? employeeStations(String(existing.id));
+    if (existing.role_key === 'OWNER' && (body.status === 'DISABLED' || (body.roleKey && body.roleKey !== 'OWNER'))) {
+      throw unprocessable('The owner account must remain active. You can update its name and phone.');
+    }
+    if (body.roleKey && body.roleKey !== existing.role_key) {
+      throw unprocessable('Roles are fixed: one owner and one manager. Edit the existing account instead.');
+    }
+    if (existing.role_key === 'MANAGER' && body.status === 'ACTIVE' && get(
+      `SELECT id FROM users WHERE tenant_id = ? AND role_key = 'MANAGER' AND status = 'ACTIVE' AND id != ?`, [tenantIdOf(auth), String(existing.id)],
+    )) throw conflict('An active manager already exists.');
+    const stationIds = existing.role_key === 'OWNER' ? [] : body.stationIds ?? employeeStations(String(existing.id));
+    if (existing.role_key === 'MANAGER' && stationIds.length === 0) throw unprocessable('Assign the manager to at least one station.');
     for (const stationId of stationIds) getStationOrThrow(auth, stationId);
     tx(() => {
       const sets: string[] = [];
@@ -917,6 +937,7 @@ catalogRouter.delete(
     ]);
     if (!existing) throw notFound('Employee not found');
     if (existing.id === auth.user.id) throw unprocessable('You cannot disable your own account');
+    if (existing.role_key === 'OWNER') throw unprocessable('The owner account cannot be disabled.');
     tx(() => {
       run('UPDATE users SET status = ?, updated_at = ? WHERE id = ?', ['DISABLED', nowIso(), String(existing.id)]);
       run('UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL', [nowIso(), String(existing.id)]);

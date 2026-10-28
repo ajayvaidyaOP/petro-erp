@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="en" class="h-full" data-theme="dark">
+<html lang="en" class="h-full" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#0a0d12" />
-    <meta name="description" content="PetroFlow ERP — multi-tenant petrol pump management for India" />
+    <meta name="theme-color" content="#f6f8f7" />
+    <meta name="description" content="PetroFlow ERP — Simple petrol pump management — one owner, one manager" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
@@ -19,26 +19,14 @@
           var theme =
             saved === 'light' || saved === 'dark'
               ? saved
-              : window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches
-                ? 'light'
-                : 'dark';
+              : 'light';
           document.documentElement.dataset.theme = theme;
           document.documentElement.style.colorScheme = theme;
         } catch (error) {
-          /* private mode / storage disabled — fall back to the dark default */
+          /* private mode / storage disabled — use the light default */
         }
       })();
     </script>
-
-    <!-- Loaded non-blocking: if the font never arrives the system stack is used. -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap"
-      media="print"
-      onload="this.media='all'"
-    />
 
     <title>PetroFlow ERP</title>
   </head>

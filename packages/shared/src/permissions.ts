@@ -62,99 +62,58 @@ export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 
 const P = PERMISSIONS;
 
+/** Only two business roles. Platform maintenance is deliberately separate. */
 export const ROLE_DEFINITIONS = {
-  SUPER_ADMIN: {
-    name: 'SaaS Super Admin',
-    scope: 'PLATFORM' as const,
-    description: 'Manages tenant organizations, subscriptions, platform devices and errors.',
-    permissions: [P.PLATFORM_MANAGE, P.PLATFORM_AUDIT, P.SETTINGS_READ] as Permission[],
-  },
   OWNER: {
-    name: 'Station Owner',
+    name: 'Owner',
+    label: 'Owner',
     scope: 'TENANT' as const,
-    description: 'Full access to the organization, all stations and billing.',
+    description: 'Full control of both pumps, prices, finance, team and settings.',
     permissions: Object.values(P).filter(
       (p) => p !== P.PLATFORM_MANAGE && p !== P.PLATFORM_AUDIT,
     ) as Permission[],
   },
-  STAFF: {
-    name: 'Pump Staff',
+  MANAGER: {
+    name: 'Manager',
+    label: 'Manager',
     scope: 'STATION' as const,
-    description: 'Daily work at the assigned pump only.',
+    description: 'Daily shifts, readings, stock, deliveries, credit and expenses.',
     permissions: [
       P.STATIONS_READ, P.PRODUCTS_READ, P.TANKS_READ, P.DISPENSERS_READ,
-      P.EMPLOYEES_READ, P.READINGS_READ, P.READINGS_MANUAL,
-      P.SHIFTS_READ, P.SHIFTS_OPEN, P.SHIFTS_CLOSE, P.SALES_READ, P.SALES_WRITE,
-      P.STOCK_READ, P.STOCK_WRITE, P.DELIVERIES_READ, P.DELIVERIES_WRITE,
-      P.CUSTOMERS_READ, P.SUPPLIERS_READ, P.EXPENSES_READ, P.EXPENSES_WRITE,
-      P.PAYMENTS_READ, P.DENSITY_READ, P.DENSITY_WRITE,
-      P.LUBRICANTS_READ, P.LUBRICANTS_WRITE, P.ATTENDANCE_READ, P.ATTENDANCE_WRITE,
-    ] as Permission[],
-  },
-  MANAGER: {
-    name: 'Station Manager',
-    scope: 'STATION' as const,
-    description: 'Runs day-to-day station operations, approves shifts and variances.',
-    permissions: [
-      P.STATIONS_READ, P.PRODUCTS_READ, P.PRODUCTS_WRITE, P.PRICES_WRITE,
-      P.TANKS_READ, P.TANKS_WRITE, P.DISPENSERS_READ, P.DISPENSERS_WRITE,
-      P.EMPLOYEES_READ, P.DEVICES_READ, P.DEVICES_WRITE, P.READINGS_READ,
-      P.READINGS_MANUAL, P.SHIFTS_READ, P.SHIFTS_OPEN, P.SHIFTS_CLOSE,
-      P.SHIFTS_APPROVE, P.SALES_READ, P.SALES_WRITE, P.STOCK_READ, P.STOCK_WRITE,
+      P.DEVICES_READ, P.READINGS_READ, P.READINGS_MANUAL,
+      P.SHIFTS_READ, P.SHIFTS_OPEN, P.SHIFTS_CLOSE, P.SHIFTS_APPROVE,
+      P.SALES_READ, P.SALES_WRITE, P.STOCK_READ, P.STOCK_WRITE,
       P.DELIVERIES_READ, P.DELIVERIES_WRITE, P.CUSTOMERS_READ, P.CUSTOMERS_WRITE,
       P.SUPPLIERS_READ, P.PAYMENTS_READ, P.PAYMENTS_WRITE, P.EXPENSES_READ,
       P.EXPENSES_WRITE, P.RECONCILIATION_READ, P.RECONCILIATION_WRITE,
       P.REPORTS_READ, P.DENSITY_READ, P.DENSITY_WRITE, P.DAYCLOSE_MANAGE,
-      P.COMPLIANCE_READ, P.COMPLIANCE_WRITE, P.LUBRICANTS_READ, P.LUBRICANTS_WRITE,
-      P.ATTENDANCE_READ, P.ATTENDANCE_WRITE, P.AUDIT_READ, P.SETTINGS_READ,
-    ] as Permission[],
-  },
-  ACCOUNTANT: {
-    name: 'Accountant',
-    scope: 'STATION' as const,
-    description: 'Handles ledgers, payments, expenses, reconciliations and reports.',
-    permissions: [
-      P.STATIONS_READ, P.PRODUCTS_READ, P.TANKS_READ, P.DISPENSERS_READ,
-      P.DEVICES_READ, P.READINGS_READ, P.SHIFTS_READ, P.SALES_READ,
-      P.STOCK_READ, P.DELIVERIES_READ, P.DELIVERIES_WRITE, P.CUSTOMERS_READ,
-      P.CUSTOMERS_WRITE, P.SUPPLIERS_READ, P.SUPPLIERS_WRITE, P.PAYMENTS_READ,
-      P.PAYMENTS_WRITE, P.EXPENSES_READ, P.EXPENSES_WRITE,
-      P.RECONCILIATION_READ, P.RECONCILIATION_WRITE, P.REPORTS_READ,
-      P.DENSITY_READ, P.COMPLIANCE_READ, P.LUBRICANTS_READ, P.LUBRICANTS_WRITE,
-      P.ATTENDANCE_READ, P.AUDIT_READ, P.SETTINGS_READ,
-    ] as Permission[],
-  },
-  CASHIER: {
-    name: 'Cashier',
-    scope: 'STATION' as const,
-    description: 'Shift operations, cash collection, credit receipts and customer payments.',
-    permissions: [
-      P.STATIONS_READ, P.PRODUCTS_READ, P.TANKS_READ, P.DISPENSERS_READ,
-      P.READINGS_READ, P.SHIFTS_READ, P.SHIFTS_OPEN, P.SHIFTS_CLOSE,
-      P.SALES_READ, P.SALES_WRITE, P.CUSTOMERS_READ, P.PAYMENTS_READ,
-      P.PAYMENTS_WRITE, P.EXPENSES_READ, P.RECONCILIATION_READ,
-      P.RECONCILIATION_WRITE, P.REPORTS_READ, P.DENSITY_READ, P.DENSITY_WRITE,
-      P.LUBRICANTS_READ, P.LUBRICANTS_WRITE, P.ATTENDANCE_READ,
-    ] as Permission[],
-  },
-  OPERATOR: {
-    name: 'Fuel Operator',
-    scope: 'STATION' as const,
-    description: 'Captures nozzle readings and operates the assigned shift.',
-    permissions: [
-      P.STATIONS_READ, P.PRODUCTS_READ, P.DISPENSERS_READ, P.READINGS_READ,
-      P.READINGS_MANUAL, P.SHIFTS_READ, P.SHIFTS_OPEN, P.SHIFTS_CLOSE,
-      P.SALES_READ, P.DENSITY_READ, P.DENSITY_WRITE, P.LUBRICANTS_READ,
-      P.ATTENDANCE_READ,
+      P.COMPLIANCE_READ, P.LUBRICANTS_READ, P.LUBRICANTS_WRITE,
+      P.ATTENDANCE_READ, P.ATTENDANCE_WRITE,
     ] as Permission[],
   },
 } as const;
 
-export type RoleKey = keyof typeof ROLE_DEFINITIONS;
+export type BusinessRoleKey = keyof typeof ROLE_DEFINITIONS;
+export const BUSINESS_ROLE_KEYS = Object.keys(ROLE_DEFINITIONS) as BusinessRoleKey[];
 
-export const ROLE_KEYS = Object.keys(ROLE_DEFINITIONS) as RoleKey[];
+const SYSTEM_ROLE_DEFINITIONS = {
+  ...ROLE_DEFINITIONS,
+  SUPER_ADMIN: {
+    name: 'Platform Administrator',
+    label: 'Platform Administrator',
+    scope: 'PLATFORM' as const,
+    description: 'Internal platform maintenance. Not a petrol-pump business role.',
+    permissions: [P.PLATFORM_MANAGE, P.PLATFORM_AUDIT, P.SETTINGS_READ] as Permission[],
+  },
+} as const;
+
+/** @deprecated Use BusinessRoleKey for business code. Includes the internal platform role. */
+export type RoleKey = keyof typeof SYSTEM_ROLE_DEFINITIONS;
+export const ROLE_KEYS = BUSINESS_ROLE_KEYS;
+export const SYSTEM_ROLE_KEYS = Object.keys(SYSTEM_ROLE_DEFINITIONS) as RoleKey[];
+export const RETIRED_ROLE_KEYS = ['STAFF', 'ACCOUNTANT', 'CASHIER', 'OPERATOR'] as const;
 
 export function permissionsForRole(role: string): Permission[] {
-  const def = ROLE_DEFINITIONS[role as RoleKey];
+  const def = SYSTEM_ROLE_DEFINITIONS[role as RoleKey];
   return def ? [...def.permissions] : [];
 }

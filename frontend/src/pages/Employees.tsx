@@ -1,551 +1,65 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ATTENDANCE_STATUSES } from '@petroflow/shared';
-import { CalendarCheck2, KeyRound, Pencil, Plus, ShieldCheck, UserCog, Users } from 'lucide-react';
-import { apiDelete, apiGet, apiPatch, apiPost } from '../lib/api';
+import { Check, ChevronDown, KeyRound, Pencil, Plus, ShieldCheck, Users } from 'lucide-react';
+import { apiGet, apiPatch, apiPost } from '../lib/api';
 import { useAuth, useStations } from '../lib/auth';
-import { formatDateTime, formatNumber, todayIst } from '../lib/format';
-import {
-  Badge,
-  Button,
-  Card,
-  CardHeader,
-  ConfirmDialog,
-  EmptyState,
-  ErrorState,
-  Field,
-  Input,
-  LoadingBlock,
-  Modal,
-  PageHeader,
-  Select,
-  StatCard,
-  StatusBadge,
-  useToast,
-} from '../components/ui';
+import { initials } from '../lib/format';
+import { Badge, Button, Card, CardHeader, ErrorState, Field, Input, LoadingBlock, Modal, PageHeader, useToast } from '../components/ui';
+import { AttendancePanel } from '../components/AttendancePanel';
 
-interface Employee {
-  id: string;
-  name: string;
-  email: string;
-  phone: string | null;
-  roleKey: string;
-  status: string;
-  lastLoginAt: string | null;
-  stationIds: string[];
-  permissions: string[];
-  isDemo: number;
-}
-
-interface RoleDef {
-  key: string;
-  label: string;
-  description: string;
-  permissions: string[];
-}
-
-const blank = { name: '', email: '', phone: '', password: '', roleKey: 'OPERATOR', stationIds: [] as string[] };
+interface Employee { id: string; name: string; email: string; phone: string | null; roleKey: string; status: string; stationIds: string[] }
+const roleInfo = {
+  OWNER: { title: 'Owner', subtitle: 'The business, in your control.', abilities: ['All pumps & organization-wide reports', 'Fuel prices, finance and subscription', 'Manager access and pump settings'], icon: ShieldCheck },
+  MANAGER: { title: 'Manager', subtitle: 'The everyday operations partner.', abilities: ['Shifts, readings and stock deliveries', 'Customer credit, payments and expenses', 'Daily reports for assigned pumps'], icon: Users },
+};
 
 export default function Employees() {
-  const { can, me } = useAuth();
+  const { me, refresh } = useAuth();
   const { stations } = useStations();
   const { toast } = useToast();
-  const queryClient = useQueryClient();
-
-  const [createOpen, setCreateOpen] = useState(false);
-  const [form, setForm] = useState({ ...blank });
+  const client = useQueryClient();
   const [edit, setEdit] = useState<Employee | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', phone: '', roleKey: 'OPERATOR', status: 'ACTIVE', stationIds: [] as string[] });
+  const [create, setCreate] = useState(false);
+  const [form, setForm] = useState({ name: '', phone: '', email: '', password: '', stationIds: [] as string[] });
   const [resetFor, setResetFor] = useState<Employee | null>(null);
   const [newPassword, setNewPassword] = useState('');
-  const [disable, setDisable] = useState<Employee | null>(null);
-
-  const employees = useQuery<Employee[]>({
-    queryKey: ['employees'],
-    queryFn: () => apiGet<Employee[]>('/catalog/employees'),
+  const employees = useQuery<Employee[]>({ queryKey: ['employees'], queryFn: () => apiGet<Employee[]>('/catalog/employees') });
+  const rows = employees.data ?? [];
+  const manager = rows.find((row) => row.roleKey === 'MANAGER' && row.status === 'ACTIVE') ?? rows.find((row) => row.roleKey === 'MANAGER');
+  const team = [rows.find((row) => row.roleKey === 'OWNER' && row.status === 'ACTIVE'), manager].filter((row): row is Employee => Boolean(row));
+  const invalidate = () => { void client.invalidateQueries({ queryKey: ['employees'] }); void client.invalidateQueries({ queryKey: ['attendance'] }); refresh(); };
+  const openEdit = (employee: Employee) => { setEdit(employee); setCreate(false); setForm({ name: employee.name, phone: employee.phone ?? '', email: employee.email, password: '', stationIds: employee.stationIds }); };
+  const openCreate = () => { setEdit(null); setCreate(true); setForm({ name: '', phone: '', email: '', password: '', stationIds: stations.map((station) => station.id) }); };
+  const save = useMutation({
+    mutationFn: () => create
+      ? apiPost('/catalog/employees', { name: form.name, email: form.email, phone: form.phone || null, password: form.password, roleKey: 'MANAGER', stationIds: form.stationIds })
+      : apiPatch(`/catalog/employees/${edit?.id}`, { name: form.name, phone: form.phone || null, ...(edit?.roleKey === 'MANAGER' ? { stationIds: form.stationIds, status: 'ACTIVE' } : {}) }),
+    onSuccess: () => { toast(create ? 'Manager added' : 'Account updated'); setEdit(null); setCreate(false); invalidate(); },
+    onError: (error: Error) => toast('Could not save account', { tone: 'danger', description: error.message }),
   });
-  const roles = useQuery<RoleDef[]>({
-    queryKey: ['roles'],
-    queryFn: () => apiGet<RoleDef[]>('/catalog/roles'),
-  });
-
-  const invalidate = () => void queryClient.invalidateQueries({ queryKey: ['employees'] });
-
-  const create = useMutation({
-    mutationFn: () =>
-      apiPost('/catalog/employees', {
-        ...form,
-        phone: form.phone || null,
-        stationIds: form.roleKey === 'OWNER' ? [] : form.stationIds,
-      }),
-    onSuccess: () => {
-      toast('Employee created', { tone: 'success', description: 'They can sign in with the temporary password.' });
-      setCreateOpen(false);
-      setForm({ ...blank });
-      invalidate();
-    },
-    onError: (error: Error) => toast('Could not create employee', { tone: 'danger', description: error.message }),
-  });
-
-  const update = useMutation({
-    mutationFn: () => apiPatch(`/catalog/employees/${edit?.id}`, editForm),
-    onSuccess: () => {
-      toast('Employee updated', { tone: 'success' });
-      setEdit(null);
-      invalidate();
-    },
-    onError: (error: Error) => toast('Update failed', { tone: 'danger', description: error.message }),
-  });
-
   const reset = useMutation({
     mutationFn: () => apiPost(`/catalog/employees/${resetFor?.id}/reset-password`, { newPassword }),
-    onSuccess: () => {
-      toast('Password reset', { tone: 'success', description: 'All active sessions for this user were revoked.' });
-      setResetFor(null);
-      setNewPassword('');
-    },
-    onError: (error: Error) => toast('Reset failed', { tone: 'danger', description: error.message }),
+    onSuccess: () => { toast('Password reset', { description: 'Other sessions were signed out.' }); setResetFor(null); setNewPassword(''); },
+    onError: (error: Error) => toast('Could not reset password', { tone: 'danger', description: error.message }),
   });
+  const toggleStation = (id: string) => setForm((value) => ({ ...value, stationIds: value.stationIds.includes(id) ? value.stationIds.filter((stationId) => stationId !== id) : [...value.stationIds, id] }));
 
-  const deactivate = useMutation({
-    mutationFn: () => apiDelete(`/catalog/employees/${disable?.id}`),
-    onSuccess: () => {
-      toast('Employee disabled', { tone: 'success', description: 'Access revoked; historical activity is preserved.' });
-      setDisable(null);
-      invalidate();
-    },
-    onError: (error: Error) => toast('Could not disable employee', { tone: 'danger', description: error.message }),
-  });
-
-  const rows = employees.data ?? [];
-  const roleMap = new Map((roles.data ?? []).map((r) => [r.key, r]));
-
-  const toggleStation = (list: string[], id: string) =>
-    list.includes(id) ? list.filter((s) => s !== id) : [...list, id];
-
-  return (
-    <div>
-      <PageHeader
-        title="Employees & Roles"
-        description="Roles are enforced by the API on every request. Station assignment limits what each non-owner employee can see and do."
-        actions={
-          can('employees.write') ? (
-            <Button onClick={() => setCreateOpen(true)}>
-              <Plus className="h-4 w-4" /> Add employee
-            </Button>
-          ) : null
-        }
-      />
-
-      <div className="mb-4 grid gap-3 sm:grid-cols-3">
-        <StatCard label="Employees" value={rows.length} icon={<Users className="h-4 w-4" />} />
-        <StatCard label="Active" value={rows.filter((r) => r.status === 'ACTIVE').length} tone="success" icon={<UserCog className="h-4 w-4" />} />
-        <StatCard
-          label="Roles in use"
-          value={new Set(rows.map((r) => r.roleKey)).size}
-          hint="Owner, manager, accountant, cashier and operator."
-          icon={<ShieldCheck className="h-4 w-4" />}
-        />
-      </div>
-
-      <Card>
-        <CardHeader title="Team" subtitle="Owners see all stations; every other role must be granted station access explicitly." />
-        {employees.isLoading ? (
-          <LoadingBlock />
-        ) : employees.isError ? (
-          <ErrorState error={employees.error} onRetry={() => void employees.refetch()} />
-        ) : rows.length === 0 ? (
-          <EmptyState title="No employees" description="Add staff to run shifts and record payments." />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Employee</th>
-                  <th>Role</th>
-                  <th>Stations</th>
-                  <th>Last login</th>
-                  <th>Status</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((employee) => {
-                  const role = roleMap.get(employee.roleKey);
-                  const names = employee.stationIds
-                    .map((id) => stations.find((s) => s.id === id)?.code)
-                    .filter(Boolean);
-                  return (
-                    <tr key={employee.id}>
-                      <td>
-                        <p className="font-medium text-ink-100">{employee.name}</p>
-                        <p className="text-xs text-ink-500">{employee.email}</p>
-                      </td>
-                      <td>
-                        <Badge tone={employee.roleKey === 'OWNER' ? 'info' : 'neutral'}>{role?.label ?? employee.roleKey}</Badge>
-                        <p className="mt-1 max-w-[220px] text-[11px] text-ink-500">{role?.description}</p>
-                      </td>
-                      <td className="text-xs text-ink-400">
-                        {employee.roleKey === 'OWNER' ? 'All stations' : names.length ? names.join(', ') : '—'}
-                      </td>
-                      <td className="text-xs text-ink-400">{employee.lastLoginAt ? formatDateTime(employee.lastLoginAt) : 'Never'}</td>
-                      <td><StatusBadge status={employee.status} /></td>
-                      <td className="text-right">
-                        {can('employees.write') ? (
-                          <div className="flex items-center justify-end gap-1">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => {
-                                setEdit(employee);
-                                setEditForm({
-                                  name: employee.name,
-                                  phone: employee.phone ?? '',
-                                  roleKey: employee.roleKey,
-                                  status: employee.status,
-                                  stationIds: employee.stationIds,
-                                });
-                              }}
-                              aria-label={`Edit ${employee.name}`}
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button size="sm" variant="ghost" onClick={() => setResetFor(employee)} aria-label={`Reset password for ${employee.name}`}>
-                              <KeyRound className="h-3.5 w-3.5" />
-                            </Button>
-                            {employee.id !== me?.user.id && employee.roleKey !== 'OWNER' && employee.status === 'ACTIVE' ? (
-                              <Button size="sm" variant="ghost" onClick={() => setDisable(employee)}>
-                                Disable
-                              </Button>
-                            ) : null}
-                          </div>
-                        ) : null}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
-
-      {can('attendance.read') && <AttendanceCard canWrite={can('attendance.write')} />}
-
-      <Modal
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        title="Add employee"
-        description="No public sign-up: accounts are created here by an authorised administrator."
-        size="lg"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setCreateOpen(false)}>Cancel</Button>
-            <Button loading={create.isPending} onClick={() => create.mutate()}>Create employee</Button>
-          </>
-        }
-      >
-        <EmployeeForm form={form} setForm={setForm} stations={stations} roles={roles.data ?? []} toggleStation={toggleStation} />
-      </Modal>
-
-      <Modal
-        open={Boolean(edit)}
-        onClose={() => setEdit(null)}
-        title={`Edit ${edit?.name ?? 'employee'}`}
-        size="lg"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setEdit(null)}>Cancel</Button>
-            <Button loading={update.isPending} onClick={() => update.mutate()}>Save changes</Button>
-          </>
-        }
-      >
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Name" required>
-            <Input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
-          </Field>
-          <Field label="Phone">
-            <Input value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} />
-          </Field>
-          <Field label="Role">
-            <Select value={editForm.roleKey} onChange={(e) => setEditForm({ ...editForm, roleKey: e.target.value })}>
-              {(roles.data ?? []).map((role) => (
-                <option key={role.key} value={role.key}>{role.label}</option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Status">
-            <Select value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}>
-              <option value="ACTIVE">Active</option>
-              <option value="DISABLED">Disabled</option>
-            </Select>
-          </Field>
-          {editForm.roleKey !== 'OWNER' ? (
-            <Field label="Station access" className="sm:col-span-2" hint="Required for every station-scoped role.">
-              <div className="grid gap-2 sm:grid-cols-2">
-                {stations.map((station) => (
-                  <label key={station.id} className="flex items-center gap-2 rounded-lg border border-navy-700/60 px-3 py-2 text-sm text-ink-200">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 rounded border-navy-600 bg-navy-900 text-accent"
-                      checked={editForm.stationIds.includes(station.id)}
-                      onChange={() => setEditForm({ ...editForm, stationIds: toggleStation(editForm.stationIds, station.id) })}
-                    />
-                    {station.name} <span className="text-xs text-ink-500">{station.code}</span>
-                  </label>
-                ))}
-              </div>
-            </Field>
-          ) : null}
-        </div>
-      </Modal>
-
-      <Modal
-        open={Boolean(resetFor)}
-        onClose={() => setResetFor(null)}
-        title={`Reset password — ${resetFor?.name ?? ''}`}
-        description="The employee must change this password at next sign-in; every active session is revoked."
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setResetFor(null)}>Cancel</Button>
-            <Button loading={reset.isPending} onClick={() => reset.mutate()}>Reset password</Button>
-          </>
-        }
-      >
-        <Field label="New password" required hint="At least 10 characters, with upper, lower and a number.">
-          <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
-        </Field>
-      </Modal>
-
-      <ConfirmDialog
-        open={Boolean(disable)}
-        title="Disable employee?"
-        message={<>{disable?.name} will be signed out immediately and cannot log in until re-enabled.</>}
-        confirmLabel="Disable access"
-        danger
-        loading={deactivate.isPending}
-        onClose={() => setDisable(null)}
-        onConfirm={() => deactivate.mutate()}
-      />
-    </div>
-  );
+  return <>
+    <PageHeader title="Your team" description="One owner. One manager. Clear responsibilities, no unnecessary roles." actions={!manager ? <Button variant="primary" onClick={openCreate} icon={<Plus className="h-4 w-4" />}>Set up manager</Button> : <Badge tone="accent" dot>Simple two-role access</Badge>} />
+    {employees.isLoading ? <LoadingBlock rows={6} /> : employees.isError ? <ErrorState error={employees.error} onRetry={() => void employees.refetch()} /> : <>
+      <div className="grid gap-5 lg:grid-cols-2">{team.map((employee) => {
+        const info = roleInfo[employee.roleKey as keyof typeof roleInfo];
+        const Icon = info.icon;
+        return <Card key={employee.id} className="overflow-hidden"><div className="border-b border-navy-700/50 bg-accent/[0.025] p-6"><div className="flex items-start justify-between"><span className="grid h-14 w-14 place-items-center rounded-2xl bg-accent/10 font-display text-lg font-bold text-accent">{initials(employee.name)}</span><Badge tone={employee.roleKey === 'OWNER' ? 'accent' : 'neutral'}>{info.title}</Badge></div><h2 className="mt-4 font-display text-xl font-bold text-ink-100">{employee.name}{employee.id === me?.user.id && <span className="ml-2 text-xs font-normal text-ink-500">You</span>}</h2><p className="mt-1 text-sm text-ink-400">{employee.email}</p><p className="mt-4 text-xs text-ink-500">{info.subtitle}</p></div><CardBodyTeam><p className="eyebrow mb-3">What this role can do</p><ul className="space-y-3">{info.abilities.map((ability) => <li key={ability} className="flex items-start gap-2 text-xs leading-relaxed text-ink-300"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />{ability}</li>)}</ul><div className="mt-5 border-t border-navy-700/50 pt-4"><p className="text-[11px] text-ink-500">Pump access</p><p className="mt-1 text-xs font-medium text-ink-200">{employee.roleKey === 'OWNER' ? 'All pumps' : stations.filter((station) => employee.stationIds.includes(station.id)).map((station) => station.name).join(' · ') || 'No pumps assigned'}</p>{employee.status !== 'ACTIVE' && <Badge tone="warning">Access disabled</Badge>}</div><div className="mt-5 flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={() => openEdit(employee)} icon={employee.roleKey === 'MANAGER' && employee.status !== 'ACTIVE' ? <Plus className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}>{employee.status !== 'ACTIVE' ? 'Re-enable manager' : employee.roleKey === 'MANAGER' ? 'Edit access' : 'Edit profile'}</Button><Button size="sm" variant="ghost" onClick={() => setResetFor(employee)} icon={<KeyRound className="h-3.5 w-3.5" />}>Reset password</Button></div></CardBodyTeam></Card>;
+      })}</div>
+      <div className="mt-5 flex items-start gap-3 rounded-xl border border-accent/15 bg-accent/[0.04] p-4"><ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-accent" /><div><p className="text-xs font-semibold text-ink-200">Less complexity. The same accountability.</p><p className="mt-1 text-xs leading-relaxed text-ink-500">Roles are fixed and permissions are checked by the server. The owner controls setup and prices; the manager handles the day-to-day. Every change stays in the audit log.</p></div></div>
+      <details className="card mt-6 group"><summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-semibold text-ink-200">Attendance & monthly summary <ChevronDown className="h-4 w-4 transition group-open:rotate-180" /></summary><div className="border-t border-navy-700/60 p-4"><AttendancePanel canWrite /></div></details>
+    </>}
+    <Modal open={Boolean(edit) || create} onClose={() => { setEdit(null); setCreate(false); }} title={create ? 'Set up your manager' : edit?.roleKey === 'OWNER' ? 'Edit owner profile' : 'Edit manager access'} description="A fixed role with clearly defined access. No extra role selection needed." footer={<><Button variant="ghost" onClick={() => { setEdit(null); setCreate(false); }}>Cancel</Button><Button variant="primary" loading={save.isPending} disabled={!form.name.trim() || (create && (!form.email || form.password.length < 10)) || (!create && edit?.roleKey === 'MANAGER' && form.stationIds.length === 0)} onClick={() => save.mutate()}>{create ? 'Create manager' : 'Save changes'}</Button></>}>
+      <div className="space-y-4"><Field label="Full name" required><Input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></Field>{create && <><Field label="Email address" required><Input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></Field><Field label="Temporary password" required hint="At least 10 characters, with upper- and lowercase letters and a number."><Input type="password" autoComplete="new-password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /></Field></>}<Field label="Phone"><Input type="tel" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></Field>{(create || edit?.roleKey === 'MANAGER') && <fieldset><legend className="label">Assigned pumps</legend><div className="space-y-2">{stations.map((station) => <label key={station.id} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border border-navy-700/70 p-3 text-sm text-ink-200"><input type="checkbox" checked={form.stationIds.includes(station.id)} onChange={() => toggleStation(station.id)} className="h-4 w-4 accent-accent" />{station.name}</label>)}</div><p className="mt-2 text-xs text-ink-500">Choose at least one pump. The manager cannot access unassigned pumps.</p></fieldset>}</div>
+    </Modal>
+    <Modal open={Boolean(resetFor)} onClose={() => setResetFor(null)} title={`Reset password · ${resetFor?.name ?? ''}`} description="All existing sessions for this account will be signed out." size="sm" footer={<><Button variant="ghost" onClick={() => setResetFor(null)}>Cancel</Button><Button variant="primary" loading={reset.isPending} disabled={newPassword.length < 10} onClick={() => reset.mutate()}>Reset password</Button></>}><Field label="New password" required hint="At least 10 characters, with upper- and lowercase letters and a number."><Input type="password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></Field></Modal>
+  </>;
 }
 
-interface AttendanceSheetRow {
-  userId: string;
-  name: string;
-  email: string;
-  roleKey: string;
-  status: string | null;
-  inTime: string | null;
-  outTime: string | null;
-}
-
-interface AttendanceSummaryRow {
-  userId: string;
-  name: string;
-  roleKey: string;
-  present: number;
-  absent: number;
-  halfDay: number;
-  weekOff: number;
-  leave: number;
-  payableDays: number;
-}
-
-function AttendanceCard({ canWrite }: { canWrite: boolean }) {
-  const { stationId } = useStations();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const [date, setDate] = useState(todayIst());
-  const [month, setMonth] = useState(() => todayIst().slice(0, 7));
-  const [marks, setMarks] = useState<Record<string, string>>({});
-
-  const sheet = useQuery<{ employees: AttendanceSheetRow[] }>({
-    queryKey: ['attendance', stationId, date],
-    queryFn: () => apiGet(`/attendance?stationId=${stationId}&date=${date}`),
-    enabled: Boolean(stationId),
-  });
-  const summary = useQuery<{ employees: AttendanceSummaryRow[] }>({
-    queryKey: ['attendance-summary', stationId, month],
-    queryFn: () => apiGet(`/attendance/summary?stationId=${stationId}&month=${month}`),
-    enabled: Boolean(stationId),
-  });
-
-  const rows = sheet.data?.employees ?? [];
-  const statusOf = (row: AttendanceSheetRow) => marks[row.userId] ?? row.status ?? '';
-
-  const save = useMutation({
-    mutationFn: () =>
-      apiPost('/attendance/mark', {
-        stationId,
-        date,
-        entries: rows
-          .filter((row) => statusOf(row))
-          .map((row) => ({ userId: row.userId, status: statusOf(row), inTime: row.inTime ?? undefined, outTime: row.outTime ?? undefined })),
-      }),
-    onSuccess: () => {
-      toast('Attendance lag gayi', { description: `${date} ki Haziri save ho gayi.` });
-      setMarks({});
-      void queryClient.invalidateQueries({ queryKey: ['attendance'] });
-      void queryClient.invalidateQueries({ queryKey: ['attendance-summary'] });
-    },
-    onError: (error: Error) => toast('Attendance nahi lagi', { tone: 'danger', description: error.message }),
-  });
-
-  const toneFor = (status: string) =>
-    status === 'PRESENT' ? 'bg-emerald-400/15 text-ok border-emerald-400/40'
-      : status === 'ABSENT' ? 'bg-rose-500/10 text-danger border-rose-500/40'
-      : status === 'HALF_DAY' ? 'bg-amber-400/10 text-warn border-amber-400/40'
-      : 'bg-navy-800 text-ink-300 border-navy-600';
-
-  return (
-    <Card className="mt-4">
-      <CardHeader
-        title={<span className="flex items-center gap-2"><CalendarCheck2 className="h-4 w-4 text-teal-300" /> Attendance — Haziri</span>}
-        subtitle="Roz ki Haziri lagao; mahine ke aakhir me payable days se salary banti hai."
-        action={(
-          <div className="flex items-end gap-2">
-            <Field label="Tarikh" className="mb-0 w-40">
-              <Input type="date" value={date} onChange={(e) => { setDate(e.target.value); setMarks({}); }} />
-            </Field>
-            {canWrite && (
-              <Button size="sm" variant="primary" loading={save.isPending} disabled={rows.length === 0} onClick={() => save.mutate()}>
-                Haziri save karo
-              </Button>
-            )}
-          </div>
-        )}
-      />
-      {sheet.isLoading ? (
-        <LoadingBlock rows={3} />
-      ) : sheet.isError ? (
-        <div className="p-4"><ErrorState error={sheet.error} onRetry={() => void sheet.refetch()} /></div>
-      ) : (
-        <div className="divide-y divide-navy-800/70">
-          {rows.map((row) => (
-            <div key={row.userId} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
-              <div>
-                <p className="text-sm font-medium text-ink-100">{row.name}</p>
-                <p className="text-[10px] text-ink-500">{row.roleKey.replace(/_/g, ' ')} · {row.email}</p>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {ATTENDANCE_STATUSES.map((status) => (
-                  <button
-                    key={status}
-                    type="button"
-                    disabled={!canWrite}
-                    onClick={() => setMarks({ ...marks, [row.userId]: status })}
-                    aria-pressed={statusOf(row) === status}
-                    className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${
-                      statusOf(row) === status ? toneFor(status) : 'border-navy-700 bg-navy-900/50 text-ink-500 hover:text-ink-200'
-                    } ${canWrite ? '' : 'cursor-not-allowed opacity-70'}`}
-                  >
-                    {status === 'PRESENT' ? 'Present' : status === 'ABSENT' ? 'Absent' : status === 'HALF_DAY' ? 'Aadha din' : status === 'WEEK_OFF' ? 'Chhutti din' : 'Leave'}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="border-t border-navy-700/60 px-4 py-3">
-        <div className="mb-2 flex items-center justify-between">
-          <p className="text-xs font-semibold text-ink-200">Mahine ka hisaab (salary ke liye)</p>
-          <Field label="Mahina" className="mb-0 w-40">
-            <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
-          </Field>
-        </div>
-        {summary.isLoading ? (
-          <LoadingBlock rows={2} />
-        ) : summary.isError ? (
-          <ErrorState error={summary.error} onRetry={() => void summary.refetch()} />
-        ) : (
-          <div className="table-wrap">
-            <table className="data-table min-w-[560px]">
-              <thead>
-                <tr>
-                  <th>Staff</th>
-                  <th className="text-right">Present</th>
-                  <th className="text-right">Aadha din</th>
-                  <th className="text-right">Absent</th>
-                  <th className="text-right">Chhutti/Leave</th>
-                  <th className="text-right">Payable days</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(summary.data?.employees ?? []).map((row) => (
-                  <tr key={row.userId}>
-                    <td className="text-ink-200">{row.name}<span className="block text-[10px] text-ink-500">{row.roleKey.replace(/_/g, ' ')}</span></td>
-                    <td className="num text-right">{row.present}</td>
-                    <td className="num text-right">{row.halfDay}</td>
-                    <td className="num text-right text-danger">{row.absent}</td>
-                    <td className="num text-right text-ink-400">{row.weekOff + row.leave}</td>
-                    <td className="num text-right font-semibold text-ink-100">{formatNumber(row.payableDays, 1)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        <p className="mt-2 text-[11px] text-ink-500">Payable days = Present + aadha din × 0.5 + weekly off. Salary = (mahine ki tankhwah ÷ 30) × payable days.</p>
-      </div>
-    </Card>
-  );
-}
-
-function EmployeeForm({
-  form,
-  setForm,
-  stations,
-  roles,
-  toggleStation,
-}: {
-  form: typeof blank;
-  setForm: (value: typeof blank) => void;
-  stations: { id: string; name: string; code: string }[];
-  roles: RoleDef[];
-  toggleStation: (list: string[], id: string) => string[];
-}) {
-  return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      <Field label="Full name" required>
-        <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-      </Field>
-      <Field label="Email" required>
-        <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-      </Field>
-      <Field label="Phone">
-        <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-      </Field>
-      <Field label="Temporary password" required hint="They will be prompted to change it.">
-        <Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-      </Field>
-      <Field label="Role" required>
-        <Select value={form.roleKey} onChange={(e) => setForm({ ...form, roleKey: e.target.value })}>
-          {roles.map((role) => (
-            <option key={role.key} value={role.key}>{role.label}</option>
-          ))}
-        </Select>
-      </Field>
-      {form.roleKey !== 'OWNER' ? (
-        <Field label="Station access" className="sm:col-span-2" hint="At least one station is required.">
-          <div className="grid gap-2 sm:grid-cols-2">
-            {stations.map((station) => (
-              <label key={station.id} className="flex items-center gap-2 rounded-lg border border-navy-700/60 px-3 py-2 text-sm text-ink-200">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-navy-600 bg-navy-900 text-accent"
-                  checked={form.stationIds.includes(station.id)}
-                  onChange={() => setForm({ ...form, stationIds: toggleStation(form.stationIds, station.id) })}
-                />
-                {station.name} <span className="text-xs text-ink-500">{station.code}</span>
-              </label>
-            ))}
-          </div>
-        </Field>
-      ) : null}
-    </div>
-  );
-}
+function CardBodyTeam({ children }: { children: React.ReactNode }) { return <div className="p-6">{children}</div>; }

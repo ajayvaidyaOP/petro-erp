@@ -50,6 +50,9 @@ authRouter.post(
     const { email, password } = parse(loginSchema, req.body);
     const row = authenticatePassword(email, password);
     if (!row) throw unauthorized('Invalid email or password');
+    if (!['OWNER', 'MANAGER', 'SUPER_ADMIN'].includes(String(row.role_key))) {
+      throw forbidden('This account uses a retired role. Ask the owner to set up the manager account.');
+    }
     const tenantId = (row.tenant_id as string | null) ?? null;
     if (tenantId) {
       const tenant = get<{ status: string }>('SELECT status FROM tenants WHERE id = ?', [tenantId]);
@@ -205,7 +208,7 @@ authRouter.get(
     const rows = all<Record<string, unknown>>(
       `SELECT u.email, u.name, u.role_key, t.name AS tenant_name, t.slug
          FROM users u LEFT JOIN tenants t ON t.id = u.tenant_id
-        WHERE u.is_demo = 1 AND u.role_key != 'SUPER_ADMIN' ORDER BY u.role_key, u.email`,
+        WHERE u.is_demo = 1 AND u.status = 'ACTIVE' AND u.role_key IN ('OWNER', 'MANAGER') ORDER BY CASE u.role_key WHEN 'OWNER' THEN 0 ELSE 1 END, u.email`,
     );
     return ok(res, {
       demoMode: true,
