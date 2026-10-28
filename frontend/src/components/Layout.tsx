@@ -11,6 +11,7 @@ import { activeSection, navigation } from '../lib/navigation';
 import { cn } from '../lib/utils';
 import { initials } from '../lib/format';
 import { Button, Field, Input, Modal, useToast } from './ui';
+import { NotificationCenter } from './NotificationCenter';
 import { apiPost } from '../lib/api';
 
 const icons: Record<string, ReactNode> = {
@@ -183,6 +184,7 @@ export function Layout() {
         </div>
         <div className="hidden lg:block">{stationPicker()}</div>
         {isDemoTenant && <span className="hidden rounded-md border border-warn/20 bg-warn/5 px-2 py-1 text-[10px] font-semibold text-warn sm:inline">DEMO</span>}
+        <NotificationCenter />
         <ThemeToggle />
         <div className="relative" ref={menuRef}>
           <button onClick={() => setUserMenu((value) => !value)} className="flex min-h-10 items-center gap-2 rounded-xl p-1 pr-1.5 transition hover:bg-navy-800" aria-haspopup="menu" aria-expanded={userMenu} aria-label="Account menu">

@@ -55,10 +55,10 @@ reportsRouter.get('/combined-dashboard', asyncHandler((req, res) => {
       "SELECT total_value FROM shifts WHERE station_id = ? AND business_date >= ? AND business_date <= ? AND status IN ('CLOSED','FLAGGED')", [station.id, monthStart, date],
     );
     const tanks = tankSummary(station.id);
-    const alerts: { level: string; message: string }[] = [...complianceAlerts(station.id)];
+    const alerts: { level: string; message: string; to?: string }[] = [...complianceAlerts(station.id)];
     for (const tank of tanks) {
-      if (D(tank.bookStockLitres).lt(0)) alerts.push({ level: 'error', message: `${tank.code}: negative book stock` });
-      else if (D(tank.capacityLitres).gt(0) && D(tank.fillPct).lt(15)) alerts.push({ level: 'warning', message: `${tank.code}: low stock at ${tank.fillPct}%` });
+      if (D(tank.bookStockLitres).lt(0)) alerts.push({ level: 'error', message: `${tank.code}: negative book stock`, to: '/tanks' });
+      else if (D(tank.capacityLitres).gt(0) && D(tank.fillPct).lt(15)) alerts.push({ level: 'warning', message: `${tank.code}: low stock at ${tank.fillPct}%`, to: '/tanks' });
     }
     const trend = Array.from({ length: 7 }, (_, i) => {
       const day = addDays(date, i - 6);
@@ -181,24 +181,24 @@ reportsRouter.get(
       });
     }
 
-    const alerts: { level: string; message: string }[] = [];
+    const alerts: { level: string; message: string; to?: string }[] = [];
     const flagged = shifts.filter((s) => s.status === 'FLAGGED');
     if (flagged.length > 0) {
-      alerts.push({ level: 'warning', message: `${flagged.length} shift(s) on ${date} are flagged and awaiting approval.` });
+      alerts.push({ level: 'warning', message: `${flagged.length} shift(s) on ${date} are flagged and awaiting approval.`, to: '/shifts' });
     }
     if (openShifts.length > 0) {
-      alerts.push({ level: 'info', message: `${openShifts.length} shift(s) are currently open.` });
+      alerts.push({ level: 'info', message: `${openShifts.length} shift(s) are currently open.`, to: '/shifts' });
     }
     if (devices.length > 0 && online === 0) {
-      alerts.push({ level: 'error', message: 'All hardware gateways are offline — readings will not arrive until they reconnect.' });
+      alerts.push({ level: 'error', message: 'All hardware gateways are offline — readings will not arrive until they reconnect.', to: '/devices' });
     } else if (devices.length > online) {
-      alerts.push({ level: 'warning', message: `${devices.length - online} hardware gateway(s) are offline.` });
+      alerts.push({ level: 'warning', message: `${devices.length - online} hardware gateway(s) are offline.`, to: '/devices' });
     }
     for (const tank of tankSummary(station.id)) {
       if (D(tank.bookStockLitres).lt(0)) {
-        alerts.push({ level: 'error', message: `${tank.code}: negative book stock — review deliveries and dispensed entries.` });
+        alerts.push({ level: 'error', message: `${tank.code}: negative book stock — review deliveries and dispensed entries.`, to: '/tanks' });
       } else if (D(tank.capacityLitres).gt(0) && D(tank.fillPct).lt(15)) {
-        alerts.push({ level: 'warning', message: `${tank.code}: low stock at ${tank.fillPct}% of capacity.` });
+        alerts.push({ level: 'warning', message: `${tank.code}: low stock at ${tank.fillPct}% of capacity.`, to: '/tanks' });
       }
     }
     alerts.push(...complianceAlerts(station.id));
@@ -209,7 +209,7 @@ reportsRouter.get(
         [station.id, yesterday],
       )?.count ?? 0;
       if (hadShifts > 0) {
-        alerts.push({ level: 'warning', message: `Kal (${yesterday}) ka din band nahi hua hai — Shifts → Day closing se roznamcha band karo.` });
+        alerts.push({ level: 'warning', message: `Kal (${yesterday}) ka din band nahi hua hai — Shifts → Day closing se roznamcha band karo.`, to: '/shifts' });
       }
     }
 

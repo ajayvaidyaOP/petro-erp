@@ -8,9 +8,11 @@ import {
 } from 'lucide-react';
 import { apiGet } from '../lib/api';
 import { useAuth, useStations } from '../lib/auth';
-import { unclosedShiftMessage, type ShiftAlertsResponse } from '../lib/shifts';
+import type { ShiftAlertsResponse } from '../lib/shifts';
+import { buildAttentionItems } from '../lib/alerts';
 import { useChartPalette } from '../lib/theme';
-import { formatDate, formatDateTime, formatINR, formatLitres, formatNumber, todayIst } from '../lib/format';
+import type { OperationalAlert } from '../lib/alerts';
+import { formatClockTime, formatDate, formatDateTime, formatINR, formatLitres, formatNumber, todayIst } from '../lib/format';
 import { Badge, Button, Card, CardBody, CardHeader, EmptyState, ErrorState, Input, LoadingBlock, StatusBadge } from '../components/ui';
 
 interface DashboardData {
@@ -23,7 +25,7 @@ interface DashboardData {
   receivables: string;
   payables: string;
   trend: { date: string; litres: string; value: string; transactionsValue: string }[];
-  alerts: { level: 'info' | 'warning' | 'error'; message: string }[];
+  alerts: OperationalAlert[];
   disclaimer: string;
 }
 interface PriceRow { id: string; productId: string; productName: string; stationId: string | null; ratePerLitre: string; effectiveTo: string | null }
@@ -67,7 +69,7 @@ export default function Dashboard() {
   const data = dashboard.data!;
   const openShift = data.openShifts[0];
   const lowStock = data.stock.filter((tank) => Number(tank.fillPct) < 15);
-  const alerts = [...data.alerts, ...(alertsQuery.data?.alerts ?? []).map((alert) => ({ level: 'warning' as const, message: unclosedShiftMessage(alert) }))];
+  const alerts = buildAttentionItems(data, alertsQuery.data);
   const firstName = me?.user.name.split(' ')[0] ?? '';
   const hour = Number(new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Kolkata' }).format(new Date()));
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
@@ -81,7 +83,7 @@ export default function Dashboard() {
 
   return <>
     <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
-      <div><p className="mb-2 text-xs font-medium text-ink-500">{formatDate(date)} <span className="mx-1.5 text-navy-600">/</span> {station?.name ?? data.station.name}</p><h1 className="font-display text-[27px] font-extrabold tracking-tight text-ink-100 sm:text-[32px]">{greeting}, {firstName}<span className="text-accent">.</span></h1><p className="mt-2 text-sm text-ink-400">Your pump’s day, without the paperwork.</p></div>
+      <div><p className="mb-2 text-xs font-medium text-ink-500">{formatDate(date)} <span className="mx-1.5 text-navy-600">/</span> {station?.name ?? data.station.name}</p><h1 className="font-display text-[27px] font-extrabold tracking-tight text-ink-100 sm:text-[32px]">{greeting}, {firstName}<span className="text-accent">.</span></h1><div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-ink-400"><span className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${openShift ? 'bg-ok' : 'bg-navy-600'}`} aria-hidden />{openShift ? <>Shift #{String(openShift.shiftNumber)} open{openShift.operatorName ? <span className="text-ink-500"> · {String(openShift.operatorName)}</span> : null}</> : 'No shift open'}</span><span className="text-ink-500">Synced {formatClockTime(dashboard.dataUpdatedAt)} IST</span></div></div>
       <div className="flex flex-wrap items-center gap-2"><Input type="date" aria-label="Business date" value={date} max={todayIst()} onChange={(event) => { if (event.target.value) setDate(event.target.value); }} className="w-auto" /><Link to={openShift ? '/shifts' : '/shifts?new=shift'}><Button variant="primary" icon={openShift ? <ArrowUpRight className="h-4 w-4" /> : <Plus className="h-4 w-4" />}>{openShift ? 'Manage shift' : 'Open shift'}</Button></Link></div>
     </div>
 
@@ -116,7 +118,7 @@ export default function Dashboard() {
 
     <div className="mt-5 grid gap-5 lg:grid-cols-2 xl:grid-cols-[1.1fr_1fr_1fr]">
       <Card><CardHeader title="Shift status" action={<Link to="/shifts" className="link text-xs">View shifts</Link>} /><CardBody>{openShift ? <><div className="flex items-center justify-between"><span className="flex items-center gap-2 text-sm font-semibold text-ink-100"><span className="grid h-9 w-9 place-items-center rounded-xl bg-accent/10 text-accent"><ListChecks className="h-4 w-4" /></span>Shift #{String(openShift.shiftNumber)}</span><StatusBadge status="OPEN" /></div><p className="mt-3 text-xs text-ink-500">Opened {formatDateTime(String(openShift.openedAt))}</p><p className="mt-1 text-xs text-ink-400">By {String(openShift.operatorName ?? openShift.openedByName ?? '—')}</p><Link to="/shifts" className="mt-4 flex min-h-10 items-center justify-center gap-2 rounded-xl bg-accent/10 text-xs font-semibold text-accent">Continue shift <ArrowRight className="h-3.5 w-3.5" /></Link></> : <div className="py-4 text-center"><CheckCircle2 className="mx-auto h-8 w-8 text-accent" /><p className="mt-3 text-sm font-semibold text-ink-100">No open shift</p><p className="mt-1 text-xs text-ink-500">Start a shift when the next crew is ready.</p></div>}</CardBody></Card>
-      <Card><CardHeader title="Needs attention" action={<Badge tone={alerts.length ? 'warning' : 'success'}>{alerts.length ? `${alerts.length} alerts` : 'All clear'}</Badge>} /><CardBody className="max-h-64 space-y-3 overflow-y-auto scroll-thin">{alerts.length ? alerts.map((alert, index) => <div key={index} className="flex items-start gap-2.5 rounded-lg bg-warn/[0.055] p-2.5"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warn" /><p className="text-xs leading-relaxed text-ink-300">{alert.message}</p></div>) : <div className="py-5 text-center"><CheckCircle2 className="mx-auto h-8 w-8 text-accent" /><p className="mt-3 text-xs text-ink-400">Nothing needs your attention right now.</p></div>}</CardBody></Card>
+      <Card><CardHeader title="Needs attention" action={<Badge tone={alerts.length ? 'warning' : 'success'}>{alerts.length ? `${alerts.length} alerts` : 'All clear'}</Badge>} /><CardBody className="max-h-64 space-y-3 overflow-y-auto scroll-thin">{alerts.length ? alerts.map((alert) => { const body = <><AlertTriangle className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${alert.level === 'error' ? 'text-danger' : 'text-warn'}`} /><p className="min-w-0 flex-1 text-xs leading-relaxed text-ink-300">{alert.message}</p>{alert.to && <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-500" aria-hidden />}</>; return alert.to ? <Link key={alert.id} to={alert.to} className="flex items-start gap-2.5 rounded-lg bg-warn/[0.055] p-2.5 transition hover:bg-warn/[0.12]">{body}</Link> : <div key={alert.id} className="flex items-start gap-2.5 rounded-lg bg-warn/[0.055] p-2.5">{body}</div>; }) : <div className="py-5 text-center"><CheckCircle2 className="mx-auto h-8 w-8 text-accent" /><p className="mt-3 text-xs text-ink-400">Nothing needs your attention right now.</p></div>}</CardBody></Card>
       <Card className="lg:col-span-2 xl:col-span-1"><CardHeader title="Recorded payment mix" subtitle="Transactions, not totalizer estimates" /><CardBody className="space-y-3">{paymentTotal > 0 ? Object.entries(data.sales.byMode).filter(([, amount]) => Number(amount) > 0).map(([mode, amount]) => <div key={mode}><div className="mb-1.5 flex justify-between text-xs"><span className="text-ink-400">{mode === 'UPI' ? 'UPI' : mode.charAt(0) + mode.slice(1).toLowerCase()}</span><span className="num font-semibold text-ink-200">{formatINR(amount)}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-navy-800"><div className="h-full rounded-full bg-accent/65" style={{ width: `${Number(amount) / paymentTotal * 100}%` }} /></div></div>) : <p className="py-6 text-center text-xs text-ink-500">No transactions recorded for this date.</p>}<Link to="/finance" className="link mt-2 inline-block text-xs">Open finance</Link></CardBody></Card>
     </div>
     <div className="mt-6 flex flex-wrap items-start justify-between gap-3 text-[10px] leading-relaxed text-ink-500"><p className="max-w-3xl">{data.disclaimer} Tank levels show current book stock.</p><span className="shrink-0">{lowStock.length ? `${lowStock.length} tanks low on stock` : `${data.stock.length} tanks tracked`}</span></div>
