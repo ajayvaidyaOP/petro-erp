@@ -31,7 +31,7 @@ beforeAll(async () => {
 describe('two-pump client setup', () => {
   it('seeds exactly one owner and one manager for two pumps', async () => {
     const demo = await request(app).get('/api/v1/auth/demo-accounts');
-    expect(demo.body.data.accounts.map((u: { email: string }) => u.email).sort()).toEqual(['manager@sunrisefuels.in', 'owner@sunrisefuels.in']);
+    expect(demo.body.data.accounts.map((u: { email: string }) => u.email).sort()).toEqual(['attendant@sunrisefuels.in', 'manager@sunrisefuels.in', 'owner@sunrisefuels.in']);
     expect(stations).toHaveLength(2);
     const me = await manager.get('/api/v1/auth/me');
     expect(me.body.data.stations).toHaveLength(2);
@@ -47,7 +47,7 @@ describe('two-pump client setup', () => {
     expect((await manager.post('/api/v1/catalog/prices').send({})).status).toBe(403);
     expect((await manager.get('/api/v1/catalog/employees')).status).toBe(403);
     const roles = await owner.get('/api/v1/catalog/roles');
-    expect(roles.body.data.map((role: { key: string }) => role.key)).toEqual(['OWNER', 'MANAGER']);
+    expect(roles.body.data.map((role: { key: string }) => role.key)).toEqual(['OWNER', 'MANAGER', 'STAFF']);
   });
 
   it('keeps one customer balance across both pumps while labelling owner ledger entries', async () => {
@@ -112,7 +112,7 @@ describe('two-role access consolidation', () => {
     const passwordHash = get<{ password_hash: string }>('SELECT password_hash FROM users WHERE id = ?', [original[0].id])!.password_hash;
     // Simulate an older database before the partial unique index existed.
     run('DROP INDEX idx_one_active_role_per_tenant');
-    run(`INSERT INTO roles (id, key, name, permissions, scope, is_system) VALUES ('rol_legacy_staff', 'STAFF', 'Legacy staff', '["shifts.read"]', 'STATION', 1)`);
+    run(`INSERT INTO roles (id, key, name, permissions, scope, is_system) VALUES ('rol_legacy_staff', 'STAFF', 'Legacy staff', '["shifts.read"]', 'STATION', 1) ON CONFLICT(key) DO UPDATE SET name = excluded.name, permissions = excluded.permissions`);
     const extras = [
       { id: 'usr_extra_owner', email: 'extra-owner@test.invalid', role: 'OWNER' },
       { id: 'usr_extra_manager', email: 'extra-manager@test.invalid', role: 'MANAGER' },
@@ -127,20 +127,24 @@ describe('two-role access consolidation', () => {
     syncRoles();
     syncRoles(); // Boot/seed retries must not duplicate audit entries.
     const active = all<{ id: string }>("SELECT id FROM users WHERE tenant_id = ? AND status = 'ACTIVE'", [tenantId]);
-    expect(active.map((row) => row.id).sort()).toEqual(original.map((row) => row.id).sort());
-    for (const user of extras) {
+    expect(active.map((row) => row.id).sort()).toEqual([...original.map((row) => row.id), 'usr_legacy_staff'].sort());
+    for (const user of extras.filter((row) => row.role !== 'STAFF')) {
       const row = get<{ status: string; role_key: string }>('SELECT status, role_key FROM users WHERE id = ?', [user.id])!;
       expect(row.status).toBe('DISABLED');
       expect(row.role_key).toBe(user.role);
       expect(get<{ count: number }>('SELECT COUNT(*) AS count FROM sessions WHERE user_id = ? AND revoked_at IS NULL', [user.id])!.count).toBe(0);
       expect(get<{ count: number }>("SELECT COUNT(*) AS count FROM audit_logs WHERE entity_id = ? AND action = 'TEAM_ACCESS_CONSOLIDATED'", [user.id])!.count).toBe(1);
     }
+    const keptStaff = get<{ status: string; role_key: string }>('SELECT status, role_key FROM users WHERE id = ?', ['usr_legacy_staff'])!;
+    expect(keptStaff.status).toBe('ACTIVE');
+    expect(keptStaff.role_key).toBe('STAFF');
     expect(JSON.parse(get<{ permissions: string }>("SELECT permissions FROM roles WHERE key = 'STAFF'")!.permissions)).toEqual([]);
     expect(() => run(`INSERT INTO users (id, tenant_id, email, name, password_hash, role_key, status, created_at, updated_at)
       VALUES ('usr_blocked_duplicate', ?, 'blocked@test.invalid', 'Blocked', ?, 'OWNER', 'ACTIVE', '2099-01-01', '2099-01-01')`, [tenantId, passwordHash])).toThrow(/UNIQUE/);
     const team = await owner.get('/api/v1/catalog/employees');
-    expect(team.body.data).toHaveLength(2);
-    expect(team.body.data.map((row: { roleKey: string }) => row.roleKey).sort()).toEqual(['MANAGER', 'OWNER']);
+    const roles = team.body.data.map((row: { roleKey: string }) => row.roleKey);
+    expect([...new Set(roles)].sort()).toEqual(['MANAGER', 'OWNER', 'STAFF']);
+    expect(roles.filter((role: string) => role === 'STAFF').length).toBeGreaterThanOrEqual(1);
   });
 
   it('rejects duplicate seats, role changes and an unassigned manager', async () => {
@@ -153,6 +157,28 @@ describe('two-role access consolidation', () => {
     expect((await owner.patch(`/api/v1/catalog/employees/${managerId}`).send({ roleKey: 'OWNER' })).status).toBe(422);
     expect((await owner.patch(`/api/v1/catalog/employees/${managerId}`).send({ stationIds: [] })).status).toBe(422);
     expect((await owner.patch(`/api/v1/catalog/employees/${ownerId}`).send({ status: 'DISABLED' })).status).toBe(422);
+  });
+
+  it('creates a staff login with only the ticked permissions', async () => {
+    const created = await owner.post('/api/v1/catalog/employees').send({
+      name: 'Raju Attendant',
+      email: 'raju.attendant@test.invalid',
+      password: 'PetroFlow@2025',
+      roleKey: 'STAFF',
+      stationIds: [stations[0].id],
+      permissions: ['shifts.read', 'platform.manage', 'employees.write'],
+    });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    expect(created.body.data.permissions).toEqual(['shifts.read']);
+    const agent = request.agent(app);
+    expect((await agent.post('/api/v1/auth/login').send({ email: 'raju.attendant@test.invalid', password: 'PetroFlow@2025' })).status).toBe(200);
+    const me = await agent.get('/api/v1/auth/me');
+    expect(me.body.data.permissions).toEqual(['shifts.read']);
+    expect(me.body.data.stations).toHaveLength(1);
+    expect((await agent.get(`/api/v1/shifts?stationId=${stations[0].id}`)).status).toBe(200);
+    expect((await agent.get('/api/v1/catalog/employees')).status).toBe(403);
+    expect((await agent.post('/api/v1/catalog/prices').send({})).status).toBe(403);
+    expect((await agent.get(`/api/v1/shifts?stationId=${stations[1].id}`)).status).toBe(403);
   });
 
   it('cannot elevate a manager through legacy station permission overrides', async () => {

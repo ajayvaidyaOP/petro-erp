@@ -1,218 +1,401 @@
 # PetroFlow ERP
 
-Petrol-pump operations ERP with a React + Vite frontend, Express API, hardware gateway, shared TypeScript package, and SQLite schema/data at the repository root.
+Petrol-pump operations and credit CRM. React/Vite frontend, Java API (`gradlew`), MySQL. One dealer organisation, one or more pumps.
 
-## One owner. One manager.
+## Seedha jawab
 
-The business workspace now has **two fixed roles and at most one active account per role**:
+Repo mein sirf do kaam ke folders hain:
 
-| Role | Responsibility |
+| Folder | Kya hai |
 | --- | --- |
-| **Owner** | Business overview, prices, finance, reports, team access, pump setup and subscription. |
-| **Manager** | Day-to-day shifts/readings, stock/deliveries, sales/credit, payments/expenses, reconciliation and reports for assigned pumps. No team, price or configuration changes. |
+| `frontend/` | Jo screen pe dikhta hai. Login, dashboard, shifts, stock, udhaar, reports. |
+| `backend/` | Java API (`src/main/java`, `gradlew`), MySQL schema/seed, aur pump hardware ka optional local agent (`backend/gateway`). |
 
-The primary navigation is reduced to **Overview, Shifts & readings, Stock & deliveries, Sales & credit, Finance, Reports, Team and Settings**. Specialist screens are contextual tabs inside those sections; the manager sees only the six sections they can use. Advanced setup/diagnostics are collapsed in Settings. The dashboard defaults to the selected pump, with an optional owner-only comparison. Quick actions open the shift/delivery/expense entry forms directly.
-
-The platform administrator is an internal maintenance account, not a third pump role, and has no client demo tile.
-
-### Upgrading an existing database
-
-Boot applies additive migrations and consolidates access without deleting business records. It keeps the earliest active owner and manager, disables surplus active accounts, revokes their sessions and writes `TEAM_ACCESS_CONSOLIDATED` audit entries. Retired role identities and historical references are preserved; old staff are **not** silently promoted. A partial unique index prevents duplicate active owners/managers. If no manager remains, the owner can use **Team → Set up manager**; a disabled manager can be re-enabled instead of creating another account. Back up existing data before upgrading. Station permission overrides cannot grant permissions outside the fixed role.
-
-## Repository layout
+Root pe `package.json`, `README.md` aur `.env.example` isliye hain taaki dono ek saath start ho sakein. Ye alag apps nahi hain.
 
 ```text
-petro-erp/
-├── frontend/          # React + Vite application
-├── backend/           # Node.js + Express API, tests, SQLite adapter
-├── gateway/           # Local hardware gateway and simulator
-├── packages/
-│   └── shared/         # Shared constants, types, and permissions
-├── db/                 # SQLite schema and ignored local database files
-├── package.json        # Root npm workspaces and commands
-├── package-lock.json
+petrolflow-erp/
+├── frontend/          screens
+├── backend/           API + database + tests + hardware agent
+├── package.json       dono ko start karne ka switch
 └── README.md
 ```
 
-## Petrol-pump audit & roadmap
+Chalane ka poora tarika neeche **Deployment** mein hai. Windows Command Prompt (`cmd`) ke commands wahi se copy karo. Browser screens **http://localhost:5173** (dev) ya **http://localhost:4173** (built). API port **4000** pe sunti hai. Browser seedha 4000 nahi bulata — frontend `/api` ko aage bhej deta hai.
 
-Three domain documents live in `docs/`:
+`npm run dev` purana Express + SQLite server start karta hai. Java API ke saath mat chalao. Dono port 4000 maangte hain.
 
-| Doc | What it answers |
-| --- | --- |
-| `docs/ARCHITECTURE.md` | How the four workspaces fit together, and the domain rules (meters → stock → shifts → day close) |
-| `docs/OPERATIONS.md` | Runbook: first run, backups, restore, health checks, disaster recovery |
-| `docs/PETROL-PUMP-ERP-GAP-REPORT.md` | What an Indian petrol pump ERP/CRM needs, what this repo has, what is missing |
-| `docs/ADD-BACKLOG.md` | The missing pieces as build-ready specs (tables, endpoints, files to touch, effort) |
-| `docs/PETROL-PUMP-ERP-AUDIT.md` | Earlier audit (28 Oct) — still useful, but several of its ❌ items are now built; see §5 of the gap report for corrections | **Phases 1–3 of that roadmap are now
-implemented** (Oct 2026):
+Demo login (khali database pe):
 
-- **Forecourt truth:** every nozzle is hard-mapped to its tank (no pro-rata guessing), testing litres
-  are netted out of sales, and tank stock moves only through the ledger.
-- **Shift hisaab:** note-wise cash counting (₹500 → ₹1), mode-wise settlement (Cash/UPI/Card/Bank/Credit)
-  with automatic short/excess, and a day-closing lock that freezes a finished business date.
-- **Quality & law:** daily density register with 15°C correction + BIS spec flag, full TT decantation
-  record (dip before/after, seals, sample, chambers), and Licence & Compliance expiry alerts
-  (PESO, W&M stamping, Fire NOC, tank testing…) on the dashboard.
-- **Stock wisdom:** monthly stock loss/gain vs oil-company norms (MS 0.75% / HSD 0.25%), water dip,
-  and indent suggestions (days-of-cover + safe ullage) per tank.
-- **Udhaar control:** vehicle-wise credit slips with auto slip numbers, printable monthly customer
-  statements, and a FIFO ageing report (0–30/31–60/61–90/90+).
-- **Counter business:** lubricant SKU stock & sales (GST-ready), two-person team attendance with payable-days,
-  and one-click CSV exports (sales register, stock statement, ageing, lubricants GST).
+- Owner: `owner@sunrisefuels.in` — sab kuch
+- Manager: `manager@sunrisefuels.in` — roz ka kaam, dono pumps
+- Staff: `attendant@sunrisefuels.in` — sirf shift aur readings, Baner pump
+- Password: `PetroFlow@2025`
 
-Existing databases migrate automatically on boot (additive columns/tables + role sync).
+## Kya hai
 
-## Theming
+Ye forecourt ka hisaab-kitab hai, poora Tally ya GST portal nahi.
 
-The UI uses **Ember & Forecourt Green**: a near-black charcoal navigation frame, warm paper
-work surfaces, ember-orange primary actions, and forecourt-green assurance. Three colours carry
-the whole product, and each one has exactly one job — orange means *your move*, green means
-*all clear*, charcoal means *structure*:
+**Forecourt**
 
-| Role | Light | Dark | Where it appears |
-| --- | --- | --- | --- |
-| Ember | `#c2410c` | `#fb923c` | Navigation pill, primary buttons, focus rings, active tabs, links |
-| Forecourt green | `#067647` | `#4ade80` | Success, healthy stock, settled cash, credit paid, live shift |
-| Charcoal | `#1a1613` | `#faf6f1` | Text, sidebar shell, dashboard hero |
-| Paper | `#f6f2ec` → `#ffffff` | `#0c0b0a` → `#191613` | Page canvas and raised work surfaces |
+- Shift open, nozzle opening/closing, testing litres, flag agar reading galat ho
+- Cash note count (₹500 se ₹1) aur Cash / UPI / Card / Bank / Credit settlement
+- Day close lock. Band date dubara tabhi khulti hai jab reason likha ho
+- Tank stock sirf ledger se. Dip alag measurement hai, balance haath se edit nahi hota
+- TT delivery record: dip, seal, sample, density
+- Density register, 15°C correction, spec ke bahar flag
+- Licence expiry (PESO, W&M, Fire NOC, insurance) dashboard pe
 
-![PetroFlow Ember & Forecourt Green palette](docs/palette-ember-green.png)
+**Paisa aur credit**
 
-Amber (`warn`) and crimson (`danger`) stay reserved for genuine exceptions — a variance, a low
-tank, a failed device — so a red badge is never just decoration. Manrope display type and Inter
-body text are locally bundled. Both the light workspace and a high-contrast dark theme share CSS
-custom properties in `frontend/src/index.css`, exposed to Tailwind in `frontend/tailwind.config.js`:
+- Customer credit limit, slip, vehicle, monthly statement, FIFO ageing (0–30 / 31–60 / 61–90 / 90+)
+- Follow-up: call, visit, promise-to-pay, next date. Customers screen pe
+- Payments, expenses, suppliers, reconciliation
+- Lubricant SKU, stock, GST CSV
+- Reports: DSR, stock loss vs OMC norm, ageing, sales register, stock statement
 
-| Token family | Meaning |
-| --- | --- |
-| `carbon-*` | Surfaces (`950` warm page canvas → `600` strongest border) |
-| `ink-*` | Text (`100` strongest → `600` faintest) |
-| `accent` / `accent-green` | Ember brand and forecourt-green secondary |
-| `accent-energy` / `fuel` / `graphite` | Readable amber text, bright orange fill, neutral support |
-| `onaccent` / `onbrand` / `onfuel` | Foreground on solid brand fills, brand gradients and fuel-orange |
-| `scrim` / `inset` | Dialog backdrop and recessed surface |
-| `ok` / `warn` / `danger` / `info` | Status colours (retinted in dark mode) |
-| `onok` / `onwarn` / `ondanger` | Foreground on solid status fills |
-| `panel-*` / `live` | Always-dark showcase surfaces (login) and the green "live" cue |
-| `chart-1…5` | Chart series; Recharts mirrors theme values in `frontend/src/lib/theme.tsx` |
+**Team**
 
-Users switch from the sun/moon button in the header. The choice is stored in
-`localStorage` under `petroflow.theme`; with no stored choice the readable
-light workspace is used. An inline script in `index.html` applies the theme
-before first paint so there is no flash of the wrong palette.
+- Ek owner. Woh staff login banata hai
+- Har staff ke liye pumps aur permissions alag tick hoti hain
+- Preset: pump attendant, cashier, accountant, shift supervisor. Uske baad tick hata sakte ho
+- Server har request pe check karta hai. Menu chhupana kaafi nahi
+- Staff ko naya login banane ka right nahi diya ja sakta. Woh sirf owner ke paas hai
+- Ek manager seat ab bhi hai, daily operations ke liye. Extra log staff login se aate hain
 
-Avoid re-introducing fixed Tailwind shades for text on themed surfaces (for example
-`text-emerald-300`), which read well on dark cards but are unreadable on white — use the
-status tokens instead. The same applies to `carbon-*` for anything other than a surface.
+**Reports share**
 
-## Requirements
+Har report pe Download aur Share hai. Phone pe file share hoti hai. Desktop pe WhatsApp khulta hai aur summary copy ho jaati hai. CSV Excel / Tally ke liye hai. Print bhi DSR pe hai.
 
-- Windows 10/11 (or another supported Node.js platform).
-- Node.js **22.13.0 or newer** and the npm version bundled with it. The backend uses Node's built-in `node:sqlite`.
-- Visual Studio Code (recommended).
+## Kya nahi hai
 
-## Windows + VS Code: local development
+Ye jaan-bujh kar nahi banaya. Pump pe kaam chalane ke liye ye pehle zaroori nahi, ya alag system ka kaam hai.
 
-Open PowerShell and clone/open the repository:
+| Cheez | Status | Baad mein kaise |
+| --- | --- | --- |
+| Asli nozzle hardware (Gilbarco / Tokheim / ATG) | Simulator only. `backend/gateway` local agent hai, physical adapter throw karta hai | Vendor register map certify karke `backend/gateway/src/adapters` mein adapter |
+| P&L / dealer margin per litre | Nahi. Sales estimate hai, munafa nahi | Purchase rate already delivery pe hai. Report mein sales minus cost jodna hai |
+| Fuel VAT / GSTR-1 / e-invoice | Nahi. Lubricant GST CSV hai | CA export kaafi hai. Filing portal khud mat banao |
+| OMC bill payment ageing | Adhura. Supplier hai, bill se payment link nahi | `payments` ko delivery se jodna |
+| Bank / UPI settlement auto-match, MDR | Nahi. Manual reconciliation hai | Bank CSV import, alag phase |
+| Email / SMS / WhatsApp alerts | Nahi. Share button manual hai. Auto digest nahi | Notification table + ek provider. Abhi mat jodo jab tak backup solid na ho |
+| Payroll, PF, ESI, payslip | Nahi. Attendance aur payable days hain | Staff pay rate table, phir payslip print |
+| Shop POS, car wash, rent income | Nahi | Alag income head. Lubricant already hai |
+| Forgot password / 2FA | Nahi. Owner password reset karta hai | Email provider ke bina mat jodo |
+| Do database ek saath | Java API MySQL use karti hai. Purana Express server SQLite file use karta hai | Ek waqt pe ek hi API chalao. Port 4000 share mat karo |
+| Hindi UI | Nahi. Labels English hain | Baad mein, hisaab pehle |
 
-```powershell
-git clone https://github.com/ajayvaidyaOP/petro-erp.git
-cd petro-erp
-code .
+Full double-entry accounting, loyalty wallet, native mobile app, aur drag-drop report builder is pump ke liye overkill hain. Tally export aur yeh screens kaafi hain.
+
+## Staff login kaise banega
+
+1. Owner se sign in karo.
+2. **Team → Add staff login**.
+3. Name, email, password, pump tick karo.
+4. Preset chuno, phir jo nahi dena woh hata do.
+5. Prices aur settings wala group sensitive hai. Default mein mat do.
+6. Staff usi email/password se login karega. Jo tick nahi hua, screen nahi khulegi, API bhi 403 degi.
+
+Password kam se kam 10 characters, ek letter aur ek number.
+
+## Colour
+
+UI **Ink & Petrol** hai. Pehle wala ember orange hata diya — woh action colour ki tarah cheekh raha tha.
+
+- Teal: button, active menu, focus. Matlab aapka kaam.
+- Green: settled, healthy stock, paid. Sirf theek hone pe.
+- Brass: fuel price cue. Button pe nahi.
+- Ink: text aur sidebar.
+- Stone: page background.
+
+Light default hai. Header ka sun/moon dark karta hai. Choice `localStorage` key `petroflow.theme` mein rehti hai.
+
+## Deployment
+
+Pump PC ya office server pe yeh stack chahiye: **JDK 21**, **MySQL 8**, **Node.js 22+**. Node sirf screens build/start karne ke liye hai. Hisaab Java API + MySQL mein rehta hai.
+
+Do CMD windows chahiye. Ek API, ek screens. Dono band karne ke liye us window mein `Ctrl+C`.
+
+### 1. Install (ek baar)
+
+Command Prompt **Run as administrator** kholo.
+
+```cmd
+winget install --id Microsoft.OpenJDK.21 -e --accept-package-agreements --accept-source-agreements
+winget install --id OpenJS.NodeJS.LTS -e --accept-package-agreements --accept-source-agreements
 ```
 
-In VS Code, open **Terminal → New Terminal** (PowerShell), then run:
+MySQL 8 Community Server installer se lagao (ya jo `MySQL80` service banata hai). Root password yaad rakhna. Service naam aksar `MySQL80` hota hai — `services.msc` mein confirm karo.
 
-```powershell
-node --version
-npm --version
+Nayi CMD window kholo (PATH update ke baad) aur check karo:
+
+```cmd
+java -version
+node -v
+mysql --version
+```
+
+`java -version` mein **21** hona chahiye. `node -v` **v22** ya usse upar. `mysql` PATH mein na ho to poora path use karo:
+
+```cmd
+"C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe" --version
+```
+
+MySQL service start:
+
+```cmd
+net start MySQL80
+```
+
+### 2. Code aur `.env` (ek baar)
+
+```cmd
+cd /d C:\petroflow-erp
+copy .env.example .env
+notepad .env
+```
+
+`.env` mein kam se kam yeh set karo. Password wahi jo MySQL root ka hai. Khali chhodo sirf jab root ka password khali ho.
+
+```text
+MYSQL_HOST=127.0.0.1
+MYSQL_PORT=3306
+MYSQL_DATABASE=petroflow
+MYSQL_USER=root
+MYSQL_PASSWORD=your-mysql-password
+SEED_DEMO_DATA=true
+ENABLE_DEMO_TOOLS=true
+NODE_ENV=development
+COOKIE_SECURE=false
+PETROFLOW_API_URL=http://127.0.0.1:4000
+```
+
+Database khud ban jaati hai. `CREATE DATABASE` alag se mat chalao, jab tak user ke paas woh right ho. API start pe `petroflow` database, tables, aur khali database pe demo rows daalti hai.
+
+Frontend packages:
+
+```cmd
+cd /d C:\petroflow-erp
 npm ci
 ```
 
-Optional: create a local environment file for overrides. `.env` is ignored by Git; the defaults work without it.
+### 3. Roz chalana — development
 
-```powershell
-Copy-Item .env.example .env
+**CMD window 1 — API.** Pehli baar Gradle 8.11.1 download hota hai. Internet chahiye. Repo root se mat chalao; `backend` folder se chalao.
+
+```cmd
+cd /d C:\petroflow-erp\backend
+gradlew.bat run
 ```
 
-Start the API and Vite development server together from the repository root:
+Jab yeh line aaye, API up hai:
 
-```powershell
-npm run dev
+```text
+PetroFlow API listening on http://0.0.0.0:4000
 ```
 
-Open **http://localhost:5173**. Vite proxies `/api` to the Express server on port **4000**. The browser uses same-origin relative `/api/v1/...` requests—no browser-side localhost API URL is configured. The API health check is at **http://localhost:4000/api/v1/health**.
+Check, teesri window mein:
 
-On the first non-production start, an empty database is created at `db/petroflow.db` and populated with demo records. Demo sign-in:
-
-The demo tenant **Sunrise Fuels** runs two outlets (Baner and Hinjewadi) with separate nozzles, tanks, shifts, deliveries and reconciliations, so multi-station behaviour can be reviewed without any setup. Switch between outlets from the station picker in the header (or the mobile menu) and compare both on the dashboard.
-
-- Owner (both pumps): `owner@sunrisefuels.in` — Rohit Deshmukh
-- Manager (both pumps): `manager@sunrisefuels.in` — Anjali Kulkarni
-- Password: `PetroFlow@2025` (or the `DEMO_PASSWORD` in your ignored `.env`)
-
-The dashboard defaults to the pump selected in the header. The owner can choose **Compare both pumps** for a combined overview and select both pumps in DSR/CSV exports. Sales figures are estimates from closed or flagged shift totalizers, not audited revenue. Customer accounts and balances are company-wide; the manager can post credit slips and review the ledger at assigned pumps.
-
-The new demo layout is seeded **only into an empty database**. Existing databases are never reset or stripped of companies/records automatically; surplus active accounts lose access as described above, and the owner sets up a manager if needed. If an old demo database is no longer needed, back it up first; `npm run db:reset` is destructive and is the explicit way to create a fresh demo. Existing customer and accounting data is not deleted on upgrade.
-
-These are development-only credentials. Do not expose a local/demo instance as a public service.
-
-Useful root commands (run from the repository root):
-
-```powershell
-npm run dev                 # frontend + backend
-npm run dev:frontend        # Vite only
-npm run dev:backend         # Express API only
-npm run dev:gateway         # requires a registered device key in .env
-npm test                    # API, authorization, and meter tests
-npm run test:e2e            # browser workflows (install Chromium first; see below)
-npm run typecheck           # shared, backend, frontend, and gateway
-npm run build               # frontend production assets + backend type/build check
-npm run db:seed             # seed demo records if the database is empty
-npm run db:backup           # verified snapshot into db/backups/ (+ sha256 sidecar, retention prune)
-npm run db:integrity        # check the live database and the newest snapshot
-npm run db:mysql-ddl        # regenerate db/mysql/schema.sql from db/schema.sql (review before use)
-npm run db:reset            # DESTRUCTIVE: delete the local SQLite DB and re-seed it
+```cmd
+curl http://127.0.0.1:4000/api/v1/health
 ```
 
-### Automated checks
+`{"data":{"ok":true,...}}` aana chahiye. MySQL band ho to yahi command fail karegi — pehle `net start MySQL80`.
 
-`npm test` uses the separate ignored `db/test-petroflow.db` (legacy authorization tests explicitly create their own multi-tenant fixture; the two-pump tests exercise the actual default seed); it does not reset `db/petroflow.db`. Do not run `npm run db:reset` if you need to keep your local data.
+**CMD window 2 — screens.**
 
-For browser checks, install Playwright's Chromium once, then run:
-
-```powershell
-npx playwright install chromium
-npm run test:e2e
+```cmd
+cd /d C:\petroflow-erp
+npm run dev:frontend
 ```
 
-The browser suite starts its own API and Vite servers on ports **4101** and **5174** and resets only the dedicated ignored `db/e2e-petroflow.db`. It covers login/logout (including an embedded HTTPS preview with third-party cookies blocked), two-role navigation, station switching, pagination, customer/credit and expense entry, direct quick actions, keyboard focus in nested dialogs, simulated device events, gateway registration, shift preview/edit/close, combined reports, and mobile layouts in both themes. These are automated checks against demo data, not a substitute for production acceptance testing or commissioning real forecourt hardware. In restricted environments, `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` can point to an existing compatible Chromium binary.
+Browser: **http://localhost:5173**
 
-Development HTTPS previews use secure, partitioned session cookies so login works inside an embedded preview without enabling ordinary third-party cookies. Localhost and production sessions retain `SameSite=Lax`. If a browser does not support embedded session cookies, use **Open preview in a new tab** on the sign-in screen.
+Demo (sirf pehli khali database pe, password `PetroFlow@2025`):
 
-## Single-server local run
+- `owner@sunrisefuels.in`
+- `manager@sunrisefuels.in`
+- `attendant@sunrisefuels.in`
 
-To verify the built SPA and API on one origin:
+Real data daalne se pehle demo password badal do, aur `.env` mein `SEED_DEMO_DATA=false` kar do.
 
-```powershell
+### 4. Pump PC pe deploy (built screens)
+
+Development server (`5173`) pump pe chhodna mat. Screens build karke preview chalao. API alag CMD mein chalti rahe.
+
+`.env` production values:
+
+```text
+NODE_ENV=production
+ENABLE_DEMO_TOOLS=false
+SEED_DEMO_DATA=false
+COOKIE_SECURE=false
+MYSQL_PASSWORD=your-mysql-password
+PETROFLOW_API_URL=http://127.0.0.1:4000
+```
+
+`COOKIE_SECURE=true` sirf tab jab site **https://** pe ho. Pump LAN pe `http://192.168.x.x` ho to `false` rakho, warna login cookie save nahi hogi.
+
+**CMD window 1 — API** (pehle se `gradlew.bat run` chal raha ho to `Ctrl+C`, phir dubara, taaki naya `.env` pick ho):
+
+```cmd
+cd /d C:\petroflow-erp\backend
+gradlew.bat run
+```
+
+Jar se chalana ho (Gradle har baar na uthaye):
+
+```cmd
+cd /d C:\petroflow-erp\backend
+gradlew.bat jar
+cd /d C:\petroflow-erp
+java -jar backend\build\libs\petroflow-1.0.0.jar
+```
+
+Jar bhi repo root se chalao, taaki `backend\db\mysql\schema.sql` mil sake.
+
+**CMD window 2 — built screens.**
+
+```cmd
+cd /d C:\petroflow-erp
 npm ci
-npm run build
-npm run start
+npm run build -w @petroflow/web
+npm run preview -w @petroflow/web
 ```
 
-Open **http://localhost:4000**. Express serves `frontend/dist` and `/api/v1` from the same server; the frontend still calls the API through relative `/api` paths. This is a local run, **not a public deployment**.
+Browser, isi PC pe: **http://localhost:4173**
 
-## Deployment requirements and limits
+Doosre PC / cashier desk se, API wale PC ka LAN IP:
 
-This repository does not deploy itself. A real production deployment needs an intentionally configured host/reverse proxy, HTTPS/TLS, firewalling, monitoring, secure secret management, and tested backups/restores. At minimum:
+```cmd
+ipconfig
+```
 
-- Use Node.js 22.13+ and build with `npm ci` followed by `npm run build`; start the backend with `npm run start`.
-- Set `NODE_ENV=production`, `COOKIE_SECURE=true`, an explicit `SESSION_COOKIE_NAME`, the public HTTPS `APP_ORIGIN`, and exact `ALLOWED_ORIGINS`. Set `ENABLE_DEMO_TOOLS=false`; do not use demo accounts/passwords or run the demo seed against production data. Production startup fails fast if required security settings are missing.
-- Put `DATABASE_FILE` on a durable, writable, backed-up disk. SQLite is the database adapter implemented here; run one application instance against that file. Do not use ephemeral storage or horizontally scale multiple writers against a local SQLite file. The commented MySQL variables in `.env.example` do not enable a MySQL adapter; `npm run db:mysql-ddl` regenerates `db/mysql/schema.sql` for a future migration, and that file must be reviewed (it is generated, not battle-tested).
-- If TLS is terminated by a trusted reverse proxy, configure `TRUST_PROXY=true` only for that deployment topology. Restrict public origins and network access to the API and database volume.
-- Snapshots are taken with `VACUUM INTO` (`npm run db:backup`), integrity-checked and hash-sided; copy them off the pump's disk daily and **test a restore** (`npm run db:restore -- --from <snapshot> --yes`) on a spare machine before go-live. See `docs/OPERATIONS.md`.
-- Run `npm audit` and resolve any findings before go-live. The lockfile reported zero vulnerabilities when last checked; advisories can change, so repeat the audit as part of deployment.
-- Development-only Vite host allowances and iframe relaxation are not part of production serving. The production Express app retains `X-Frame-Options: SAMEORIGIN`; do not weaken it to make a public site embeddable.
+`IPv4 Address` lo, masalan `192.168.1.50`. Doosri machine pe browser: **http://192.168.1.50:4173**
 
-For multi-instance/high-availability production, a supported shared database adapter and deployment-specific migration/backup plan are required first. Do not treat `npm run dev`, `vite preview`, or the local single-server command above as a public launch.
+Firewall, API wale PC pe, administrator CMD:
+
+```cmd
+netsh advfirewall firewall add rule name="PetroFlow Screens" dir=in action=allow protocol=TCP localport=4173
+```
+
+MySQL port **3306** LAN pe mat kholo. Screens sirf isi PC ke `127.0.0.1:4000` se API ko bolti hain.
+
+### 5. Update
+
+```cmd
+cd /d C:\petroflow-erp
+git pull
+npm ci
+npm run build -w @petroflow/web
+```
+
+API window mein `Ctrl+C`, phir:
+
+```cmd
+cd /d C:\petroflow-erp\backend
+gradlew.bat run
+```
+
+Screens window mein bhi `Ctrl+C`, phir `npm run preview -w @petroflow/web`.
+
+### 6. Backup aur restore
+
+Roz backup, pump ke disk se bahar (USB / doosra PC). `mysqldump` PATH mein na ho to `C:\Program Files\MySQL\MySQL Server 8.0\bin\` se chalao.
+
+```cmd
+mkdir C:\petroflow-backups
+"C:\Program Files\MySQL\MySQL Server 8.0\bin\mysqldump.exe" -u root -p --routines --databases petroflow > C:\petroflow-backups\petroflow.sql
+```
+
+Restore (yeh current `petroflow` data overwrite karega):
+
+```cmd
+"C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe" -u root -p < C:\petroflow-backups\petroflow.sql
+```
+
+### Linux server (bash)
+
+Wahi do process. `gradlew.bat` ki jagah `./gradlew`.
+
+```bash
+sudo apt-get update
+sudo apt-get install -y openjdk-21-jdk mysql-server
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt-get install -y nodejs
+sudo systemctl enable --now mysql
+
+cd /opt/petrolflow-erp
+cp .env.example .env
+nano .env
+
+cd /opt/petrolflow-erp/backend
+chmod +x gradlew
+./gradlew run
+```
+
+Doosre terminal mein:
+
+```bash
+cd /opt/petrolflow-erp
+npm ci
+npm run build -w @petroflow/web
+npm run preview -w @petroflow/web
+```
+
+Backup:
+
+```bash
+mysqldump -u root -p --routines --databases petroflow > /var/backups/petroflow.sql
+```
+
+## Commands
+
+Roz ka start **Deployment** section se karo. Neeche wale `npm` commands purane Express + SQLite server ke hain. Unhe Java API ke saath mat chalao — dono port 4000 lete hain.
+
+```cmd
+cd /d C:\petroflow-erp\backend
+gradlew.bat run
+```
+
+```cmd
+cd /d C:\petroflow-erp
+npm run dev:frontend
+npm run build -w @petroflow/web
+npm run preview -w @petroflow/web
+```
+
+MySQL schema: `backend/db/mysql/schema.sql`. Demo seed: `backend/db/mysql/seed.sql`. API khali database pe schema aur seed khud lagati hai.
+
+Purana Node server (tests / SQLite file `backend/db/petroflow.db`):
+
+```cmd
+npm test
+npm run typecheck
+npm run db:backup
+npm run db:reset
+```
+
+`npm test` alag test database use karta hai. MySQL demo data nahi mit-ta.
+
+## Domain rules — inhe mat todna
+
+1. Paisa aur litre `TEXT` + Decimal.js. Float nahi.
+2. Sale meter se aati hai, invoice se nahi. Galat reading sales nahi banti, flag hoti hai.
+3. Tank stock sirf `stock_movements` se. Dip variance hai, edit nahi.
+4. Band business date pe mutation nahi. Reopen reason ke saath, audit mein.
+5. Price history overwrite nahi hoti. Kal ki report kal ka rate dikhati hai.
+6. Tenant id session se aata hai, request se nahi. Doosri company ka data query mein aata hi nahi.
+7. Staff permission user row pe stored hai. Station JSON se extra right nahi badhta.
+
+## Hardware
+
+`backend/gateway` pump ke LAN pe chal sakta hai. Abhi simulator verified hai. Asli dispenser controller certify hone tak readings haath se daalo. Simulated data ko live meter mat bolo.
+
+## Production se pehle
+
+- Demo password hatao. `ENABLE_DEMO_TOOLS=false`, `SEED_DEMO_DATA=false`.
+- `COOKIE_SECURE=true` sirf HTTPS pe. Pump LAN `http://` pe `false`, warna login cookie nahi tikegi.
+- Roz `mysqldump` (Deployment §6) aur backup ko pump ke disk se bahar copy karo.
+- Ek hi Java API process. `npm run dev` usi port pe mat chalao. MySQL port 3306 LAN pe mat kholo.
+- Ye audited accounts nahi hain. CA ko CSV do, Tally mein final books rakho.

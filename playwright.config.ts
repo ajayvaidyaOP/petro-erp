@@ -8,7 +8,7 @@ const origin = `http://127.0.0.1:${webPort}`;
 const browserExecutable = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
 
 export default defineConfig({
-  testDir: './e2e',
+  testDir: './frontend/e2e',
   timeout: 90_000,
   expect: { timeout: 10_000 },
   workers: 1,
@@ -31,7 +31,7 @@ export default defineConfig({
       timeout: 90_000,
       reuseExistingServer: false,
       env: {
-        DATABASE_FILE: 'db/e2e-petroflow.db',
+        DATABASE_FILE: 'backend/db/e2e-petroflow.db',
         NODE_ENV: 'development',
         PORT: String(apiPort),
         HOST: '0.0.0.0',

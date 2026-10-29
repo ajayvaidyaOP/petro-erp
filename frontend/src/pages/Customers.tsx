@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BookOpen, IndianRupee, Plus, Printer, Trash2, Truck, UserPlus, Users } from 'lucide-react';
+import { BookOpen, IndianRupee, Phone, Plus, Printer, Trash2, Truck, UserPlus, Users } from 'lucide-react';
 import { apiDelete, apiGet, apiList, apiPatch, apiPost, idempotencyKey, type ListMeta } from '../lib/api';
 import { useAuth, useStations } from '../lib/auth';
 import { formatDate, formatDateTime, formatINR, formatNumber, todayIst } from '../lib/format';
@@ -166,7 +166,7 @@ export default function Customers() {
     <>
       <PageHeader
         title="Customers & credit ledger"
-        description="Credit limits, outstanding balances and customer receipts. Credit sales are never counted as cash received."
+        description="Credit limits, outstanding balances, receipts and follow-up calls. Credit sales are never counted as cash received."
         actions={
           can('customers.write') ? (
             <Button size="sm" variant="primary" icon={<UserPlus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>
@@ -186,6 +186,8 @@ export default function Customers() {
           icon={<BookOpen className="h-4 w-4" />}
         />
       </div>
+
+      {can('customers.read') && <DueFollowups />}
 
       <Card className="mt-3">
         <CardHeader
@@ -346,6 +348,7 @@ export default function Customers() {
         ) : ledger.data ? (
           <div className="space-y-3">
             {ledgerCustomer && <VehiclesSection customerId={ledgerCustomer.id} canWrite={can('customers.write')} />}
+            {ledgerCustomer && <FollowUpPanel customerId={ledgerCustomer.id} canWrite={can('customers.write')} />}
             {Number(ledger.data.overdueAmount) > 0 && (
               <div className="callout-danger">
                 {formatINR(ledger.data.overdueAmount)} is past due — credit terms exceeded.
@@ -419,6 +422,101 @@ export default function Customers() {
         </>
       )}
     </>
+  );
+}
+
+interface FollowUp {
+  id: string;
+  kind: string;
+  note: string;
+  promisedAmount: string | null;
+  nextOn: string | null;
+  createdAt: string;
+  createdByName?: string | null;
+  customerName?: string;
+  customerCode?: string;
+  customerId?: string;
+  balance?: string;
+}
+
+function DueFollowups() {
+  const due = useQuery<FollowUp[]>({
+    queryKey: ['followups-due', todayIst()],
+    queryFn: () => apiGet<FollowUp[]>(`/catalog/followups?dueBy=${todayIst()}`),
+  });
+  const rows = due.data ?? [];
+  if (due.isLoading || rows.length === 0) return null;
+  return (
+    <Card className="mt-3">
+      <CardHeader title="Follow-ups due" subtitle="Calls and promises dated today or earlier. Open the customer ledger to log the next one." />
+      <div className="divide-y divide-carbon-800/80">
+        {rows.slice(0, 6).map((row) => (
+          <div key={row.id} className="flex items-start justify-between gap-3 px-4 py-2.5">
+            <div>
+              <p className="text-sm font-semibold text-ink-100">{row.customerName} <span className="font-normal text-ink-500">{row.customerCode}</span></p>
+              <p className="text-xs text-ink-400">{row.kind} · {row.note}</p>
+            </div>
+            <div className="text-right">
+              <Badge tone={row.nextOn && row.nextOn < todayIst() ? 'danger' : 'warning'}>{row.nextOn ? formatDate(row.nextOn) : 'Due'}</Badge>
+              {row.balance && Number(row.balance) > 0 && <p className="mt-1 text-[11px] text-ink-500">Due {formatINR(row.balance)}</p>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function FollowUpPanel({ customerId, canWrite }: { customerId: string; canWrite: boolean }) {
+  const { toast } = useToast();
+  const client = useQueryClient();
+  const [note, setNote] = useState('');
+  const [kind, setKind] = useState('CALL');
+  const [nextOn, setNextOn] = useState('');
+  const [promised, setPromised] = useState('');
+  const list = useQuery<FollowUp[]>({
+    queryKey: ['followups', customerId],
+    queryFn: () => apiGet<FollowUp[]>(`/catalog/customers/${customerId}/followups`),
+  });
+  const save = useMutation({
+    mutationFn: () => apiPost(`/catalog/customers/${customerId}/followups`, {
+      kind, note, nextOn: nextOn || null, promisedAmount: promised || null,
+    }),
+    onSuccess: () => {
+      toast('Follow-up saved');
+      setNote('');
+      setPromised('');
+      void client.invalidateQueries({ queryKey: ['followups', customerId] });
+      void client.invalidateQueries({ queryKey: ['followups-due'] });
+    },
+    onError: (error: Error) => toast('Could not save follow-up', { tone: 'danger', description: error.message }),
+  });
+  return (
+    <div className="rounded-xl border border-carbon-700/70 p-3">
+      <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-ink-400"><Phone className="h-3.5 w-3.5" /> Follow-ups</p>
+      {canWrite && (
+        <div className="mt-2 grid gap-2 sm:grid-cols-[8rem_1fr_9rem_8rem_auto]">
+          <Select value={kind} onChange={(event) => setKind(event.target.value)} aria-label="Follow-up type">
+            <option value="CALL">Call</option>
+            <option value="VISIT">Visit</option>
+            <option value="PROMISE">Promise</option>
+            <option value="NOTE">Note</option>
+          </Select>
+          <Input value={note} onChange={(event) => setNote(event.target.value)} placeholder="What was said" />
+          <Input type="date" value={nextOn} onChange={(event) => setNextOn(event.target.value)} aria-label="Next follow-up date" />
+          <Input inputMode="decimal" value={promised} onChange={(event) => setPromised(event.target.value)} placeholder="Promise ₹" />
+          <Button size="sm" variant="secondary" disabled={note.trim().length < 2} loading={save.isPending} onClick={() => save.mutate()}>Save</Button>
+        </div>
+      )}
+      <div className="mt-3 space-y-2">
+        {(list.data ?? []).length === 0 ? <p className="text-xs text-ink-500">No follow-ups yet. Log a call when you chase udhaar.</p> : (list.data ?? []).map((row) => (
+          <div key={row.id} className="flex items-start justify-between gap-3 text-xs">
+            <p className="text-ink-200"><span className="font-semibold">{row.kind}</span> · {row.note}</p>
+            <p className="shrink-0 text-ink-500">{formatDate(row.createdAt)}{row.nextOn ? ` · next ${formatDate(row.nextOn)}` : ''}</p>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 

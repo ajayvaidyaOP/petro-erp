@@ -7,10 +7,9 @@
     "node": ">=22.13.0"
   },
   "workspaces": [
-    "packages/shared",
     "backend",
     "frontend",
-    "gateway"
+    "backend/gateway"
   ],
   "scripts": {
     "dev": "concurrently -k -n backend,frontend -c blue,green \"npm:dev:backend\" \"npm:dev:frontend\"",
@@ -21,12 +20,12 @@
     "dev:gateway": "npm run dev -w @petroflow/gateway",
     "start": "npm run start -w @petroflow/server",
     "build": "npm run build -w @petroflow/web && npm run build -w @petroflow/server",
-    "typecheck": "npm run typecheck -w @petroflow/shared && npm run typecheck -w @petroflow/server && npm run typecheck -w @petroflow/web && npm run typecheck -w @petroflow/gateway",
+    "typecheck": "npm run typecheck -w @petroflow/server && npm run typecheck -w @petroflow/web && npm run typecheck -w @petroflow/gateway",
     "test": "npm run test -w @petroflow/server",
     "test:e2e": "playwright test",
     "db:reset": "npm run db:reset -w @petroflow/server",
     "db:seed": "npm run db:seed -w @petroflow/server",
-    "db:mysql-ddl": "node scripts/generate-mysql-ddl.mjs",
+    "db:mysql-ddl": "node backend/scripts/generate-mysql-ddl.mjs",
     "db:backup": "npm run db:backup -w @petroflow/server",
     "db:restore": "npm run db:restore -w @petroflow/server",
     "db:integrity": "npm run db:integrity -w @petroflow/server"

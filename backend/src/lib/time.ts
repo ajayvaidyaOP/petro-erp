@@ -1,4 +1,4 @@
-import { DEFAULT_TIMEZONE } from '@petroflow/shared';
+import { DEFAULT_TIMEZONE } from '../shared/index.js';
 
 const IST_OFFSET_MINUTES = 330;
 

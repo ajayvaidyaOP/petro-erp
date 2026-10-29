@@ -9,7 +9,7 @@ import { hashPassword } from '../lib/security.js';
 import { addDays } from '../lib/time.js';
 import { D, Decimal, money, litres as fmtLitres, rate as fmtRate } from '../lib/decimal.js';
 import { evaluateDensity } from '../lib/density.js';
-import { ROLE_DEFINITIONS, SYSTEM_ROLE_KEYS, RETIRED_ROLE_KEYS, BUSINESS_ROLE_KEYS } from '@petroflow/shared';
+import { ROLE_DEFINITIONS, SYSTEM_ROLE_KEYS, RETIRED_ROLE_KEYS, UNIQUE_SEAT_ROLES } from '../shared/index.js';
 import { audit } from '../lib/audit.js';
 import { logger } from '../lib/logger.js';
 
@@ -70,12 +70,12 @@ export function syncRoles() {
         [newId('rol'), key, def.name, def.description, JSON.stringify(def.permissions), def.scope],
       );
     }
-    // Retired roles never retain write access. Historical user/shift references remain intact.
+    // Retired identities never retain write access. Staff is a real role again and is not wiped.
     for (const key of RETIRED_ROLE_KEYS) {
-      run(`UPDATE roles SET permissions = '[]', name = 'Retired account', description = 'Consolidated into the two-role team model.' WHERE key = ?`, [key]);
+      run(`UPDATE roles SET permissions = '[]', name = 'Retired account', description = 'Replaced by a staff login with explicit permissions.' WHERE key = ?`, [key]);
     }
-    // Never promote a legacy operator/cashier into a manager. Retain their original
-    // role on the disabled account so re-enabling cannot silently grant new rights.
+    // One owner and one manager. Staff logins are kept — their rights live on granted_permissions.
+    // Never promote a legacy cashier into a manager. Historical rows stay on the disabled account.
     const tenants = all<{ id: string }>('SELECT id FROM tenants');
     for (const tenant of tenants) {
       const users = all<{ id: string; role_key: string; email: string; status: string }>(
@@ -83,23 +83,27 @@ export function syncRoles() {
          ORDER BY created_at, id`, [tenant.id],
       );
       const kept = new Set<string>();
-      for (const role of BUSINESS_ROLE_KEYS) {
+      for (const role of UNIQUE_SEAT_ROLES) {
         const candidate = users.find((u) => u.role_key === role);
         if (candidate) kept.add(candidate.id);
       }
       for (const user of users) {
-        if (kept.has(user.id)) continue;
+        if (user.role_key === 'STAFF' || kept.has(user.id)) continue;
         run(`UPDATE users SET status = 'DISABLED', updated_at = ? WHERE id = ?`, [nowIso(), user.id]);
         run('UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL', [nowIso(), user.id]);
         audit(null, {
           action: 'TEAM_ACCESS_CONSOLIDATED', entity: 'User', entityId: user.id, tenantId: tenant.id,
-          summary: 'Access retired for the one-owner, one-manager team. Historical records preserved.',
+          summary: 'Surplus owner or manager seat retired. Staff logins and historical records were kept.',
           before: { roleKey: user.role_key, status: user.status }, after: { status: 'DISABLED' },
         });
       }
     }
     run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_one_active_role_per_tenant
       ON users(tenant_id, role_key) WHERE status = 'ACTIVE' AND role_key IN ('OWNER', 'MANAGER')`);
+    // Demo plans were seeded at 2 seats. Raise only those catalogue codes so an owner can add staff
+    // without a database reset. A platform admin who already set a higher cap is left alone.
+    run(`UPDATE subscription_plans SET max_users = 15, updated_at = ?
+         WHERE code IN ('STARTER', 'GROWTH', 'ENTERPRISE') AND max_users < 15`, [nowIso()]);
   });
 }
 
@@ -122,20 +126,20 @@ export async function runSeed(options: { force?: boolean; legacyTestFixtures?: b
       {
         code: 'STARTER', name: 'Starter', price: '2999.00', annual: '32389.00',
         desc: 'Single outlet, core operations and hardware gateway.',
-        stations: 1, users: 2, dispensers: 4, trial: 14,
-        features: ['1 station', 'Owner + manager', 'Totalizer capture', 'Shift management', 'DSR reports', '1 gateway'],
+        stations: 1, users: 15, dispensers: 4, trial: 14,
+        features: ['1 station', 'Owner + staff logins', 'Totalizer capture', 'Shift management', 'DSR reports', '1 gateway'],
       },
       {
         code: 'GROWTH', name: 'Growth', price: '7499.00', annual: '80989.00',
         desc: 'Multi-outlet groups with ledgers, credit control and reconciliation.',
-        stations: 3, users: 2, dispensers: 12, trial: 14,
-        features: ['3 stations', 'Owner + manager', 'Credit ledger', 'Reconciliation', 'Audit trail', 'Priority support'],
+        stations: 3, users: 15, dispensers: 12, trial: 14,
+        features: ['3 stations', 'Owner + staff logins', 'Credit ledger', 'Reconciliation', 'Audit trail', 'Priority support'],
       },
       {
         code: 'ENTERPRISE', name: 'Enterprise', price: '18999.00', annual: '205189.00',
         desc: 'Large networks with advanced controls and dedicated onboarding.',
-        stations: 10, users: 2, dispensers: 50, trial: 30,
-        features: ['10 stations', 'Owner + manager', 'Simple access control', 'Hardware fleet monitoring', 'SSO ready', 'Dedicated support'],
+        stations: 10, users: 25, dispensers: 50, trial: 30,
+        features: ['10 stations', 'Owner + staff logins', 'Per-person permissions', 'Hardware fleet monitoring', 'SSO ready', 'Dedicated support'],
       },
     ];
     const planIds: Record<string, string> = {};
@@ -252,6 +256,19 @@ export async function runSeed(options: { force?: boolean; legacyTestFixtures?: b
           [newId('usa'), user.id, stationId, '[]', nowIso()],
         );
       }
+    }
+    if (!legacyTestFixtures) {
+      const attendantId = newId('usr');
+      const attendantGrants = ['shifts.read', 'shifts.open', 'readings.read', 'readings.manual', 'sales.read', 'stock.read'];
+      run(
+        `INSERT INTO users (id, tenant_id, email, name, phone, password_hash, role_key, status, must_change_password, is_demo, granted_permissions, created_at, updated_at)
+         VALUES (?, ?, 'attendant@sunrisefuels.in', 'Suresh Pawar', '+91 98200 00011', ?, 'STAFF', 'ACTIVE', 0, 1, ?, ?, ?)`,
+        [attendantId, tenantA, hashPassword(DEMO_PASSWORD), JSON.stringify(attendantGrants), nowIso(), nowIso()],
+      );
+      run(
+        'INSERT INTO user_station_access (id, user_id, station_id, permissions, created_at) VALUES (?, ?, ?, ?, ?)',
+        [newId('usa'), attendantId, stationA.id, '[]', nowIso()],
+      );
     }
     const ownerA = userSpecs[1].id;
     const managerA = managerUser.id;
@@ -970,7 +987,7 @@ export async function runSeed(options: { force?: boolean; legacyTestFixtures?: b
 
   logger.info('Demo seed complete.');
   logger.info(
-    { password: DEMO_PASSWORD, accounts: ['owner@sunrisefuels.in', 'manager@sunrisefuels.in'] },
+    { password: DEMO_PASSWORD, accounts: ['owner@sunrisefuels.in', 'manager@sunrisefuels.in', 'attendant@sunrisefuels.in'] },
     'Demo login credentials',
   );
   return { seeded: true, demoPassword: DEMO_PASSWORD };

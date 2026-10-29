@@ -93,7 +93,7 @@ export default function Billing() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <CardHeader title="Plan details" subtitle="Two fixed team seats: one owner and one manager. Station and device limits follow the plan." />
+          <CardHeader title="Plan details" subtitle="One owner, plus staff logins up to the plan limit. Station and device limits follow the plan." />
           <div className="p-4">
             <KeyValue
               items={[
@@ -102,12 +102,12 @@ export default function Billing() {
                 { label: 'Started', value: formatDate(sub.startsAt) },
                 { label: 'Renews / ends', value: sub.endsAt ? formatDate(sub.endsAt) : '—' },
                 { label: 'Trial ends', value: sub.trialEndsAt ? formatDate(sub.trialEndsAt) : '—' },
-                { label: 'Team access', value: 'One owner + one manager' },
+                { label: 'Team access', value: 'Owner + staff logins' },
               ]}
             />
             <div className="mt-4 space-y-3">
               <UsageBar label="Stations" used={data.usage.stations} max={sub.maxStations} pct={usagePct(data.usage.stations, sub.maxStations)} />
-              <UsageBar label="Team accounts" used={data.usage.users} max={2} pct={usagePct(data.usage.users, 2)} icon={<Users className="h-3.5 w-3.5" />} />
+              <UsageBar label="Team accounts" used={data.usage.users} max={sub.maxUsers} pct={usagePct(data.usage.users, sub.maxUsers)} icon={<Users className="h-3.5 w-3.5" />} />
               <UsageBar label="Dispensers" used={data.usage.dispensers} max={sub.maxDispensers} pct={usagePct(data.usage.dispensers, sub.maxDispensers)} />
             </div>
             {(sub.features ?? []).length > 0 ? (

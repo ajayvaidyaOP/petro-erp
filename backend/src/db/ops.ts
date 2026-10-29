@@ -6,7 +6,7 @@
  * of a live database. Every backup is integrity-checked and gets a sha256 sidecar
  * so a restore can prove which file it came from.
  *
- *   npm run db:backup            # snapshot into db/backups/ + prune by retention
+ *   npm run db:backup            # snapshot into backend/db/backups/ + prune by retention
  *   npm run db:integrity         # live DB + newest backup (hash + integrity_check)
  *   npm run db:restore -- --from db/backups/petroflow-....db --yes
  */
@@ -35,7 +35,7 @@ export interface BackupResult {
   source: string;
 }
 
-const BACKUP_DIR = 'db/backups';
+const BACKUP_DIR = 'backend/db/backups';
 
 export function resolveDataFile(file?: string): string {
   const target = file ?? env.DATABASE_FILE;

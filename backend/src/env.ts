@@ -51,7 +51,7 @@ export const env = {
     ? path.isAbsolute(databaseFile)
       ? databaseFile
       : path.join(ROOT_DIR, databaseFile)
-    : path.join(ROOT_DIR, 'db', nodeEnv === 'test' ? 'test-petroflow.db' : 'petroflow.db'),
+    : path.join(ROOT_DIR, 'backend', 'db', nodeEnv === 'test' ? 'test-petroflow.db' : 'petroflow.db'),
   SESSION_COOKIE_NAME: str('SESSION_COOKIE_NAME', 'pf_session'),
   SESSION_TTL_HOURS: num('SESSION_TTL_HOURS', 12),
   COOKIE_SECURE: bool('COOKIE_SECURE', nodeEnv === 'production'),

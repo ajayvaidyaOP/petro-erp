@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Download, Printer, ReceiptText } from 'lucide-react';
-import { apiDownload, apiGet } from '../lib/api';
+import { Download, Printer, ReceiptText, Share2 } from 'lucide-react';
+import { apiBlob, apiDownload, apiGet } from '../lib/api';
+import { shareReport } from '../lib/share';
 import { useAuth, useStations } from '../lib/auth';
 import { formatDate, formatDateTime, formatINR, formatNumber, todayIst } from '../lib/format';
 import { downloadCsv } from '../lib/utils';
@@ -20,6 +21,7 @@ import {
   StatCard,
   Select,
   StatusBadge,
+  useToast,
 } from '../components/ui';
 
 interface Dsr {
@@ -69,6 +71,7 @@ function mergeDsrs(reports: Dsr[]): Dsr {
 export default function Reports() {
   const { stationId, station, stations } = useStations();
   const { me } = useAuth();
+  const { toast } = useToast();
   const [scope, setScope] = useState<string>('current');
   const selected = scope === 'current' ? stationId : scope;
   const [date, setDate] = useState(todayIst());
@@ -99,30 +102,33 @@ export default function Reports() {
             </Button>
             <Button
               size="sm"
+              variant="ghost"
+              icon={<Share2 className="h-3.5 w-3.5" />}
+              className="mt-4"
+              disabled={!dsr.data}
+              onClick={() => {
+                const report = dsr.data;
+                if (!report) return;
+                const rows = nozzleRows(report);
+                void shareReport({
+                  title: `DSR ${date} · ${report.station.name}`,
+                  filename: `dsr-${date}.csv`,
+                  text: `${report.station.name} · ${date}\nLitres ${report.totals.aggregateLitres}\nEstimated sales ₹${report.totals.aggregateEstimatedValue}\nExpenses ₹${report.totals.expenses}`,
+                  rows,
+                }).then((mode) => toast(mode === 'whatsapp' ? 'Opened WhatsApp' : 'Report shared', { description: mode === 'whatsapp' ? 'Summary copied. Attach the CSV if you also downloaded it.' : undefined }));
+              }}
+            >
+              Share
+            </Button>
+            <Button
+              size="sm"
               variant="secondary"
               icon={<Download className="h-3.5 w-3.5" />}
               className="mt-4"
               disabled={!dsr.data}
-              onClick={() =>
-                downloadCsv(
-                  `dsr-${date}.csv`,
-                  (dsr.data?.nozzleSales ?? []).map((row) => ({
-                    pump: row.stationName ?? dsr.data?.station.name,
-                    shift: row.shiftNumber,
-                    nozzle: row.nozzleLabel,
-                    dispenser: row.dispenserCode,
-                    product: row.productName,
-                    opening: row.openingReading,
-                    closing: row.closingReading,
-                    litres: row.litresSold,
-                    rate: row.rate,
-                    value: row.salesValue,
-                    status: row.status,
-                  })),
-                )
-              }
+              onClick={() => downloadCsv(`dsr-${date}.csv`, nozzleRows(dsr.data!))}
             >
-              Export CSV
+              Download CSV
             </Button>
           </>
         }
@@ -356,7 +362,24 @@ interface StockLossRow {
   status: 'WITHIN_NORM' | 'BEYOND_NORM' | 'GAIN_CHECK' | 'NO_DIP';
 }
 
+function nozzleRows(report: Dsr) {
+  return report.nozzleSales.map((row) => ({
+    pump: row.stationName ?? report.station.name,
+    shift: row.shiftNumber,
+    nozzle: row.nozzleLabel,
+    dispenser: row.dispenserCode,
+    product: row.productName,
+    opening: row.openingReading,
+    closing: row.closingReading,
+    litres: row.litresSold,
+    rate: row.rate,
+    value: row.salesValue,
+    status: row.status,
+  }));
+}
+
 function StockLossCard({ stationId, stations }: { stationId: string; stations: { id: string; name: string }[] }) {
+  const { toast } = useToast();
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const report = useQuery<{ month: string; rows: StockLossRow[] }>({
     queryKey: ['stock-loss', stationId, month],
@@ -373,9 +396,19 @@ function StockLossCard({ stationId, stations }: { stationId: string; stations: {
         title="Monthly stock loss / gain analysis"
         subtitle="Book stock vs physical dip — OMC evaporation norms: MS 0.75% · HSD 0.25% of dispensed volume."
         action={(
-          <Field label="Month" className="mb-0 w-44">
-            <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
-          </Field>
+          <>
+            <Field label="Month" className="mb-0 w-40">
+              <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
+            </Field>
+            <Button size="sm" variant="ghost" icon={<Share2 className="h-3.5 w-3.5" />} disabled={rows.length === 0} onClick={() => void shareReport({
+              title: `Stock loss ${month}`,
+              filename: `stock-loss-${month}.csv`,
+              text: rows.map((row) => `${row.stationName ? `${row.stationName} · ` : ''}${row.productName}: ${row.lossGainLitres ?? 'no dip'} L (${row.status})`).join('\n'),
+              rows: rows.map((row) => ({ pump: row.stationName ?? '', product: row.productName, opening: row.openingLitres, receipts: row.receiptsLitres, dispensed: row.dispensedLitres, bookClosing: row.closingBookLitres, physical: row.physicalLitres, lossGain: row.lossGainLitres, pct: row.lossGainPctOfSales, status: row.status })),
+            }).then((mode) => toast(mode === 'whatsapp' ? 'Opened WhatsApp' : 'Stock statement shared'))}
+            >Share</Button>
+            <Button size="sm" variant="secondary" icon={<Download className="h-3.5 w-3.5" />} disabled={rows.length === 0} onClick={() => downloadCsv(`stock-loss-${month}.csv`, rows.map((row) => ({ pump: row.stationName ?? '', product: row.productName, opening: row.openingLitres, receipts: row.receiptsLitres, dispensed: row.dispensedLitres, bookClosing: row.closingBookLitres, physical: row.physicalLitres, lossGain: row.lossGainLitres, pct: row.lossGainPctOfSales, norm: row.normPct, status: row.status })))}>Download</Button>
+          </>
         )}
       />
       <TableScrollHint />
@@ -447,6 +480,7 @@ interface AgeingRow {
 type AgeingTotals = { outstanding: string; bucket0To30: string; bucket31To60: string; bucket61To90: string; bucket90Plus: string };
 
 function AgeingCard({ stationId }: { stationId: string }) {
+  const { toast } = useToast();
   const report = useQuery<{ asOf: string; rows: AgeingRow[]; totals: AgeingTotals }>({
     queryKey: ['ageing', stationId],
     queryFn: () => apiGet(`/reports/ageing?stationId=${stationId}`),
@@ -464,6 +498,17 @@ function AgeingCard({ stationId }: { stationId: string }) {
       <CardHeader
         title="Customer receivables ageing (FIFO)"
         subtitle="Outstanding fleet credit bucketed by invoice age (oldest unpaid slips settled first)."
+        action={rows.length === 0 ? undefined : (
+          <>
+            <Button size="sm" variant="ghost" icon={<Share2 className="h-3.5 w-3.5" />} onClick={() => void shareReport({
+              title: 'Credit ageing',
+              filename: 'credit-ageing.csv',
+              text: `Outstanding ₹${report.data?.totals.outstanding ?? '0'} · 90+ days ₹${report.data?.totals.bucket90Plus ?? '0'}`,
+              rows: rows.map((row) => ({ customer: row.name, code: row.code, outstanding: row.outstanding, d0_30: row.bucket0To30, d31_60: row.bucket31To60, d61_90: row.bucket61To90, d90: row.bucket90Plus, overLimit: row.overLimit })),
+            }).then((mode) => toast(mode === 'whatsapp' ? 'Opened WhatsApp' : 'Ageing shared'))}>Share</Button>
+            <Button size="sm" variant="secondary" icon={<Download className="h-3.5 w-3.5" />} onClick={() => downloadCsv('credit-ageing.csv', rows.map((row) => ({ customer: row.name, code: row.code, limit: row.creditLimit, outstanding: row.outstanding, d0_30: row.bucket0To30, d31_60: row.bucket31To60, d61_90: row.bucket61To90, d90: row.bucket90Plus })))}>Download</Button>
+          </>
+        )}
       />
       <TableScrollHint />
       {report.isLoading ? (
@@ -519,16 +564,37 @@ function AgeingCard({ stationId }: { stationId: string }) {
 }
 
 function ExportsCard({ stationId }: { stationId: string }) {
+  const { toast } = useToast();
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [busy, setBusy] = useState('');
   const filenameOf = (name: string) => `${name}-${month}.csv`;
+  const pathOf = (slug: string) => {
+    const effectiveStation = stationId === 'all' && (slug === 'ageing' || slug === 'lubricants-gst') ? '' : stationId;
+    return `/reports/export/${slug}.csv?stationId=${effectiveStation}&month=${month}`;
+  };
 
   const download = async (slug: string, filename: string) => {
     setBusy(slug);
-    const effectiveStation = stationId === 'all' && (slug === 'ageing' || slug === 'lubricants-gst') ? '' : stationId;
-    const query = `stationId=${effectiveStation}&month=${month}`;
     try {
-      await apiDownload(`/reports/export/${slug}.csv?${query}`, filename);
+      await apiDownload(pathOf(slug), filename);
+    } catch (error) {
+      window.alert((error as Error).message);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const share = async (slug: string, name: string) => {
+    setBusy(`share-${slug}`);
+    try {
+      const blob = await apiBlob(pathOf(slug));
+      const mode = await shareReport({
+        title: `${name} · ${month}`,
+        filename: filenameOf(slug),
+        text: `${name} for ${month}. Open the attached CSV in Excel or Tally, or download it from PetroFlow.`,
+        blob,
+      });
+      toast(mode === 'whatsapp' ? 'Opened WhatsApp' : 'Report shared', { description: 'The CSV is ready to send.' });
     } catch (error) {
       window.alert((error as Error).message);
     } finally {
@@ -547,7 +613,7 @@ function ExportsCard({ stationId }: { stationId: string }) {
     <Card className="mt-4">
       <CardHeader
         title="Accounting & statutory CSV exports"
-        subtitle="Select a month to download formatted CSV schedules for your CA, Tally or Excel workbooks."
+        subtitle="Download or share a month's CSV with your CA, Tally, Excel or WhatsApp."
         action={(
           <Field label="Month" className="mb-0 w-44">
             <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
@@ -556,19 +622,17 @@ function ExportsCard({ stationId }: { stationId: string }) {
       />
       <div className="grid gap-3 p-5 sm:grid-cols-2">
         {items.map((item) => (
-          <button
-            key={item.slug}
-            type="button"
-            disabled={busy === item.slug}
-            onClick={() => void download(item.slug, filenameOf(item.slug))}
-            className="group flex items-start gap-3 rounded-xl border border-carbon-700/80 bg-carbon-900/60 p-3.5 text-left transition hover:border-accent/45 hover:bg-carbon-800/80 disabled:opacity-60"
-          >
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-accent/25 bg-accent/10 text-accent transition group-hover:bg-accent group-hover:text-onaccent"><Download className="h-4 w-4" /></span>
-            <span>
-              <span className="block text-sm font-bold text-ink-100">{item.name}</span>
-              <span className="mt-0.5 block text-xs text-ink-500">{item.detail}</span>
-            </span>
-          </button>
+          <div key={item.slug} className="flex items-start gap-3 rounded-xl border border-carbon-700/80 bg-carbon-900/60 p-3.5">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-accent/25 bg-accent/10 text-accent"><Download className="h-4 w-4" /></span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-ink-100">{item.name}</p>
+              <p className="mt-0.5 text-xs text-ink-500">{item.detail}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Button size="sm" variant="secondary" disabled={busy === item.slug} onClick={() => void download(item.slug, filenameOf(item.slug))}>Download</Button>
+                <Button size="sm" variant="ghost" icon={<Share2 className="h-3.5 w-3.5" />} disabled={busy === `share-${item.slug}`} onClick={() => void share(item.slug, item.name)}>Share</Button>
+              </div>
+            </div>
+          </div>
         ))}
       </div>
     </Card>

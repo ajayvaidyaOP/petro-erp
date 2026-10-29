@@ -1,5 +1,5 @@
 /**
- * Generates db/mysql/schema.sql (MySQL 8 DDL) from db/schema.sql (the SQLite source of truth).
+ * Generates backend/db/mysql/schema.sql (MySQL 8 DDL) from backend/db/schema.sql.
  *
  * The application ships a SQLite adapter only — this file exists so a future MySQL migration has
  * a starting point that matches the SQLite schema exactly. Review it before running it:
@@ -15,9 +15,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const source = path.join(root, 'db', 'schema.sql');
-const target = path.join(root, 'db', 'mysql', 'schema.sql');
+const backendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const source = path.join(backendRoot, 'db', 'schema.sql');
+const target = path.join(backendRoot, 'db', 'mysql', 'schema.sql');
 
 const RESERVED = new Set(['key', 'value', 'type', 'status', 'references', 'order', 'group', 'condition', 'interval', 'usage', 'rows', 'read', 'check']);
 
@@ -76,10 +76,15 @@ function convertColumn(rawLine) {
     if (/^(id|\w+_id)$/.test(name)) {
       return `${col} VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin${mods ? ` ${mods}` : ''}`;
     }
-    // Temporal columns are ISO strings in SQLite; give MySQL real types.
-    if (/(_at|_timestamp)$/.test(name)) return `${col} DATETIME(3)${mods ? ` ${mods}` : ''}`;
+    // The API stores UTC ISO-8601 strings and compares them as text. DATETIME
+    // rejects the "T"/"Z" form and would change sort order, so these stay strings.
+    if (/(_at|_timestamp)$/.test(name)) return `${col} VARCHAR(40)${mods ? ` ${mods}` : ''}`;
     if (/(_date|_on|_month|business_date)$/.test(name) || name === 'month') {
       return `${col} DATE${mods ? ` ${mods}` : ''}`;
+    }
+    // Role and staff grants are JSON arrays. VARCHAR(255) truncates the owner list.
+    if (/permissions$/.test(name) || name === 'password_hash' || name === 'user_agent') {
+      return `${col} VARCHAR(2048)${mods ? ` ${mods}` : ''}`;
     }
     const prose = LONG_TEXT.test(name);
     // MySQL: no index or default on bare TEXT → those cases need a VARCHAR width.
@@ -152,7 +157,8 @@ function convert(sql) {
   // statement starts on its own terms, then split on top-level semicolons.
   const statements = sql
     .split(/\r?\n/)
-    .filter((line) => !/^\s*--/.test(line))
+    .map((line) => line.replace(/--.*$/, ''))
+    .filter((line) => line.trim())
     .join('\n')
     .split(/;\s*(?:\r?\n|$)/)
     .map((s) => s.trim())
@@ -194,5 +200,5 @@ fs.writeFileSync(target, result, 'utf8');
 const tables = (result.match(/CREATE TABLE/g) ?? []).length;
 const indexes = (result.match(/ADD (?:UNIQUE )?INDEX/g) ?? []).length;
 const fks = (result.match(/FOREIGN KEY/g) ?? []).length;
-console.log(`✔ wrote ${path.relative(root, target)} — ${tables} tables, ${indexes} indexes, ${fks} foreign keys`);
+console.log(`✔ wrote ${path.relative(backendRoot, target)} — ${tables} tables, ${indexes} indexes, ${fks} foreign keys`);
 console.log('  review before use: decimal TEXT/VARCHAR columns and any engine choice are not decided here.');

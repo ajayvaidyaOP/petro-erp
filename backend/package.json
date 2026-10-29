@@ -16,7 +16,6 @@
     "db:integrity": "tsx src/db/ops.ts integrity"
   },
   "dependencies": {
-    "@petroflow/shared": "*",
     "cookie-parser": "^1.4.7",
     "decimal.js": "^10.4.3",
     "dotenv": "^16.4.5",

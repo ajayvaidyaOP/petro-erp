@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { ROLE_DEFINITIONS, BUSINESS_ROLE_KEYS, permissionsForRole } from '@petroflow/shared';
+import { ROLE_DEFINITIONS, BUSINESS_ROLE_KEYS, permissionsForRole, sanitizeStaffGrants } from '../shared/index.js';
 import { all, get, run, shape, shapeAll, tx } from '../db/index.js';
 import { asyncHandler, created, ok, parse } from '../lib/http.js';
 import { conflict, forbidden, notFound, unprocessable } from '../lib/errors.js';
@@ -737,6 +737,38 @@ function employeeStations(userId: string) {
   );
 }
 
+function employeePermissions(row: Record<string, unknown>): string[] {
+  if (String(row.role_key) === 'STAFF') return sanitizeStaffGrants(safeJson(row.granted_permissions));
+  return permissionsForRole(String(row.role_key));
+}
+
+function safeJson(value: unknown): unknown {
+  if (typeof value !== 'string' || value.length === 0) return [];
+  try { return JSON.parse(value); } catch { return []; }
+}
+
+function assertSeatAvailable(tenantId: string, roleKey: string) {
+  if (roleKey === 'OWNER') throw conflict('This organization already has one owner. The owner account cannot be duplicated.');
+  if (roleKey === 'MANAGER' && get(`SELECT id FROM users WHERE tenant_id = ? AND role_key = 'MANAGER' AND status = 'ACTIVE'`, [tenantId])) {
+    throw conflict('Only one manager is allowed. Add a staff login if you need another person with chosen permissions.');
+  }
+}
+
+function assertUserCap(tenantId: string) {
+  const cap = get<{ max_users: number }>(
+    `SELECT p.max_users FROM subscriptions s JOIN subscription_plans p ON p.id = s.plan_id
+      WHERE s.tenant_id = ? ORDER BY s.created_at DESC LIMIT 1`,
+    [tenantId],
+  )?.max_users ?? 15;
+  const active = get<{ count: number }>(
+    `SELECT COUNT(*) AS count FROM users WHERE tenant_id = ? AND status = 'ACTIVE'`,
+    [tenantId],
+  )?.count ?? 0;
+  if (active >= cap) {
+    throw conflict(`This plan allows ${cap} team logins. Disable an unused account or ask the platform administrator to raise the limit.`);
+  }
+}
+
 catalogRouter.get(
   '/roles',
   requireAuth,
@@ -761,23 +793,23 @@ catalogRouter.get(
     if (!can(auth, 'employees.read')) throw forbidden();
     const tenantId = tenantIdOf(auth);
     const rows = all<Record<string, unknown>>(
-      `SELECT u.id, u.name, u.email, u.phone, u.role_key, u.status, u.last_login_at, u.created_at, u.is_demo
-         FROM users u WHERE u.tenant_id = ? AND u.role_key IN ('OWNER', 'MANAGER')
+      `SELECT u.id, u.name, u.email, u.phone, u.role_key, u.status, u.last_login_at, u.created_at, u.is_demo, u.granted_permissions
+         FROM users u WHERE u.tenant_id = ? AND u.role_key IN ('OWNER', 'MANAGER', 'STAFF')
            AND (? = 1 OR (u.role_key != 'OWNER' AND EXISTS (SELECT 1 FROM user_station_access usa WHERE usa.user_id = u.id AND usa.station_id IN (SELECT station_id FROM user_station_access WHERE user_id = ?)))) ORDER BY u.name`,
       [tenantId, auth.allStations ? 1 : 0, auth.user.id],
     );
     const employees = rows.map<Record<string, unknown>>((row) => ({
       ...shape(row),
       stationIds: employeeStations(String(row.id)).filter((id) => auth.allStations || auth.stationIds.has(id)),
-      permissions: permissionsForRole(String(row.role_key)),
+      permissions: employeePermissions(row),
     }));
-    // Show the fixed active team, plus one recoverable manager if the seat is vacant.
-    const active = employees.filter((employee) => employee.status === 'ACTIVE');
-    if (!active.some((employee) => employee.roleKey === 'MANAGER')) {
-      const inactiveManager = employees.find((employee) => employee.roleKey === 'MANAGER');
-      if (inactiveManager) active.push(inactiveManager);
-    }
-    return ok(res, active);
+    const visible = employees.filter((employee) => {
+      if (employee.roleKey === 'STAFF') return true;
+      if (employee.status === 'ACTIVE') return true;
+      if (employee.roleKey === 'MANAGER' && !employees.some((row) => row.roleKey === 'MANAGER' && row.status === 'ACTIVE')) return true;
+      return false;
+    });
+    return ok(res, visible);
   }),
 );
 
@@ -786,8 +818,9 @@ const employeeSchema = z.object({
   email: z.string().email().max(200),
   phone: z.string().max(20).optional().nullable(),
   password: z.string().min(10).max(200),
-  roleKey: z.enum(['OWNER', 'MANAGER']),
+  roleKey: z.enum(['OWNER', 'MANAGER', 'STAFF']),
   stationIds: z.array(z.string().min(3)).max(50).optional(),
+  permissions: z.array(z.string().min(3).max(40)).max(80).optional(),
   status: z.enum(['ACTIVE', 'DISABLED']).optional(),
 });
 
@@ -799,25 +832,25 @@ catalogRouter.post(
     if (!can(auth, 'employees.write')) throw forbidden();
     const tenantId = tenantIdOf(auth);
     const body = parse(employeeSchema, req.body);
-    if (body.roleKey !== 'MANAGER') throw conflict('This organization already has one owner. The owner account cannot be duplicated.');
-    if (get(`SELECT id FROM users WHERE tenant_id = ? AND role_key = 'MANAGER'`, [tenantId])) {
-      throw conflict('Only one manager is allowed. Edit or re-enable the existing manager in Team.');
-    }
+    assertSeatAvailable(tenantId, body.roleKey);
+    assertUserCap(tenantId);
     assertPasswordStrength(body.password);
     const email = body.email.toLowerCase().trim();
     if (get('SELECT id FROM users WHERE email = ?', [email])) throw conflict('A user with this email already exists');
     const stationIds = body.stationIds ?? [];
-    if (stationIds.length === 0) {
-      throw unprocessable('Assign the manager to at least one station');
-    }
+    if (stationIds.length === 0) throw unprocessable('Assign this login to at least one pump');
     for (const stationId of stationIds) getStationOrThrow(auth, stationId);
+    const grants = body.roleKey === 'STAFF' ? sanitizeStaffGrants(body.permissions ?? []) : [];
+    if (body.roleKey === 'STAFF' && grants.length === 0) {
+      throw unprocessable('Tick at least one permission. A staff login with no access cannot sign in to any screen.');
+    }
     const id = newId('usr');
     tx(() => {
       run(
-        `INSERT INTO users (id, tenant_id, email, name, phone, password_hash, role_key, status, is_demo, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+        `INSERT INTO users (id, tenant_id, email, name, phone, password_hash, role_key, status, is_demo, granted_permissions, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
         [id, tenantId, email, body.name, body.phone ?? null, hashPassword(body.password), body.roleKey,
-          body.status ?? 'ACTIVE', nowIso(), nowIso()],
+          body.status ?? 'ACTIVE', JSON.stringify(grants), nowIso(), nowIso()],
       );
       for (const stationId of stationIds) {
         run(
@@ -829,9 +862,9 @@ catalogRouter.post(
     audit(req, {
       action: 'EMPLOYEE_CREATED', entity: 'User', entityId: id,
       summary: `${body.name} (${body.roleKey})`,
-      after: { name: body.name, email, roleKey: body.roleKey, stationIds },
+      after: { name: body.name, email, roleKey: body.roleKey, stationIds, permissions: grants },
     });
-    return created(res, { id, name: body.name, email, roleKey: body.roleKey, stationIds });
+    return created(res, { id, name: body.name, email, roleKey: body.roleKey, stationIds, permissions: grants });
   }),
 );
 
@@ -850,9 +883,10 @@ catalogRouter.patch(
       z.object({
         name: z.string().min(2).max(120).optional(),
         phone: z.string().max(20).optional().nullable(),
-        roleKey: z.enum(['OWNER', 'MANAGER']).optional(),
+        roleKey: z.enum(['OWNER', 'MANAGER', 'STAFF']).optional(),
         status: z.enum(['ACTIVE', 'DISABLED']).optional(),
         stationIds: z.array(z.string().min(3)).max(50).optional(),
+        permissions: z.array(z.string().min(3).max(40)).max(80).optional(),
       }),
       req.body,
     );
@@ -860,25 +894,35 @@ catalogRouter.patch(
       throw unprocessable('The owner account must remain active. You can update its name and phone.');
     }
     if (body.roleKey && body.roleKey !== existing.role_key) {
-      throw unprocessable('Roles are fixed: one owner and one manager. Edit the existing account instead.');
+      throw unprocessable('The owner and manager seats are fixed. Create a staff login for a custom permission set.');
     }
     if (existing.role_key === 'MANAGER' && body.status === 'ACTIVE' && get(
       `SELECT id FROM users WHERE tenant_id = ? AND role_key = 'MANAGER' AND status = 'ACTIVE' AND id != ?`, [tenantIdOf(auth), String(existing.id)],
     )) throw conflict('An active manager already exists.');
+    if (body.status === 'ACTIVE' && existing.status !== 'ACTIVE') assertUserCap(tenantIdOf(auth));
     const stationIds = existing.role_key === 'OWNER' ? [] : body.stationIds ?? employeeStations(String(existing.id));
-    if (existing.role_key === 'MANAGER' && stationIds.length === 0) throw unprocessable('Assign the manager to at least one station.');
+    if (existing.role_key !== 'OWNER' && stationIds.length === 0) throw unprocessable('Assign this login to at least one pump.');
     for (const stationId of stationIds) getStationOrThrow(auth, stationId);
+    const grants = existing.role_key === 'STAFF'
+      ? sanitizeStaffGrants(body.permissions ?? safeJson(existing.granted_permissions))
+      : [];
+    if (existing.role_key === 'STAFF' && grants.length === 0) {
+      throw unprocessable('A staff login needs at least one permission.');
+    }
     tx(() => {
       const sets: string[] = [];
       const params: (string | null)[] = [];
       if (body.name !== undefined) { sets.push('name = ?'); params.push(body.name); }
       if (body.phone !== undefined) { sets.push('phone = ?'); params.push(body.phone ?? null); }
-      if (body.roleKey !== undefined) { sets.push('role_key = ?'); params.push(body.roleKey); }
       if (body.status !== undefined) { sets.push('status = ?'); params.push(body.status); }
+      if (existing.role_key === 'STAFF' && body.permissions !== undefined) {
+        sets.push('granted_permissions = ?');
+        params.push(JSON.stringify(grants));
+      }
       if (sets.length) {
         run(`UPDATE users SET ${sets.join(', ')}, updated_at = ? WHERE id = ?`, [...params, nowIso(), String(existing.id)]);
       }
-      if (body.stationIds !== undefined) {
+      if (body.stationIds !== undefined && existing.role_key !== 'OWNER') {
         run('DELETE FROM user_station_access WHERE user_id = ?', [String(existing.id)]);
         for (const stationId of body.stationIds) {
           run(
@@ -887,16 +931,16 @@ catalogRouter.patch(
           );
         }
       }
-      if (body.status === 'DISABLED') {
+      if (body.status === 'DISABLED' || (existing.role_key === 'STAFF' && body.permissions !== undefined)) {
         run('UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL', [nowIso(), String(existing.id)]);
       }
     });
     audit(req, {
       action: 'EMPLOYEE_UPDATED', entity: 'User', entityId: String(existing.id),
       before: { roleKey: existing.role_key, status: existing.status },
-      after: { roleKey: body.roleKey ?? existing.role_key, status: body.status ?? existing.status, stationIds },
+      after: { roleKey: existing.role_key, status: body.status ?? existing.status, stationIds, permissions: grants },
     });
-    return ok(res, { id: existing.id, roleKey: body.roleKey ?? existing.role_key, stationIds });
+    return ok(res, { id: existing.id, roleKey: existing.role_key, stationIds, permissions: existing.role_key === 'STAFF' ? grants : permissionsForRole(String(existing.role_key)) });
   }),
 );
 
@@ -947,6 +991,81 @@ catalogRouter.delete(
       summary: `${existing.name} disabled`,
     });
     return ok(res, { disabled: true });
+  }),
+);
+
+const followupSchema = z.object({
+  kind: z.enum(['CALL', 'VISIT', 'PROMISE', 'NOTE']),
+  note: z.string().min(2).max(500),
+  promisedAmount: z.string().max(20).optional().nullable(),
+  nextOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  stationId: z.string().min(3).optional().nullable(),
+});
+
+catalogRouter.get(
+  '/followups',
+  requireAuth,
+  asyncHandler((req, res) => {
+    const auth = req.auth as AuthContext;
+    if (!can(auth, 'customers.read')) throw forbidden();
+    const today = typeof req.query.dueBy === 'string' ? req.query.dueBy : new Date().toISOString().slice(0, 10);
+    const rows = all(
+      `SELECT f.*, c.name AS customer_name, c.code AS customer_code, c.balance
+         FROM customer_followups f
+         JOIN customers c ON c.id = f.customer_id
+        WHERE f.tenant_id = ? AND f.next_on IS NOT NULL AND f.next_on <= ?
+        ORDER BY f.next_on ASC, f.created_at DESC
+        LIMIT 30`,
+      [tenantIdOf(auth), today],
+    );
+    return ok(res, shapeAll(rows));
+  }),
+);
+
+catalogRouter.get(
+  '/customers/:id/followups',
+  requireAuth,
+  asyncHandler((req, res) => {
+    const auth = req.auth as AuthContext;
+    if (!can(auth, 'customers.read')) throw forbidden();
+    const customer = get('SELECT id FROM customers WHERE id = ? AND tenant_id = ?', [req.params.id, tenantIdOf(auth)]);
+    if (!customer) throw notFound('Customer not found');
+    const rows = all(
+      `SELECT f.*, u.name AS created_by_name
+         FROM customer_followups f
+         LEFT JOIN users u ON u.id = f.created_by
+        WHERE f.customer_id = ? AND f.tenant_id = ?
+        ORDER BY f.created_at DESC
+        LIMIT 40`,
+      [req.params.id, tenantIdOf(auth)],
+    );
+    return ok(res, shapeAll(rows));
+  }),
+);
+
+catalogRouter.post(
+  '/customers/:id/followups',
+  requireAuth,
+  asyncHandler((req, res) => {
+    const auth = req.auth as AuthContext;
+    if (!can(auth, 'customers.write')) throw forbidden();
+    const customer = get('SELECT id, name FROM customers WHERE id = ? AND tenant_id = ?', [req.params.id, tenantIdOf(auth)]);
+    if (!customer) throw notFound('Customer not found');
+    const body = parse(followupSchema, req.body);
+    if (body.stationId) getStationOrThrow(auth, body.stationId);
+    const id = newId('cfu');
+    run(
+      `INSERT INTO customer_followups (id, tenant_id, customer_id, station_id, kind, note, promised_amount, next_on, created_by, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, tenantIdOf(auth), req.params.id, body.stationId ?? null, body.kind, body.note.trim(),
+        body.promisedAmount ?? null, body.nextOn ?? null, auth.user.id, nowIso()],
+    );
+    audit(req, {
+      action: 'CUSTOMER_FOLLOWUP', entity: 'Customer', entityId: String(req.params.id),
+      summary: `${body.kind} · ${(customer as { name: string }).name}`,
+      after: { note: body.note, nextOn: body.nextOn ?? null },
+    });
+    return created(res, { id });
   }),
 );
 

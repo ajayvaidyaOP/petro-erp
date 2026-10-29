@@ -2,10 +2,10 @@
 -- PetroFlow ERP — core relational schema
 -- ----------------------------------------------------------------------------
 -- Portable DDL. The running demo database uses the Node.js built-in SQLite
--- engine (see docs/ARCHITECTURE.md for why). All monetary and measured
+-- engine (see README.md). All monetary and measured
 -- quantities are stored as exact decimal TEXT values; application code performs
 -- arithmetic with Decimal.js (never IEEE-754 floats).
--- db/mysql/schema.sql is generated from this file for MySQL 8 production use.
+-- backend/db/mysql/schema.sql is generated from this file for a future MySQL review.
 -- ============================================================================
 PRAGMA foreign_keys = ON;
 
@@ -124,6 +124,7 @@ CREATE TABLE IF NOT EXISTS users (
   must_change_password INTEGER NOT NULL DEFAULT 0,
   last_login_at TEXT,
   is_demo INTEGER NOT NULL DEFAULT 0,
+  granted_permissions TEXT NOT NULL DEFAULT '[]', -- STAFF only; owner/manager use the role bundle
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -857,3 +858,19 @@ CREATE TABLE IF NOT EXISTS attendance_records (
   UNIQUE (user_id, attendance_date)
 );
 CREATE INDEX IF NOT EXISTS idx_attendance_station_date ON attendance_records(station_id, attendance_date);
+
+-- Credit CRM: calls, visits and promise-to-pay notes. Not a second ledger.
+CREATE TABLE IF NOT EXISTS customer_followups (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+  customer_id TEXT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  station_id TEXT REFERENCES stations(id) ON DELETE SET NULL,
+  kind TEXT NOT NULL DEFAULT 'NOTE',              -- CALL | VISIT | PROMISE | NOTE
+  note TEXT NOT NULL,
+  promised_amount TEXT,
+  next_on TEXT,                                   -- YYYY-MM-DD, when to call again
+  created_by TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_followups_customer ON customer_followups(customer_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_followups_due ON customer_followups(tenant_id, next_on);

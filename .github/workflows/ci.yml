@@ -31,7 +31,7 @@ jobs:
       - name: Install (clean, from the lockfile)
         run: npm ci
 
-      - name: Typecheck (shared, backend, frontend, gateway)
+      - name: Typecheck (backend, frontend, gateway)
         run: npm run typecheck
 
       - name: Unit + API tests

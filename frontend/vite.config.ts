@@ -19,6 +19,11 @@ export default defineConfig(({ mode }) => {
     root: frontendRoot,
     envDir: repositoryRoot,
     plugins: [react()],
+    resolve: {
+      alias: {
+        '@petroflow/shared': path.resolve(frontendRoot, '../backend/src/shared/index.ts'),
+      },
+    },
     server: {
       host: '0.0.0.0',
       port: 5173,
@@ -39,6 +44,13 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       port: 4173,
       allowedHosts: true,
+      proxy: {
+        '/api': {
+          target: apiProxyTarget,
+          changeOrigin: false,
+          secure: false,
+        },
+      },
     },
     build: {
       outDir: 'dist',

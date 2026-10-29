@@ -35,7 +35,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     root.dataset.theme = theme;
     root.style.colorScheme = theme;
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', theme === 'dark' ? '#0c0b0a' : '#f6f2ec');
+    if (meta) meta.setAttribute('content', theme === 'dark' ? '#0a1014' : '#f1f5f7');
   }, [theme]);
 
   const setTheme = useCallback((next: Theme) => {
@@ -79,31 +79,31 @@ export interface ChartPalette {
 }
 
 const CHART_DARK: ChartPalette = {
-  grid: '#332e28',
-  axis: '#b2a89c',
-  tooltipBg: '#191613',
-  tooltipBorder: '#3a332c',
-  tooltipLabel: '#faf6f1',
-  accent: '#fb923c',
-  green: '#4ade80',
-  secondary: '#fbbf24',
-  energy: '#fbbf24',
-  warn: '#fcd34d',
+  grid: '#2a3a44',
+  axis: '#9cb0b8',
+  tooltipBg: '#122028',
+  tooltipBorder: '#2a4450',
+  tooltipLabel: '#f4f8fa',
+  accent: '#6ec4c4',
+  green: '#4ac496',
+  secondary: '#c4a86e',
+  energy: '#c4a86e',
+  warn: '#e8b85c',
   danger: '#fb7185',
 };
 
 const CHART_LIGHT: ChartPalette = {
-  grid: '#e3dcd2',
-  axis: '#675e54',
+  grid: '#d2dce2',
+  axis: '#4e6070',
   tooltipBg: '#ffffff',
-  tooltipBorder: '#e3dcd2',
-  tooltipLabel: '#1a1613',
-  accent: '#c2410c',
-  green: '#067647',
-  secondary: '#b45309',
-  energy: '#b45309',
-  warn: '#a16207',
-  danger: '#be123c',
+  tooltipBorder: '#d2dce2',
+  tooltipLabel: '#0f1c26',
+  accent: '#0d5c6e',
+  green: '#0d7a54',
+  secondary: '#8a6024',
+  energy: '#8a6024',
+  warn: '#a16214',
+  danger: '#b0203a',
 };
 
 export function useChartPalette(): ChartPalette {

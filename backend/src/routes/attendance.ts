@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { ATTENDANCE_STATUSES } from '@petroflow/shared';
+import { ATTENDANCE_STATUSES } from '../shared/index.js';
 import { all, run, tx } from '../db/index.js';
 import { asyncHandler, ok, parse } from '../lib/http.js';
 import { forbidden, unprocessable } from '../lib/errors.js';
