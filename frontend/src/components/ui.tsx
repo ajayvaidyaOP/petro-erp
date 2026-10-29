@@ -33,19 +33,21 @@ import { cn } from '../lib/utils';
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'outline';
 type ButtonSize = 'sm' | 'md' | 'lg';
 
+// Solid fills use the status tokens (not hardcoded hexes) so dark mode keeps a dark
+// foreground on the brightened colours.
 const buttonVariants: Record<ButtonVariant, string> = {
   primary:
-    'bg-accent text-onaccent font-semibold shadow-glow border border-accent hover:bg-accent-soft hover:border-accent-soft active:scale-[.985]',
+    'brand-gradient text-onaccent font-semibold shadow-glow border border-accent/70 hover:brightness-110 active:scale-[.985]',
   secondary:
-    'bg-navy-800/90 text-ink-100 font-medium border border-navy-600/80 hover:bg-navy-750 hover:border-navy-600 active:scale-[.985]',
+    'bg-navy-800/90 text-ink-100 font-medium border border-navy-600/75 shadow-sheen hover:bg-navy-750 hover:border-accent/40 active:scale-[.985]',
   ghost:
     'text-ink-300 font-medium hover:bg-navy-800/80 hover:text-ink-100 border border-transparent',
   danger:
-    'bg-[#d62436] text-white font-semibold hover:bg-[#be1e2e] border border-[#d62436] active:scale-[.985]',
+    'bg-danger text-ondanger font-semibold border border-danger hover:brightness-110 active:scale-[.985]',
   success:
-    'bg-[#058760] text-white font-semibold hover:bg-[#047050] border border-[#058760] active:scale-[.985]',
+    'bg-ok text-onok font-semibold border border-ok hover:brightness-110 active:scale-[.985]',
   outline:
-    'bg-navy-900/60 border border-navy-600/85 text-ink-200 font-medium hover:bg-navy-800/70 hover:border-accent/55 hover:text-ink-100 active:scale-[.985]',
+    'bg-navy-900/60 border border-navy-600/80 text-ink-200 font-medium shadow-sheen hover:bg-navy-800/70 hover:border-accent/55 hover:text-ink-100 active:scale-[.985]',
 };
 
 const buttonSizes: Record<ButtonSize, string> = {
@@ -76,7 +78,7 @@ export function Button({
       {...props}
       disabled={disabled || loading}
       className={cn(
-        'inline-flex select-none items-center justify-center whitespace-nowrap rounded-lg transition-all duration-150',
+        'inline-flex select-none items-center justify-center whitespace-nowrap rounded-xl shadow-sheen ring-offset-0 transition-all duration-150 ease-smooth',
         'btn-touch disabled:cursor-not-allowed disabled:opacity-50',
         buttonVariants[variant],
         buttonSizes[size],
@@ -112,7 +114,7 @@ export function CardHeader({
   return (
     <div
       className={cn(
-        'flex flex-wrap items-center justify-between gap-3 border-b border-navy-700/75 px-4 py-3.5 sm:px-5',
+        'flex flex-wrap items-center justify-between gap-3 border-b border-navy-700/60 px-4 py-3.5 sm:px-5',
         className,
       )}
     >
@@ -133,11 +135,11 @@ export function CardBody({ className, children }: { className?: string; children
 export type BadgeTone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger' | 'info' | 'muted';
 
 const toneClasses: Record<BadgeTone, string> = {
-  neutral: 'bg-navy-800 text-ink-200 border-navy-600/75',
-  accent: 'bg-accent/12 text-accent border-accent/30',
-  success: 'bg-ok/12 text-ok border-ok/30',
-  warning: 'bg-warn/12 text-warn border-warn/30',
-  danger: 'bg-danger/12 text-danger border-danger/30',
+  neutral: 'bg-navy-800 text-ink-200 border-navy-600/70',
+  accent: 'bg-accent/12 text-accent border-accent/28',
+  success: 'bg-ok/12 text-ok border-ok/28',
+  warning: 'bg-warn/12 text-warn border-warn/28',
+  danger: 'bg-danger/12 text-danger border-danger/28',
   info: 'bg-info/12 text-info border-info/30',
   muted: 'bg-navy-800/70 text-ink-500 border-navy-700/80',
 };
@@ -156,7 +158,7 @@ export function Badge({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-semibold tracking-tight',
+        'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold tracking-tight',
         toneClasses[tone],
         className,
       )}
@@ -340,7 +342,7 @@ export function MeterBar({
 }) {
   const clamped = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
   const fillClasses = {
-    accent: 'bg-accent',
+    accent: 'brand-gradient',
     ok: 'bg-ok',
     warn: 'bg-warn',
     danger: 'bg-danger',
@@ -544,11 +546,11 @@ export function Modal({
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
         className={cn(
-          'animate-scale-in my-auto flex max-h-[92dvh] w-full flex-col rounded-t-2xl border border-navy-700 bg-navy-850 shadow-pop outline-none sm:max-h-[88dvh] sm:rounded-2xl',
+          'animate-scale-in my-auto flex max-h-[92dvh] w-full flex-col rounded-t-2.5xl border border-navy-700/80 bg-navy-850 shadow-pop ring-1 ring-navy-900/20 outline-none sm:max-h-[88dvh] sm:rounded-2.5xl',
           widths[size],
         )}
       >
-        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-navy-700/75 bg-navy-900/50 px-4 py-4 sm:rounded-t-2xl sm:px-5">
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-navy-700/60 bg-navy-900/50 px-4 py-4 sm:rounded-t-2.5xl sm:px-5">
           <div className="min-w-0">
             <h2 id={titleId} className="font-display text-base font-bold tracking-tight text-ink-100">
               {title}
@@ -571,7 +573,7 @@ export function Modal({
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 scroll-thin sm:px-5">{children}</div>
         {footer && (
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-navy-700/75 bg-navy-900/40 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:rounded-b-2xl sm:px-5 sm:pb-3">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-navy-700/60 bg-navy-900/40 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:rounded-b-2.5xl sm:px-5 sm:pb-3">
             {footer}
           </div>
         )}
@@ -673,8 +675,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {toasts.map((t) => (
           <div
             key={t.id}
-            className="animate-slide-in pointer-events-auto flex items-start gap-3 rounded-xl border border-navy-600/80 bg-navy-850 p-3.5 shadow-pop"
+            className="animate-slide-in pointer-events-auto relative flex items-start gap-3 overflow-hidden rounded-2xl border border-navy-600/70 bg-navy-850 p-3.5 pl-4 shadow-pop"
           >
+            <span
+              aria-hidden
+              className={cn(
+                'absolute inset-y-0 left-0 w-[3px]',
+                t.tone === 'success' && 'bg-ok',
+                t.tone === 'danger' && 'bg-danger',
+                t.tone === 'warning' && 'bg-warn',
+                t.tone === 'info' && 'bg-info',
+              )}
+            />
             <div className="mt-0.5 shrink-0">{icons[t.tone]}</div>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-ink-100">{t.title}</p>
@@ -768,7 +780,7 @@ export function PageHeader({
         {breadcrumb && (
           <div className="mb-1 text-[11px] font-bold uppercase tracking-[0.12em] text-accent">{breadcrumb}</div>
         )}
-        <h1 className="font-display text-2xl font-extrabold tracking-tight text-ink-100 sm:text-[26px] sm:leading-8">
+        <h1 className="font-display text-[26px] font-extrabold leading-8 tracking-[-0.028em] text-ink-100 sm:text-3xl sm:leading-10">
           {title}
         </h1>
         {description && <p className="mt-1 max-w-3xl text-xs leading-relaxed text-ink-400 sm:text-sm">{description}</p>}
@@ -807,22 +819,39 @@ export function StatCard({
     warning: 'bg-warn/10 text-warn border-warn/25',
     danger: 'bg-danger/10 text-danger border-danger/25',
   };
+  // A 2px tinted hairline across the top edge + a soft corner wash: reads as a
+  // "series colour" without a heavy coloured bar.
   const accentStrip = {
+    default: 'before:bg-navy-600/50',
+    accent: 'before:bg-accent',
+    success: 'before:bg-ok',
+    warning: 'before:bg-warn',
+    danger: 'before:bg-danger',
+  };
+  const washes = {
     default: '',
-    accent: 'border-t-2 border-t-accent',
-    success: 'border-t-2 border-t-ok',
-    warning: 'border-t-2 border-t-warn',
-    danger: 'border-t-2 border-t-danger',
+    accent: 'after:bg-accent/[0.07]',
+    success: 'after:bg-ok/[0.07]',
+    warning: 'after:bg-warn/[0.07]',
+    danger: 'after:bg-danger/[0.07]',
   };
   return (
-    <div className={cn('card relative overflow-hidden p-4 sm:p-5', accentStrip[tone])}>
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-400">{label}</p>
-        {icon && <div className={cn('rounded-lg border p-1.5', iconTones[tone])}>{icon}</div>}
+    <div
+      className={cn(
+        'card relative overflow-hidden p-4 sm:p-5',
+        'before:absolute before:inset-x-0 before:top-0 before:h-[2px] before:opacity-80',
+        'after:pointer-events-none after:absolute after:-right-8 after:-top-10 after:h-28 after:w-28 after:rounded-full after:blur-2xl',
+        accentStrip[tone],
+        washes[tone],
+      )}
+    >
+      <div className="relative flex items-start justify-between gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-ink-400">{label}</p>
+        {icon && <div className={cn('rounded-xl border p-1.5 shadow-sheen', iconTones[tone])}>{icon}</div>}
       </div>
       <p
         className={cn(
-          'num mt-2 break-words font-display text-[22px] font-extrabold leading-tight tracking-tight sm:text-2xl',
+          'num relative mt-2 break-words font-display text-stat-lg font-extrabold leading-tight',
           tones[tone],
         )}
       >
@@ -846,7 +875,7 @@ export function Tabs({
   return (
     <div
       role="tablist"
-      className="inline-flex max-w-full gap-1 overflow-x-auto rounded-xl border border-navy-700/80 bg-navy-800/75 p-1 scroll-thin"
+      className="inline-flex max-w-full gap-1 overflow-x-auto rounded-2xl border border-navy-700/70 bg-navy-800/70 p-1 shadow-sheen scroll-thin"
     >
       {tabs.map((tab) => {
         const isSelected = active === tab.key;
@@ -860,8 +889,8 @@ export function Tabs({
             className={cn(
               'whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all sm:text-[13px]',
               isSelected
-                ? 'border border-navy-600/70 bg-navy-900 text-accent shadow-sm'
-                : 'border border-transparent text-ink-400 hover:text-ink-100',
+                ? 'border border-accent/30 bg-navy-900 text-accent shadow-[var(--shadow-card),var(--card-sheen)]'
+                : 'border border-transparent text-ink-400 hover:bg-navy-750/60 hover:text-ink-100',
             )}
           >
             {tab.label}

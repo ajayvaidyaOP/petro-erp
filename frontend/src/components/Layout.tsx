@@ -109,8 +109,9 @@ const GROUP_ORDER: NavigationGroup[] = [
 function Brand({ collapsed = false }: { collapsed?: boolean }) {
   return (
     <div className={cn('flex items-center gap-2.5', collapsed && 'justify-center')}>
-      <span className="brand-gradient grid h-9.5 w-9.5 shrink-0 place-items-center rounded-xl text-onaccent shadow-glow">
-        <Fuel className="h-[19px] w-[19px]" strokeWidth={2.25} aria-hidden />
+      <span className="brand-gradient relative grid h-9.5 w-9.5 shrink-0 place-items-center overflow-hidden rounded-xl text-onaccent shadow-glow ring-1 ring-accent/25">
+        <span aria-hidden className="absolute inset-0 bg-[linear-gradient(150deg,rgb(255_255_255/0.28),transparent_55%)]" />
+        <Fuel className="relative h-[19px] w-[19px]" strokeWidth={2.25} aria-hidden />
       </span>
       {!collapsed && (
         <div className="min-w-0">
@@ -508,8 +509,8 @@ export function Layout() {
       {/* Desktop Sidebar */}
       <aside
         className={cn(
-          'sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-navy-700/80 bg-navy-900 transition-[width] duration-200 md:flex',
-          collapsed ? 'w-[72px]' : 'w-[244px] xl:w-[252px]',
+          'sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-navy-700/70 bg-navy-900 transition-[width] duration-200 [background-image:linear-gradient(180deg,rgb(var(--accent)/0.055),transparent_24%)] md:flex',
+          collapsed ? 'w-[72px]' : 'w-[248px] xl:w-[256px]',
         )}
       >
         <div

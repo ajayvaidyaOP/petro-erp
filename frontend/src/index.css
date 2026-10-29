@@ -2,71 +2,131 @@
 @tailwind components;
 @tailwind utilities;
 
-/* PetroFlow Fuel-Tech Design System */
+/* ============================================================================
+   PetroFlow — "Forecourt Lux" design system
+   ----------------------------------------------------------------------------
+   Palette direction: deep petrol jade as the brand, a warm sage-tinted paper
+   canvas in light mode and a graphite-jade ink in dark mode, with amber-gold
+   reserved as the "energy / fuel / money-in" highlight. Every colour resolves
+   through these custom properties, so `data-theme` on <html> re-tints the
+   whole app and no component ever hardcodes a Tailwind shade.
+
+   Values are space-separated RGB channels so Tailwind's /opacity modifiers
+   (bg-accent/12) keep working.
+   ========================================================================== */
 @layer base {
   :root,
   [data-theme='light'] {
     color-scheme: light;
-    --navy-950: 243 246 250;
+    /* Surfaces: 950 = page canvas (warm sage paper) … 600 = strongest border */
+    --navy-950: 242 246 243;
     --navy-900: 255 255 255;
-    --navy-850: 255 255 255;
-    --navy-800: 238 243 249;
-    --navy-750: 226 234 244;
-    --navy-700: 207 219 233;
-    --navy-600: 174 191 212;
-    --ink-100: 15 23 42;
-    --ink-200: 30 41 59;
-    --ink-300: 51 65 85;
-    --ink-400: 71 85 105;
-    --ink-500: 100 116 139;
-    --ink-600: 130 146 168;
-    --accent: 5 135 96;
-    --accent-soft: 4 110 78;
-    --accent-teal: 13 148 136;
+    --navy-850: 252 253 252;
+    --navy-800: 237 242 238;
+    --navy-750: 226 233 228;
+    --navy-700: 205 216 208;
+    --navy-600: 170 184 175;
+    /* Text: 100 = strongest … 600 = faintest (all ≥ AA for body sizes) */
+    --ink-100: 11 25 21;
+    --ink-200: 24 41 35;
+    --ink-300: 47 65 58;
+    --ink-400: 74 92 85;
+    --ink-500: 100 117 109;
+    --ink-600: 128 143 136;
+    /* Brand */
+    --accent: 4 106 84;
+    --accent-soft: 3 86 68;
+    --accent-teal: 11 137 122;
+    --accent-energy: 173 84 11;
     --on-accent: 255 255 255;
-    --scrim: 9 16 30;
-    --inset: 236 241 248;
-    --ok: 5 135 96;
-    --warn: 180 83 9;
-    --danger: 214 36 54;
-    --info: 3 105 161;
-    --shadow-card: 0 1px 2px rgb(15 23 42 / 0.035), 0 6px 18px -10px rgb(15 23 42 / 0.08);
-    --shadow-focus: 0 0 0 3px rgb(5 135 96 / 0.16);
-    --shadow-pop: 0 18px 48px -12px rgb(15 23 42 / 0.18), 0 2px 8px rgb(15 23 42 / 0.06);
-    --shadow-glow: 0 1px 2px rgb(5 135 96 / 0.18), 0 4px 10px -4px rgb(5 135 96 / 0.22);
-    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    /* Foreground for text sitting on a solid status fill */
+    --on-ok: 255 255 255;
+    --on-warn: 255 255 255;
+    --on-danger: 255 255 255;
+    --on-energy: 255 255 255;
+    --scrim: 9 19 16;
+    --inset: 234 239 235;
+    /* Brand panel (login/marketing surfaces) — deliberately dark in BOTH themes,
+       like the scrim, so the ink panel always reads as the brand, not as a bug. */
+    --panel-ink: 6 18 16;
+    --panel-deep: 4 12 11;
+    --panel-raised: 13 30 26;
+    --panel-line: 34 62 53;
+    --panel-text: 231 240 236;
+    --panel-muted: 156 178 170;
+    --panel-dim: 118 140 132;
+    --panel-accent: 62 220 175;
+    --panel-energy: 250 196 88;
+    /* Status */
+    --ok: 13 143 88;
+    --warn: 168 90 10;
+    --danger: 193 32 58;
+    --info: 11 101 156;
+    /* Depth */
+    --shadow-card: 0 1px 1px rgb(11 25 21 / 0.03), 0 2px 6px -2px rgb(11 25 21 / 0.06),
+      0 14px 30px -22px rgb(11 25 21 / 0.22);
+    --shadow-card-hover: 0 2px 4px rgb(11 25 21 / 0.05), 0 16px 34px -18px rgb(4 106 84 / 0.24);
+    --shadow-focus: 0 0 0 3px rgb(4 106 84 / 0.18);
+    --shadow-pop: 0 26px 64px -22px rgb(11 25 21 / 0.28), 0 4px 14px -6px rgb(11 25 21 / 0.14);
+    --shadow-glow: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 2px 5px rgb(4 106 84 / 0.2),
+      0 10px 24px -12px rgb(4 106 84 / 0.4);
+    --card-sheen: inset 0 1px 0 rgb(255 255 255 / 0.72);
+    /* Ambient canvas glows — kept faint so type stays readable */
+    --canvas-glow-1: rgb(4 106 84 / 0.07);
+    --canvas-glow-2: rgb(173 84 11 / 0.05);
+    --canvas-glow-3: rgb(11 137 122 / 0.05);
+    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%234a5c55' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   }
 
   [data-theme='dark'] {
     color-scheme: dark;
-    --navy-950: 10 16 29;
-    --navy-900: 14 23 40;
-    --navy-850: 19 30 51;
-    --navy-800: 26 40 66;
-    --navy-750: 34 52 84;
-    --navy-700: 44 65 103;
-    --navy-600: 62 88 134;
-    --ink-100: 241 245 249;
-    --ink-200: 222 230 242;
-    --ink-300: 192 205 224;
-    --ink-400: 148 165 190;
-    --ink-500: 112 131 158;
-    --ink-600: 84 103 131;
-    --accent: 16 185 129;
-    --accent-soft: 52 211 153;
-    --accent-teal: 20 184 166;
-    --on-accent: 4 30 21;
-    --scrim: 3 7 16;
-    --inset: 11 18 33;
-    --ok: 52 211 153;
-    --warn: 251 191 36;
-    --danger: 248 113 113;
-    --info: 56 189 248;
-    --shadow-card: 0 1px 3px rgb(0 0 0 / 0.26), 0 8px 22px -12px rgb(0 0 0 / 0.45);
-    --shadow-focus: 0 0 0 3px rgb(16 185 129 / 0.22);
-    --shadow-pop: 0 22px 56px -12px rgb(0 0 0 / 0.62), 0 2px 10px rgb(0 0 0 / 0.35);
-    --shadow-glow: 0 1px 2px rgb(0 0 0 / 0.25), 0 4px 12px -4px rgb(16 185 129 / 0.26);
-    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a5be' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    --navy-950: 7 13 12;
+    --navy-900: 11 19 17;
+    --navy-850: 15 24 22;
+    --navy-800: 20 32 29;
+    --navy-750: 27 42 38;
+    --navy-700: 38 56 50;
+    --navy-600: 56 78 69;
+    --ink-100: 236 244 240;
+    --ink-200: 213 225 219;
+    --ink-300: 178 194 187;
+    --ink-400: 140 158 150;
+    --ink-500: 112 130 122;
+    --ink-600: 88 104 97;
+    --accent: 34 197 152;
+    --accent-soft: 94 226 190;
+    --accent-teal: 45 212 190;
+    --accent-energy: 250 186 62;
+    --on-accent: 3 26 20;
+    --on-ok: 4 32 22;
+    --on-warn: 40 25 2;
+    --on-danger: 42 6 14;
+    --on-energy: 38 23 2;
+    --scrim: 2 6 5;
+    --inset: 9 16 14;
+    --panel-ink: 5 14 12;
+    --panel-deep: 2 8 7;
+    --panel-raised: 11 25 22;
+    --panel-line: 30 54 47;
+    --panel-text: 231 240 236;
+    --panel-muted: 156 178 170;
+    --panel-dim: 112 134 126;
+    --panel-accent: 62 220 175;
+    --panel-energy: 250 196 88;
+    --ok: 52 208 152;
+    --warn: 250 190 60;
+    --danger: 246 110 116;
+    --info: 66 182 240;
+    --shadow-card: 0 1px 1px rgb(0 0 0 / 0.4), 0 12px 26px -16px rgb(0 0 0 / 0.6);
+    --shadow-card-hover: 0 2px 6px rgb(0 0 0 / 0.42), 0 18px 38px -18px rgb(0 0 0 / 0.7);
+    --shadow-focus: 0 0 0 3px rgb(34 197 152 / 0.28);
+    --shadow-pop: 0 28px 70px -20px rgb(0 0 0 / 0.78), 0 4px 14px rgb(0 0 0 / 0.45);
+    --shadow-glow: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 8px 22px -10px rgb(34 197 152 / 0.42);
+    --card-sheen: inset 0 1px 0 rgb(255 255 255 / 0.05);
+    --canvas-glow-1: rgb(34 197 152 / 0.09);
+    --canvas-glow-2: rgb(250 186 62 / 0.05);
+    --canvas-glow-3: rgb(45 212 190 / 0.07);
+    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238c9e96' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   }
 
   html,
@@ -78,7 +138,13 @@
   body {
     @apply bg-navy-950 font-sans text-ink-200 antialiased;
     overflow-x: clip;
-    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'ss01';
+    /* Three soft radial washes give the flat canvas depth without touching contrast. */
+    background-image: radial-gradient(880px 520px at 8% -10%, var(--canvas-glow-1), transparent 62%),
+      radial-gradient(760px 480px at 100% 0%, var(--canvas-glow-2), transparent 58%),
+      radial-gradient(900px 700px at 50% 120%, var(--canvas-glow-3), transparent 65%);
+    background-attachment: fixed;
+    background-repeat: no-repeat;
   }
 
   button,
@@ -93,7 +159,7 @@
   }
 
   ::selection {
-    background: rgb(var(--accent) / 0.2);
+    background: rgb(var(--accent) / 0.22);
   }
 
   :focus-visible {
@@ -107,39 +173,57 @@
   }
 
   ::-webkit-scrollbar {
-    width: 7px;
-    height: 7px;
+    width: 8px;
+    height: 8px;
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply rounded-full bg-navy-600/70 hover:bg-navy-600;
+    @apply rounded-full border-2 border-transparent bg-navy-600/60 bg-clip-padding;
   }
 
-  ::-webkit-scrollbar-track {
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-accent/55;
+  }
+
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
     background: transparent;
   }
 }
 
 @layer components {
+  /* --------------------------------------------------------------- cards */
   .card {
-    @apply min-w-0 rounded-xl border border-navy-700/85 bg-navy-850 shadow-card;
+    @apply min-w-0 rounded-2xl border border-navy-700/70 bg-navy-850 shadow-card;
+    box-shadow: var(--shadow-card), var(--card-sheen);
+    transition: border-color 160ms ease, box-shadow 200ms ease;
   }
 
   .card-hover {
-    @apply transition duration-150 hover:border-accent/45 hover:shadow-pop;
+    @apply hover:border-accent/45;
+    box-shadow: var(--shadow-card-hover), var(--card-sheen);
   }
 
+  /* Brand gradient — jade → teal, used on the mark and primary actions. */
   .brand-gradient {
-    background-image: linear-gradient(135deg, rgb(var(--accent)) 0%, rgb(var(--accent-teal)) 100%);
+    background-image: linear-gradient(135deg, rgb(var(--accent)) 0%, rgb(var(--accent-teal)) 58%, rgb(var(--accent)) 100%);
   }
 
+  .brand-gradient-soft {
+    background-image: linear-gradient(150deg, rgb(var(--accent) / 0.14) 0%, rgb(var(--accent-teal) / 0.05) 46%, transparent 78%);
+  }
+
+  .energy-gradient-soft {
+    background-image: linear-gradient(150deg, rgb(var(--accent-energy) / 0.16) 0%, transparent 72%);
+  }
+
+  /* --------------------------------------------------------------- forms */
   .label {
-    @apply mb-1.5 block text-xs font-semibold tracking-tight text-ink-300;
+    @apply mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.045em] text-ink-400;
   }
 
   .input {
-    @apply min-h-10 w-full rounded-lg border border-navy-600/80 bg-navy-900 px-3 py-2 text-sm text-ink-100 placeholder:text-ink-500/80 transition focus:border-accent focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60;
-    box-shadow: none;
+    @apply min-h-10 w-full rounded-xl border border-navy-600/75 bg-navy-900 px-3 py-2 text-sm text-ink-100 shadow-[inset_0_1px_2px_rgb(11_25_21/0.04)] transition placeholder:text-ink-500/85 focus:border-accent focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60;
   }
 
   .input:focus {
@@ -154,23 +238,27 @@
     padding-right: 2.15rem;
   }
 
+  /* ------------------------------------------------------------ sidebar */
   .nav-item {
-    @apply relative flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium text-ink-400 transition-colors hover:bg-navy-800/80 hover:text-ink-100;
+    @apply relative flex min-h-10 items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-medium text-ink-400 transition-all duration-150 hover:bg-navy-800/80 hover:text-ink-100;
   }
 
   .nav-item-active {
     @apply font-semibold text-accent;
-    background-color: rgb(var(--accent) / 0.12);
+    background-image: linear-gradient(90deg, rgb(var(--accent) / 0.16), rgb(var(--accent) / 0.05) 62%, transparent);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
   }
 
   .nav-item-active:hover {
-    background-color: rgb(var(--accent) / 0.16);
+    background-image: linear-gradient(90deg, rgb(var(--accent) / 0.22), rgb(var(--accent) / 0.08) 62%, transparent);
     color: rgb(var(--accent));
   }
 
   .nav-item-active::before {
     content: '';
-    @apply absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full bg-accent;
+    @apply absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full;
+    background-image: linear-gradient(180deg, rgb(var(--accent-teal)), rgb(var(--accent)));
+    box-shadow: 0 0 10px rgb(var(--accent) / 0.5);
   }
 
   .nav-icon {
@@ -190,6 +278,7 @@
     @apply flex min-h-9 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-medium text-ink-300 transition hover:bg-navy-800 hover:text-ink-100;
   }
 
+  /* -------------------------------------------------------------- tables */
   .table-wrap {
     @apply w-full max-w-full overflow-x-auto overscroll-x-contain;
     -webkit-overflow-scrolling: touch;
@@ -201,11 +290,12 @@
   }
 
   .data-table thead th {
-    @apply sticky top-0 z-[1] whitespace-nowrap border-b border-navy-700/85 bg-navy-800/75 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.055em] text-ink-400;
+    @apply sticky top-0 z-[1] whitespace-nowrap border-b border-navy-700/85 px-4 py-2.5 text-left text-[10.5px] font-bold uppercase tracking-[0.07em] text-ink-400 backdrop-blur-sm;
+    background-color: rgb(var(--navy-800) / 0.82);
   }
 
   .data-table tbody td {
-    @apply border-b border-navy-700/60 px-4 py-3 align-middle text-ink-200;
+    @apply border-b border-navy-700/55 px-4 py-3 align-middle text-ink-200;
   }
 
   .data-table tbody tr {
@@ -213,15 +303,18 @@
   }
 
   .data-table tbody tr:hover {
-    background-color: rgb(var(--navy-800) / 0.45);
+    background-color: rgb(var(--accent) / 0.05);
   }
 
   .data-table tbody tr:last-child td {
     @apply border-b-0;
   }
 
+  /* ------------------------------------------------------------- numerals */
   .num {
     @apply font-sans tabular-nums;
+    letter-spacing: -0.012em;
+    font-variant-numeric: tabular-nums;
   }
 
   .mono-code {
@@ -236,6 +329,7 @@
     scrollbar-width: thin;
   }
 
+  /* --------------------------------------------------------------- states */
   .skeleton {
     @apply relative overflow-hidden rounded-lg bg-navy-800/80;
   }
@@ -243,34 +337,42 @@
   .skeleton::after {
     @apply absolute inset-0 -translate-x-full animate-shimmer;
     content: '';
-    background-image: linear-gradient(90deg, transparent, rgb(var(--ink-100) / 0.06), transparent);
+    background-image: linear-gradient(90deg, transparent, rgb(var(--ink-100) / 0.07), transparent);
   }
 
   .eyebrow {
-    @apply text-[10px] font-bold uppercase tracking-[0.14em] text-ink-500;
+    @apply text-[10px] font-bold uppercase tracking-[0.16em] text-ink-500;
+  }
+
+  .chip {
+    @apply inline-flex min-h-7 items-center gap-1.5 rounded-full border border-navy-700/80 bg-navy-900/70 px-2.5 py-1 text-[11px] font-semibold text-ink-300 shadow-[var(--card-sheen)];
+  }
+
+  .kbd {
+    @apply rounded-md border border-navy-600/70 bg-navy-900 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-ink-400;
   }
 
   .quick-action {
-    @apply flex min-h-[72px] items-center gap-3 rounded-xl border border-navy-700/85 bg-navy-850 p-3.5 text-left shadow-card transition duration-150 hover:border-accent/45 hover:bg-navy-800/40;
+    @apply flex min-h-[72px] items-center gap-3 rounded-2xl border border-navy-700/80 bg-navy-850 p-3.5 text-left shadow-card transition duration-150 hover:-translate-y-px hover:border-accent/50 hover:bg-navy-800/45;
   }
 
   .callout-ok {
-    @apply rounded-lg border border-ok/25 px-3.5 py-2.5 text-xs text-ok;
+    @apply rounded-xl border border-ok/25 px-3.5 py-2.5 text-xs text-ok;
     background-color: rgb(var(--ok) / 0.08);
   }
 
   .callout-warn {
-    @apply rounded-lg border border-warn/25 px-3.5 py-2.5 text-xs text-warn;
+    @apply rounded-xl border border-warn/25 px-3.5 py-2.5 text-xs text-warn;
     background-color: rgb(var(--warn) / 0.08);
   }
 
   .callout-danger {
-    @apply rounded-lg border border-danger/25 px-3.5 py-2.5 text-xs text-danger;
+    @apply rounded-xl border border-danger/25 px-3.5 py-2.5 text-xs text-danger;
     background-color: rgb(var(--danger) / 0.08);
   }
 
   .callout-info {
-    @apply rounded-lg border border-info/25 px-3.5 py-2.5 text-xs text-info;
+    @apply rounded-xl border border-info/25 px-3.5 py-2.5 text-xs text-info;
     background-color: rgb(var(--info) / 0.08);
   }
 }
@@ -315,6 +417,10 @@
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
   }
+
+  body {
+    background-attachment: scroll;
+  }
 }
 
 /* Print only the report, not the application chrome or action controls. */
@@ -335,7 +441,7 @@
 
   body {
     background: white !important;
-    color: #0f172a !important;
+    color: #0b1915 !important;
   }
 
   .card {
