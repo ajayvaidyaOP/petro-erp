@@ -151,8 +151,9 @@ auto-match. Pump par roz 200–600 card/UPI hits hote hain — T+2 settlement au
 ### P1-8 · Payroll / HR bilkul nahi, chahe aadha bana hua dikhta hai
 `AttendancePanel.tsx:82` kehta hai *"monthly payable days drive payroll computation"* — par **payroll compute
 kahin nahi hota**: `attendance.ts:/summary` sirf `payableDays = present + half*0.5 + week_off` return karta hai.
-Koi `salary_structure`, per-day rate, advance, PF/ESI/ESIC, overtime, incentive (DSM ka per-KL incentive), form
-16, payslip **nahi** (`grep -iE "PF_|ESI"` → 0 hits). Advance ka sirf ek demo **expense category** hai
+Koi `salary_structure` table **nahi** (UI me sirf "Monthly payroll summary" header hai, amounts nahi), per-day
+rate nahi, PF/ESI/ESIC nahi, overtime nahi, incentive (DSM ka per-KL incentive) nahi, Form 16 / payslip print nahi
+(`grep -iE "PF_|ESI"` → 0 hits). Advance ka sirf ek demo **expense category** hai
 (`seed.ts:751` 'Staff salary advance') — matlab advance expense me dub jayega, employee se link nahi rahega.
 
 ### P1-9 · Quality/inspection & printing workflows — data hai, kaam nahi
