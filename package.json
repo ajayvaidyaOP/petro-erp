@@ -26,7 +26,10 @@
     "test:e2e": "playwright test",
     "db:reset": "npm run db:reset -w @petroflow/server",
     "db:seed": "npm run db:seed -w @petroflow/server",
-    "db:mysql-ddl": "node scripts/generate-mysql-ddl.mjs"
+    "db:mysql-ddl": "node scripts/generate-mysql-ddl.mjs",
+    "db:backup": "npm run db:backup -w @petroflow/server",
+    "db:restore": "npm run db:restore -w @petroflow/server",
+    "db:integrity": "npm run db:integrity -w @petroflow/server"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",

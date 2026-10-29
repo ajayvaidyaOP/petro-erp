@@ -36,8 +36,15 @@ petro-erp/
 
 ## Petrol-pump audit & roadmap
 
-`docs/PETROL-PUMP-ERP-AUDIT.md` contains a full domain audit of this codebase against how an Indian
-petrol pump actually runs, plus the complete feature checklist. **Phases 1–3 of that roadmap are now
+Three domain documents live in `docs/`:
+
+| Doc | What it answers |
+| --- | --- |
+| `docs/ARCHITECTURE.md` | How the four workspaces fit together, and the domain rules (meters → stock → shifts → day close) |
+| `docs/OPERATIONS.md` | Runbook: first run, backups, restore, health checks, disaster recovery |
+| `docs/PETROL-PUMP-ERP-GAP-REPORT.md` | What an Indian petrol pump ERP/CRM needs, what this repo has, what is missing |
+| `docs/ADD-BACKLOG.md` | The missing pieces as build-ready specs (tables, endpoints, files to touch, effort) |
+| `docs/PETROL-PUMP-ERP-AUDIT.md` | Earlier audit (28 Oct) — still useful, but several of its ❌ items are now built; see §5 of the gap report for corrections | **Phases 1–3 of that roadmap are now
 implemented** (Oct 2026):
 
 - **Forecourt truth:** every nozzle is hard-mapped to its tank (no pro-rata guessing), testing litres
@@ -58,12 +65,13 @@ Existing databases migrate automatically on boot (additive columns/tables + role
 
 ## Theming
 
-The UI uses a quiet petrol-green design system: white/light-green surfaces, locally bundled
-Manrope display type and Inter body text, responsive sidebar/drawer/bottom navigation, and
-keyboard-accessible dialogs. Light is the default; dark mode remains available. Every colour resolves through CSS
-custom properties defined in `frontend/src/index.css` and exposed to Tailwind in
-`frontend/tailwind.config.js`, so switching `data-theme` on `<html>` re-tints the whole
-app — components only ever reference semantic tokens:
+The UI is a **token-only "Forecourt Lux" system**: deep petrol jade as the brand colour, a warm
+sage-paper canvas in light mode, a green-graphite ink in dark mode, and amber-gold reserved as the
+"energy" highlight (rates, litres, revenue moments). Locally bundled Manrope display type + Inter
+body text, responsive sidebar/drawer/bottom navigation, keyboard-accessible dialogs. Light is the
+default; dark mode remains available. Nothing in a component references a raw Tailwind shade — every
+colour resolves through CSS custom properties in `frontend/src/index.css`, exposed to Tailwind in
+`frontend/tailwind.config.js`, so switching `data-theme` on `<html>` re-tints all 32 screens:
 
 | Token family | Meaning |
 | --- | --- |
@@ -74,6 +82,15 @@ app — components only ever reference semantic tokens:
 | `scrim` | Modal/drawer backdrop — always dark in both themes |
 | `inset` | Recessed surface for code blocks and inset panels |
 | `ok` / `warn` / `danger` / `info` | Status colours (invert with the theme to stay legible) |
+| `onaccent` / `onok` / `onwarn` / `ondanger` | Foreground for text on a solid status fill |
+| `energy` / `accent-energy` | Amber-gold fuel highlight — rates, litres, positive revenue |
+| `panel-*` | Brand ink panel (login split) — deliberately dark in **both** themes |
+| `chart-1…5` | Chart series; Recharts mirrors the same values in `frontend/src/lib/theme.tsx` |
+
+Shadows and radii are tokens too (`shadow-card`, `shadow-card-hover`, `shadow-sheen`, `shadow-pop`,
+`shadow-glow`, `rounded-2.5xl`), and the page canvas carries three faint radial washes for depth.
+Chart colours live in `lib/theme.tsx` because SVG attributes cannot resolve CSS variables — keep
+those hexes in step with `index.css` when the palette changes.
 
 Users switch from the sun/moon button in the header. The choice is stored in
 `localStorage` under `petroflow.theme`; with no stored choice the readable
@@ -148,6 +165,9 @@ npm run test:e2e            # browser workflows (install Chromium first; see bel
 npm run typecheck           # shared, backend, frontend, and gateway
 npm run build               # frontend production assets + backend type/build check
 npm run db:seed             # seed demo records if the database is empty
+npm run db:backup           # verified snapshot into db/backups/ (+ sha256 sidecar, retention prune)
+npm run db:integrity        # check the live database and the newest snapshot
+npm run db:mysql-ddl        # regenerate db/mysql/schema.sql from db/schema.sql (review before use)
 npm run db:reset            # DESTRUCTIVE: delete the local SQLite DB and re-seed it
 ```
 
@@ -184,8 +204,9 @@ This repository does not deploy itself. A real production deployment needs an in
 
 - Use Node.js 22.13+ and build with `npm ci` followed by `npm run build`; start the backend with `npm run start`.
 - Set `NODE_ENV=production`, `COOKIE_SECURE=true`, an explicit `SESSION_COOKIE_NAME`, the public HTTPS `APP_ORIGIN`, and exact `ALLOWED_ORIGINS`. Set `ENABLE_DEMO_TOOLS=false`; do not use demo accounts/passwords or run the demo seed against production data. Production startup fails fast if required security settings are missing.
-- Put `DATABASE_FILE` on a durable, writable, backed-up disk. SQLite is the database adapter implemented here; run one application instance against that file. Do not use ephemeral storage or horizontally scale multiple writers against a local SQLite file. The commented MySQL variables in `.env.example` do not enable a MySQL adapter.
+- Put `DATABASE_FILE` on a durable, writable, backed-up disk. SQLite is the database adapter implemented here; run one application instance against that file. Do not use ephemeral storage or horizontally scale multiple writers against a local SQLite file. The commented MySQL variables in `.env.example` do not enable a MySQL adapter; `npm run db:mysql-ddl` regenerates `db/mysql/schema.sql` for a future migration, and that file must be reviewed (it is generated, not battle-tested).
 - If TLS is terminated by a trusted reverse proxy, configure `TRUST_PROXY=true` only for that deployment topology. Restrict public origins and network access to the API and database volume.
+- Snapshots are taken with `VACUUM INTO` (`npm run db:backup`), integrity-checked and hash-sided; copy them off the pump's disk daily and **test a restore** (`npm run db:restore -- --from <snapshot> --yes`) on a spare machine before go-live. See `docs/OPERATIONS.md`.
 - Run `npm audit` and resolve any findings before go-live. The lockfile reported zero vulnerabilities when last checked; advisories can change, so repeat the audit as part of deployment.
 - Development-only Vite host allowances and iframe relaxation are not part of production serving. The production Express app retains `X-Frame-Options: SAMEORIGIN`; do not weaken it to make a public site embeddable.
 
