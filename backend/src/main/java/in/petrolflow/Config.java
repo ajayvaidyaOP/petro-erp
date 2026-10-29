@@ -24,6 +24,8 @@ public final class Config {
     public final boolean cookieSecure;
     public final Path root;
     public final String sandboxId;
+    public final String appOrigin;
+    public final java.util.Set<String> allowedOrigins;
 
     private Config(Map<String, String> env, Path root) {
         this.root = root;
@@ -43,14 +45,26 @@ public final class Config {
         this.sessionHours = num(env, "SESSION_TTL_HOURS", 12);
         this.cookieSecure = bool(env, "COOKIE_SECURE", production);
         this.sandboxId = System.getenv("E2B_SANDBOX_ID");
+        this.appOrigin = str(env, "APP_ORIGIN", "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174");
+        java.util.Set<String> origins = new java.util.LinkedHashSet<>();
+        for (String item : this.appOrigin.split(",")) {
+            String trimmed = item.trim();
+            if (!trimmed.isEmpty()) origins.add(trimmed);
+        }
+        this.allowedOrigins = java.util.Collections.unmodifiableSet(origins);
     }
 
     public static Config load() {
+        return load(Map.of());
+    }
+
+    public static Config load(Map<String, String> overrides) {
         Path root = findRoot();
         Map<String, String> env = new HashMap<>();
         loadFile(root.resolve(".env"), env);
         loadFile(root.resolve("backend").resolve(".env"), env);
         System.getenv().forEach(env::put);
+        if (overrides != null) env.putAll(overrides);
         return new Config(env, root);
     }
 

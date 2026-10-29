@@ -17,6 +17,7 @@ public final class FinanceApi {
         web.get("/finance/payments", FinanceApi::payments);
         web.post("/finance/payments", FinanceApi::createPayment);
         web.post("/finance/payments/:id/settle", FinanceApi::settle);
+        web.patch("/finance/payments/:id/settle", FinanceApi::settle);
         web.post("/finance/payments/:id/reverse", FinanceApi::reversePayment);
         web.get("/finance/expenses", FinanceApi::expenses);
         web.post("/finance/expenses", FinanceApi::createExpense);
@@ -42,7 +43,48 @@ public final class FinanceApi {
         String customerId = required(ctx, "customerId");
         Map<String, Object> customer = Db.one("SELECT * FROM customers WHERE id = ? AND tenant_id = ?", customerId, auth.tenantId());
         if (customer == null) throw ApiException.notFound("Customer not found");
-        ctx.ok(Map.of("customer", Json.shape(customer), "entries", Json.shapeAll(Db.all("SELECT * FROM credit_entries WHERE customer_id = ? ORDER BY occurred_at DESC LIMIT 200", customerId))));
+        List<Map<String, Object>> entries = Db.all(
+                """
+                SELECT ce.*, st.name AS station_name, u.name AS created_by_name, p.name AS product_name
+                  FROM credit_entries ce
+                  LEFT JOIN stations st ON st.id = ce.station_id
+                  LEFT JOIN users u ON u.id = ce.created_by
+                  LEFT JOIN fuel_products p ON p.id = ce.product_id
+                 WHERE ce.customer_id = ? AND ce.status = 'POSTED'
+                 ORDER BY ce.occurred_at ASC, ce.created_at ASC
+                """, customerId);
+        BigDecimal running = Money.d(customer.get("opening_balance"));
+        BigDecimal overdueTotal = BigDecimal.ZERO;
+        String today = Clock.todayIst();
+        List<Map<String, Object>> ledger = new ArrayList<>();
+        for (Map<String, Object> entry : entries) {
+            String type = Db.str(entry, "type");
+            BigDecimal rawAmt = Money.d(entry.get("amount"));
+            BigDecimal absAmt = rawAmt.abs();
+            if ("CREDIT_SALE".equals(type)) running = running.add(absAmt);
+            else if ("PAYMENT".equals(type)) running = running.subtract(absAmt);
+            else running = running.add(rawAmt);
+            String due = Db.str(entry, "due_date");
+            boolean overdue = "CREDIT_SALE".equals(type) && due != null && due.compareTo(today) < 0;
+            if (overdue) overdueTotal = overdueTotal.add(absAmt);
+            Map<String, Object> shaped = Json.shape(entry);
+            shaped.put("amount", Money.money(absAmt));
+            shaped.put("debit", "CREDIT_SALE".equals(type) ? Money.money(absAmt) : "0.00");
+            shaped.put("credit", "PAYMENT".equals(type) ? Money.money(absAmt) : "0.00");
+            shaped.put("runningBalance", Money.money(running));
+            shaped.put("overdue", overdue);
+            ledger.add(shaped);
+        }
+        BigDecimal limit = Money.d(customer.get("credit_limit"));
+        ctx.ok(Web.map(
+                "customer", Json.shape(customer),
+                "ledger", ledger,
+                "entries", ledger,
+                "closingBalance", Money.money(running),
+                "creditLimit", Money.money(limit),
+                "availableCredit", Money.money(limit.subtract(running)),
+                "overdueAmount", Money.money(overdueTotal),
+                "note", "A credit sale increases the customer balance; a receipt reduces it. Payment mode does not change the credit balance until a receipt is recorded."));
     }
 
     private static void statement(Web.Ctx ctx) {
@@ -52,10 +94,52 @@ public final class FinanceApi {
         if (month == null || !month.matches("\\d{4}-\\d{2}")) throw ApiException.unprocessable("month (YYYY-MM) is required");
         Map<String, Object> customer = Db.one("SELECT * FROM customers WHERE id = ? AND tenant_id = ?", ctx.q("customerId"), auth.tenantId());
         if (customer == null) throw ApiException.notFound("Customer not found");
-        List<Map<String, Object>> lines = Json.shapeAll(Db.all(
-                "SELECT * FROM credit_entries WHERE customer_id = ? AND occurred_at LIKE ? ORDER BY occurred_at",
-                customer.get("id"), month + "%"));
-        ctx.ok(Map.of("customer", Json.shape(customer), "month", month, "lines", lines, "closingBalance", customer.get("balance"), "generatedAt", Clock.nowIso()));
+        String fromIso = Clock.istDayStart(month + "-01");
+        String toIso = Clock.istDayStart(Clock.addDays(month + "-28", 4).substring(0, 8) + "01");
+        BigDecimal opening = Money.d(customer.get("opening_balance"));
+        for (Map<String, Object> r : Db.all("SELECT type, amount FROM credit_entries WHERE customer_id = ? AND status = 'POSTED' AND occurred_at < ?", customer.get("id"), fromIso)) {
+            BigDecimal amt = Money.d(r.get("amount"));
+            opening = "PAYMENT".equals(r.get("type")) ? opening.subtract(amt.abs()) : opening.add("CREDIT_SALE".equals(r.get("type")) ? amt.abs() : amt);
+        }
+        List<Map<String, Object>> rows = Db.all(
+                """
+                SELECT ce.*, st.name AS station_name, p.name AS product_name
+                  FROM credit_entries ce
+                  LEFT JOIN stations st ON st.id = ce.station_id
+                  LEFT JOIN fuel_products p ON p.id = ce.product_id
+                 WHERE ce.customer_id = ? AND ce.status = 'POSTED' AND ce.occurred_at >= ? AND ce.occurred_at < ?
+                 ORDER BY ce.occurred_at ASC, ce.created_at ASC
+                """, customer.get("id"), fromIso, toIso);
+        BigDecimal running = opening;
+        BigDecimal totalSales = BigDecimal.ZERO;
+        BigDecimal totalPayments = BigDecimal.ZERO;
+        List<Map<String, Object>> lines = new ArrayList<>();
+        for (Map<String, Object> row : rows) {
+            String type = Db.str(row, "type");
+            BigDecimal amt = Money.d(row.get("amount"));
+            BigDecimal abs = amt.abs();
+            if ("CREDIT_SALE".equals(type)) { running = running.add(abs); totalSales = totalSales.add(abs); }
+            else if ("PAYMENT".equals(type)) { running = running.subtract(abs); totalPayments = totalPayments.add(abs); }
+            else { running = running.add(amt); }
+            Map<String, Object> line = Json.shape(row);
+            line.put("debit", "CREDIT_SALE".equals(type) ? Money.money(abs) : "0.00");
+            line.put("credit", "PAYMENT".equals(type) ? Money.money(abs) : "0.00");
+            line.put("runningBalance", Money.money(running));
+            lines.add(line);
+        }
+        Map<String, Object> tenant = Db.one("SELECT name, legal_name, gstin, address FROM tenants WHERE id = ?", auth.tenantId());
+        List<Map<String, Object>> vehicles = Json.shapeAll(Db.all("SELECT * FROM customer_vehicles WHERE customer_id = ? AND is_active = 1 ORDER BY vehicle_number", customer.get("id")));
+        ctx.ok(Web.map(
+                "tenant", tenant == null ? null : Json.shape(tenant),
+                "customer", Json.shape(customer),
+                "vehicles", vehicles,
+                "month", month,
+                "openingBalance", Money.money(opening),
+                "closingBalance", Money.money(running),
+                "totalSales", Money.money(totalSales),
+                "totalPayments", Money.money(totalPayments),
+                "lines", lines,
+                "generatedAt", Clock.nowIso()));
     }
 
     private static void creditSale(Web.Ctx ctx) {
@@ -64,7 +148,15 @@ public final class FinanceApi {
         Map<String, Object> station = auth.station(requiredBody(ctx, "stationId"));
         Map<String, Object> customer = Db.one("SELECT * FROM customers WHERE id = ? AND tenant_id = ?", requiredBody(ctx, "customerId"), auth.tenantId());
         if (customer == null) throw ApiException.notFound("Customer not found");
-        BigDecimal amount = ctx.str("amount") != null ? Money.d(ctx.str("amount")) : Money.d(ctx.str("quantityLitres")).multiply(Money.d(ctx.str("ratePerLitre")));
+        String rateStr = ctx.str("ratePerLitre");
+        if ((rateStr == null || rateStr.isBlank()) && ctx.str("productId") != null && !ctx.str("productId").isBlank()) {
+            Map<String, Object> price = Domain.priceAt(auth.tenantId(), ctx.str("productId"), Db.str(station, "id"));
+            if (price != null) rateStr = Db.str(price, "rate_per_litre");
+        }
+        final String resolvedRate = rateStr;
+        BigDecimal amount = ctx.str("amount") != null && !ctx.str("amount").isBlank()
+                ? Money.d(ctx.str("amount"))
+                : (ctx.str("quantityLitres") != null && resolvedRate != null ? Money.d(ctx.str("quantityLitres")).multiply(Money.d(resolvedRate)) : BigDecimal.ZERO);
         if (amount.signum() <= 0) throw ApiException.unprocessable("Amount do, ya litres + rate do — dono me se ek zaroori hai");
         BigDecimal balance = Money.d(customer.get("balance"));
         BigDecimal limit = Money.d(customer.get("credit_limit"));
@@ -73,7 +165,10 @@ public final class FinanceApi {
         }
         String id = Clock.newId("cre");
         String now = Clock.nowIso();
-        String slip = ctx.str("slipNumber") == null ? station.get("code") + "-" + Clock.todayIst().replace("-", "") : ctx.str("slipNumber");
+        long seq = Db.count("SELECT COUNT(*) FROM credit_entries WHERE station_id = ? AND type = 'CREDIT_SALE'", station.get("id")) + 1;
+        String slip = ctx.str("slipNumber") == null || ctx.str("slipNumber").isBlank()
+                ? station.get("code") + "-" + Clock.todayIst().replace("-", "") + "-" + String.format("%03d", seq)
+                : ctx.str("slipNumber");
         Db.tx(() -> {
             Db.exec(
                     """
@@ -85,13 +180,13 @@ public final class FinanceApi {
                     id, auth.tenantId(), station.get("id"), customer.get("id"), Money.money(amount), slip,
                     ctx.str("vehicleNumber"), ctx.str("driverName"), ctx.str("productId"),
                     ctx.str("quantityLitres") == null ? null : Money.litres(ctx.str("quantityLitres")),
-                    ctx.str("ratePerLitre") == null ? null : Money.money(ctx.str("ratePerLitre")),
+                    resolvedRate == null ? null : Money.rate(resolvedRate),
                     ctx.str("reference"), now, ctx.str("dueDate"), ctx.str("note"), auth.userId, now);
             Db.exec("UPDATE customers SET balance = ?, updated_at = ? WHERE id = ?", Money.money(balance.add(amount)), now, customer.get("id"));
             return id;
         });
         Auth.audit(auth, "CREDIT_SALE_RECORDED", "CreditEntry", id, Db.str(station, "id"), customer.get("name") + ": " + Money.money(amount));
-        ctx.created(Map.of("id", id, "customerId", customer.get("id"), "slipNumber", slip, "amount", Money.money(amount), "newBalance", Money.money(balance.add(amount))));
+        ctx.created(Web.map("id", id, "customerId", customer.get("id"), "slipNumber", slip, "amount", Money.money(amount), "newBalance", Money.money(balance.add(amount))));
     }
 
     private static void supplierLedger(Web.Ctx ctx) {
@@ -99,7 +194,47 @@ public final class FinanceApi {
         auth.require("suppliers.read");
         Map<String, Object> supplier = Db.one("SELECT * FROM suppliers WHERE id = ? AND tenant_id = ?", required(ctx, "supplierId"), auth.tenantId());
         if (supplier == null) throw ApiException.notFound("Supplier not found");
-        ctx.ok(Map.of("supplier", Json.shape(supplier), "entries", Json.shapeAll(Db.all("SELECT * FROM deliveries WHERE supplier_id = ? ORDER BY created_at DESC LIMIT 100", supplier.get("id")))));
+        List<Map<String, Object>> events = new ArrayList<>();
+        for (Map<String, Object> d : Db.all(
+                "SELECT d.*, p.name AS product_name FROM deliveries d JOIN fuel_products p ON p.id = d.product_id WHERE d.supplier_id = ? AND d.status = 'RECEIVED'",
+                supplier.get("id"))) {
+            events.add(Web.map(
+                    "id", d.get("id"),
+                    "date", d.get("received_at") != null ? d.get("received_at") : (d.get("invoice_date") + "T00:00:00.000Z"),
+                    "type", "PURCHASE",
+                    "description", d.get("product_name") + " · " + d.get("quantity_litres") + " L · Inv " + d.get("invoice_number"),
+                    "reference", d.get("invoice_number"),
+                    "debit", Money.money(d.get("total_amount")),
+                    "credit", "0.00"));
+        }
+        for (Map<String, Object> pay : Db.all(
+                "SELECT * FROM payments WHERE supplier_id = ? AND direction = 'PAYOUT' AND status != 'REVERSED'",
+                supplier.get("id"))) {
+            events.add(Web.map(
+                    "id", pay.get("id"),
+                    "date", pay.get("occurred_at"),
+                    "type", "PAYMENT",
+                    "description", pay.get("mode") + (pay.get("reference") != null ? " · " + pay.get("reference") : ""),
+                    "reference", pay.get("reference"),
+                    "debit", "0.00",
+                    "credit", Money.money(pay.get("amount"))));
+        }
+        events.sort((a, b) -> String.valueOf(a.get("date")).compareTo(String.valueOf(b.get("date"))));
+        BigDecimal running = Money.d(supplier.get("opening_balance"));
+        List<Map<String, Object>> ledger = new ArrayList<>();
+        for (Map<String, Object> ev : events) {
+            running = running.add(Money.d(ev.get("debit"))).subtract(Money.d(ev.get("credit")));
+            Map<String, Object> item = new LinkedHashMap<>(ev);
+            item.put("runningBalance", Money.money(running));
+            ledger.add(item);
+        }
+        ctx.ok(Web.map(
+                "supplier", Json.shape(supplier),
+                "ledger", ledger,
+                "entries", ledger,
+                "openingBalance", Money.money(supplier.get("opening_balance")),
+                "closingBalance", Money.money(running),
+                "note", "Purchases enter the payable ledger when a delivery is marked received."));
     }
 
     private static void payments(Web.Ctx ctx) {
@@ -107,34 +242,71 @@ public final class FinanceApi {
         auth.require("payments.read");
         int page = Domain.pageOf(ctx);
         int size = Domain.pageSize(ctx);
-        long total = Db.count("SELECT COUNT(*) AS count FROM payments WHERE tenant_id = ?", auth.tenantId());
-        ctx.ok(Json.shapeAll(Db.all("SELECT * FROM payments WHERE tenant_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?", auth.tenantId(), size, (page - 1) * size)), Domain.page(total, page, size));
+        String where = "p.tenant_id = ?";
+        List<Object> params = new ArrayList<>(List.of(auth.tenantId()));
+        if (ctx.q("stationId") != null && !ctx.q("stationId").isBlank()) {
+            auth.station(ctx.q("stationId"));
+            where += " AND p.station_id = ?";
+            params.add(ctx.q("stationId"));
+        }
+        if (ctx.q("direction") != null && !ctx.q("direction").isBlank()) {
+            where += " AND p.direction = ?";
+            params.add(ctx.q("direction"));
+        }
+        if (ctx.q("status") != null && !ctx.q("status").isBlank()) {
+            where += " AND p.status = ?";
+            params.add(ctx.q("status"));
+        }
+        long total = Db.count("SELECT COUNT(*) AS count FROM payments p WHERE " + where, params.toArray());
+        params.add(size);
+        params.add((page - 1) * size);
+        ctx.ok(Json.shapeAll(Db.all(
+                """
+                SELECT p.*, c.name AS customer_name, s.name AS supplier_name, st.name AS station_name
+                  FROM payments p
+                  LEFT JOIN customers c ON c.id = p.customer_id
+                  LEFT JOIN suppliers s ON s.id = p.supplier_id
+                  LEFT JOIN stations st ON st.id = p.station_id
+                 WHERE %s ORDER BY p.occurred_at DESC, p.created_at DESC LIMIT ? OFFSET ?
+                """.formatted(where), params.toArray())), Domain.page(total, page, size));
     }
 
     private static void createPayment(Web.Ctx ctx) {
         Auth auth = ctx.requireAuth();
         auth.require("payments.write");
         String id = Clock.newId("pay");
-        String now = Clock.nowIso();
+        String now = ctx.str("occurredAt") == null || ctx.str("occurredAt").isBlank() ? Clock.nowIso() : ctx.str("occurredAt");
         String partyType = ctx.str("partyType") == null ? "CUSTOMER" : ctx.str("partyType");
-        Db.exec(
-                """
-                INSERT INTO payments (id, tenant_id, station_id, direction, party_type, customer_id, supplier_id, amount, mode, status, reference, notes, occurred_at, created_by, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'POSTED', ?, ?, ?, ?, ?)
-                """,
-                id, auth.tenantId(), requiredBody(ctx, "stationId"), ctx.str("direction") == null ? "RECEIPT" : ctx.str("direction"),
-                partyType, "CUSTOMER".equals(partyType) ? ctx.str("partyId") : null, "SUPPLIER".equals(partyType) ? ctx.str("partyId") : null,
-                Money.money(requiredBody(ctx, "amount")), ctx.str("mode") == null ? "CASH" : ctx.str("mode"),
-                ctx.str("reference"), ctx.str("note"), now, auth.userId, now);
-        if ("CUSTOMER".equals(ctx.str("partyType")) && ctx.str("partyId") != null && "RECEIPT".equals(ctx.str("direction") == null ? "RECEIPT" : ctx.str("direction"))) {
-            Map<String, Object> customer = Db.one("SELECT balance FROM customers WHERE id = ?", ctx.str("partyId"));
-            if (customer != null) {
-                Db.exec("UPDATE customers SET balance = ?, updated_at = ? WHERE id = ?", Money.money(Money.d(customer.get("balance")).subtract(Money.d(ctx.str("amount")))), now, ctx.str("partyId"));
-                Db.exec(
-                        "INSERT INTO credit_entries (id, tenant_id, station_id, customer_id, type, amount, occurred_at, status, created_by, created_at) VALUES (?, ?, ?, ?, 'PAYMENT', ?, ?, 'POSTED', ?, ?)",
-                        Clock.newId("cre"), auth.tenantId(), ctx.str("stationId"), ctx.str("partyId"), Money.money(ctx.str("amount")), now, auth.userId, now);
+        String direction = ctx.str("direction") == null ? ("SUPPLIER".equals(partyType) ? "PAYOUT" : "RECEIPT") : ctx.str("direction");
+        String customerId = ctx.str("customerId") != null ? ctx.str("customerId") : ("CUSTOMER".equals(partyType) ? ctx.str("partyId") : null);
+        String supplierId = ctx.str("supplierId") != null ? ctx.str("supplierId") : ("SUPPLIER".equals(partyType) ? ctx.str("partyId") : null);
+        String stationId = requiredBody(ctx, "stationId");
+        auth.station(stationId);
+        String amt = Money.money(requiredBody(ctx, "amount"));
+        String mode = ctx.str("mode") == null ? "CASH" : ctx.str("mode");
+        String status = "CASH".equals(mode) ? "SETTLED" : "POSTED";
+        String notes = ctx.str("notes") != null ? ctx.str("notes") : ctx.str("note");
+        Db.tx(() -> {
+            Db.exec(
+                    """
+                    INSERT INTO payments (id, tenant_id, station_id, direction, party_type, customer_id, supplier_id, amount, mode, status, settled_at, reference, notes, occurred_at, created_by, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    id, auth.tenantId(), stationId, direction, partyType, customerId, supplierId,
+                    amt, mode, status, "SETTLED".equals(status) ? now : null,
+                    ctx.str("reference"), notes, now, auth.userId, Clock.nowIso());
+            if ("CUSTOMER".equals(partyType) && customerId != null && "RECEIPT".equals(direction)) {
+                Map<String, Object> customer = Db.one("SELECT balance FROM customers WHERE id = ?", customerId);
+                if (customer != null) {
+                    Db.exec("UPDATE customers SET balance = ?, updated_at = ? WHERE id = ?",
+                            Money.money(Money.d(customer.get("balance")).subtract(Money.d(amt))), Clock.nowIso(), customerId);
+                    Db.exec(
+                            "INSERT INTO credit_entries (id, tenant_id, station_id, customer_id, type, amount, payment_id, reference, occurred_at, note, status, created_by, created_at) VALUES (?, ?, ?, ?, 'PAYMENT', ?, ?, ?, ?, ?, 'POSTED', ?, ?)",
+                            Clock.newId("cre"), auth.tenantId(), stationId, customerId, amt, id, ctx.str("reference"), now, notes, auth.userId, Clock.nowIso());
+                }
             }
-        }
+            return null;
+        });
         ctx.created(Json.shape(Db.one("SELECT * FROM payments WHERE id = ?", id)));
     }
 

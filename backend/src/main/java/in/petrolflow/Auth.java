@@ -79,7 +79,7 @@ public final class Auth {
                 """
                 SELECT u.id, u.email, u.name, u.role_key, u.tenant_id, u.status, u.must_change_password,
                        u.last_login_at, u.is_demo, u.granted_permissions, r.name AS role_name, r.scope
-                  FROM users u LEFT JOIN roles r ON r.key = u.role_key
+                  FROM users u LEFT JOIN roles r ON r.`key` = u.role_key
                  WHERE u.id = ?
                 """,
                 userId);

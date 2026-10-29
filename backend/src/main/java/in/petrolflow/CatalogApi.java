@@ -16,28 +16,34 @@ public final class CatalogApi {
         web.post("/catalog/products", ctx -> crudCreate(ctx, "fuel_products", "prd", "products.write", true, false, "code", "name", "category", "unit", "color", "isActive"));
         web.patch("/catalog/products/:id", ctx -> crudPatch(ctx, "fuel_products", "products.write", true, "name", "category", "unit", "color", "isActive"));
         web.get("/catalog/prices", CatalogApi::prices);
+        web.get("/catalog/prices/current", CatalogApi::currentPrices);
         web.post("/catalog/prices", CatalogApi::createPrice);
         web.get("/catalog/tanks", ctx -> crudList(ctx, "tanks", "tanks.read", false, true, "code", "name"));
-        web.post("/catalog/tanks", ctx -> crudCreate(ctx, "tanks", "tnk", "tanks.write", false, true, "code", "name", "productId", "capacityLitres", "deadStockLitres", "status"));
-        web.patch("/catalog/tanks/:id", ctx -> crudPatch(ctx, "tanks", "tanks.write", false, "name", "productId", "capacityLitres", "deadStockLitres", "status"));
+        web.post("/catalog/tanks", ctx -> crudCreate(ctx, "tanks", "tnk", "tanks.write", false, true, "code", "name", "productId", "capacityLitres", "deadStockLitres", "calibrationReference", "status"));
+        web.patch("/catalog/tanks/:id", ctx -> crudPatch(ctx, "tanks", "tanks.write", false, "name", "productId", "capacityLitres", "deadStockLitres", "calibrationReference", "status"));
+        web.get("/catalog/tanks/:id/calibration", CatalogApi::getCalibration);
+        web.put("/catalog/tanks/:id/calibration", CatalogApi::putCalibration);
+        web.get("/catalog/tanks/:id/measurements", CatalogApi::listMeasurements);
         web.post("/catalog/tanks/:id/measurements", CatalogApi::measurement);
         web.get("/catalog/dispensers", ctx -> crudList(ctx, "dispensers", "dispensers.read", false, true, "code", "name"));
         web.post("/catalog/dispensers", ctx -> crudCreate(ctx, "dispensers", "dsp", "dispensers.write", false, true, "code", "name", "serialNumber", "model", "status"));
-        web.patch("/catalog/dispensers/:id", ctx -> crudPatch(ctx, "dispensers", "dispensers.write", false, "name", "status"));
+        web.patch("/catalog/dispensers/:id", ctx -> crudPatch(ctx, "dispensers", "dispensers.write", false, "name", "model", "serialNumber", "status"));
         web.get("/catalog/nozzles", ctx -> crudList(ctx, "nozzles", "dispensers.read", false, true, "label", "number"));
         web.post("/catalog/nozzles", ctx -> crudCreate(ctx, "nozzles", "nzl", "dispensers.write", false, true, "dispenserId", "number", "label", "productId", "tankId", "status"));
         web.patch("/catalog/nozzles/:id", ctx -> crudPatch(ctx, "nozzles", "dispensers.write", false, "label", "productId", "tankId", "status"));
         web.get("/catalog/nozzles/:id/history", CatalogApi::nozzleHistory);
         web.get("/catalog/customers", ctx -> crudList(ctx, "customers", "customers.read", true, false, "code", "name", "phone"));
-        web.post("/catalog/customers", ctx -> crudCreate(ctx, "customers", "cus", "customers.write", true, false, "code", "name", "phone", "creditLimit", "creditDays", "status"));
-        web.patch("/catalog/customers/:id", ctx -> crudPatch(ctx, "customers", "customers.write", true, "name", "phone", "creditLimit", "creditDays", "status"));
+        web.post("/catalog/customers", ctx -> crudCreate(ctx, "customers", "cus", "customers.write", true, false, "code", "name", "phone", "email", "gstin", "address", "creditLimit", "creditDays", "balance", "status"));
+        web.patch("/catalog/customers/:id", ctx -> crudPatch(ctx, "customers", "customers.write", true, "name", "phone", "email", "gstin", "address", "creditLimit", "creditDays", "status"));
         web.get("/catalog/customers/:id/vehicles", CatalogApi::vehicles);
         web.post("/catalog/customers/:id/vehicles", CatalogApi::addVehicle);
         web.delete("/catalog/customers/:id/vehicles/:vehicleId", CatalogApi::deleteVehicle);
-        web.get("/catalog/suppliers", ctx -> crudList(ctx, "suppliers", "suppliers.read", true, false, "code", "name"));
-        web.post("/catalog/suppliers", ctx -> crudCreate(ctx, "suppliers", "sup", "suppliers.write", true, false, "code", "name", "phone", "gstin", "status"));
-        web.patch("/catalog/suppliers/:id", ctx -> crudPatch(ctx, "suppliers", "suppliers.write", true, "name", "phone", "gstin", "isActive"));
+        web.get("/catalog/suppliers", ctx -> crudList(ctx, "suppliers", "suppliers.read", true, false, "code", "name", "phone", "gstin"));
+        web.post("/catalog/suppliers", ctx -> crudCreate(ctx, "suppliers", "sup", "suppliers.write", true, false, "code", "name", "contactPerson", "phone", "email", "gstin", "address", "creditDays", "openingBalance", "isActive"));
+        web.patch("/catalog/suppliers/:id", ctx -> crudPatch(ctx, "suppliers", "suppliers.write", true, "name", "contactPerson", "phone", "email", "gstin", "address", "creditDays", "isActive"));
         web.get("/catalog/expense-categories", ctx -> crudList(ctx, "expense_categories", "expenses.read", true, false, "name"));
+        web.post("/catalog/expense-categories", ctx -> crudCreate(ctx, "expense_categories", "exc", "expenses.write", true, false, "name", "isActive"));
+        web.patch("/catalog/expense-categories/:id", ctx -> crudPatch(ctx, "expense_categories", "expenses.write", true, "name", "isActive"));
         web.get("/catalog/employees", CatalogApi::employees);
         web.post("/catalog/employees", CatalogApi::createEmployee);
         web.patch("/catalog/employees/:id", CatalogApi::patchEmployee);
@@ -141,16 +147,34 @@ public final class CatalogApi {
         ctx.ok(visible);
     }
 
+    private static void currentPrices(Web.Ctx ctx) {
+        Auth auth = ctx.requireAuth();
+        auth.require("products.read");
+        String stationId = ctx.q("stationId");
+        if (stationId != null && !stationId.isBlank()) auth.station(stationId);
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Map<String, Object> product : Db.all("SELECT * FROM fuel_products WHERE tenant_id = ? AND is_active = 1 ORDER BY code", auth.tenantId())) {
+            Map<String, Object> price = Domain.priceAt(auth.tenantId(), Db.str(product, "id"), stationId);
+            out.add(Web.map(
+                    "product", Json.shape(product),
+                    "ratePerLitre", price == null ? null : price.get("rate_per_litre"),
+                    "effectiveFrom", price == null ? null : price.get("effective_from"),
+                    "priceId", price == null ? null : price.get("id")));
+        }
+        ctx.ok(out);
+    }
+
     private static void createPrice(Web.Ctx ctx) {
         Auth auth = ctx.requireAuth();
         auth.require("prices.write");
         String productId = required(ctx, "productId");
-        String rate = required(ctx, "rate");
+        String rate = ctx.str("rate") != null ? ctx.str("rate") : required(ctx, "ratePerLitre");
         String stationId = ctx.str("stationId");
-        if (stationId != null) auth.station(stationId);
+        if (stationId != null && !stationId.isBlank()) auth.station(stationId);
+        else stationId = null;
         String id = Clock.newId("prc");
         String now = Clock.nowIso();
-        String from = ctx.str("effectiveFrom") == null ? now : ctx.str("effectiveFrom");
+        String from = ctx.str("effectiveFrom") == null || ctx.str("effectiveFrom").isBlank() ? now : ctx.str("effectiveFrom");
         Db.exec(
                 """
                 INSERT INTO fuel_prices (id, tenant_id, station_id, product_id, rate_per_litre, effective_from, note, created_by, created_at)
@@ -161,6 +185,53 @@ public final class CatalogApi {
         ctx.created(Json.shape(Db.one("SELECT * FROM fuel_prices WHERE id = ?", id)));
     }
 
+    private static void getCalibration(Web.Ctx ctx) {
+        Auth auth = ctx.requireAuth();
+        auth.require("tanks.read");
+        Map<String, Object> tank = Db.one("SELECT * FROM tanks WHERE id = ?", ctx.p("id"));
+        if (tank == null) throw ApiException.notFound("Tank not found");
+        auth.station(Db.str(tank, "station_id"));
+        List<Map<String, Object>> points = Db.all(
+                "SELECT id, dip_cm AS dipCm, litres FROM tank_calibration_points WHERE tank_id = ? ORDER BY CAST(dip_cm AS DECIMAL(18,4)) ASC",
+                tank.get("id"));
+        ctx.ok(Web.map("tank", Json.shape(tank), "points", points));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void putCalibration(Web.Ctx ctx) {
+        Auth auth = ctx.requireAuth();
+        auth.require("tanks.write");
+        Map<String, Object> tank = Db.one("SELECT * FROM tanks WHERE id = ?", ctx.p("id"));
+        if (tank == null) throw ApiException.notFound("Tank not found");
+        auth.station(Db.str(tank, "station_id"));
+        Object raw = ctx.body().get("points");
+        if (!(raw instanceof List<?> list) || list.size() < 2) {
+            throw ApiException.unprocessable("At least two calibration points are required");
+        }
+        Db.tx(() -> {
+            Db.exec("DELETE FROM tank_calibration_points WHERE tank_id = ?", tank.get("id"));
+            for (Object item : list) {
+                Map<String, Object> pt = Json.object(item);
+                Db.exec("INSERT INTO tank_calibration_points (id, tank_id, dip_cm, litres) VALUES (?, ?, ?, ?)",
+                        Clock.newId("tcp"), tank.get("id"), Money.fixed(pt.get("dipCm"), 2), Money.litres(pt.get("litres")));
+            }
+            if (ctx.body().containsKey("reference")) {
+                Db.exec("UPDATE tanks SET calibration_reference = ?, updated_at = ? WHERE id = ?", ctx.str("reference"), Clock.nowIso(), tank.get("id"));
+            }
+            return null;
+        });
+        ctx.ok(Web.map("count", list.size()));
+    }
+
+    private static void listMeasurements(Web.Ctx ctx) {
+        Auth auth = ctx.requireAuth();
+        auth.require("stock.read");
+        Map<String, Object> tank = Db.one("SELECT * FROM tanks WHERE id = ?", ctx.p("id"));
+        if (tank == null) throw ApiException.notFound("Tank not found");
+        auth.station(Db.str(tank, "station_id"));
+        ctx.ok(Json.shapeAll(Db.all("SELECT * FROM tank_measurements WHERE tank_id = ? ORDER BY measured_at DESC LIMIT 60", tank.get("id"))));
+    }
+
     private static void measurement(Web.Ctx ctx) {
         Auth auth = ctx.requireAuth();
         auth.require("stock.write");
@@ -168,17 +239,22 @@ public final class CatalogApi {
         if (tank == null) throw ApiException.notFound("Tank not found");
         auth.station(Db.str(tank, "station_id"));
         String litres = ctx.str("measuredLitres");
-        if (litres == null) throw ApiException.validation("measuredLitres", "Measured litres are required");
+        String dipCm = ctx.str("dipCm");
+        if ((litres == null || litres.isBlank()) && dipCm != null && !dipCm.isBlank()) {
+            litres = Money.litres(Domain.convertDipToLitres(Db.str(tank, "id"), dipCm));
+        }
+        if (litres == null || litres.isBlank()) throw ApiException.validation("measuredLitres", "Enter measured litres or dip (cm)");
         var book = Domain.bookStock(Db.str(tank, "id"));
         String id = Clock.newId("tms");
         Db.exec(
                 """
                 INSERT INTO tank_measurements
-                  (id, tenant_id, station_id, tank_id, method, measured_litres, book_stock_litres, variance_litres, measured_at, note, entered_by, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  (id, tenant_id, station_id, tank_id, method, dip_cm, water_dip_cm, measured_litres, book_stock_litres, variance_litres, measured_at, note, entered_by, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 id, auth.tenantId(), tank.get("station_id"), tank.get("id"),
-                ctx.str("method") == null ? "DIP" : ctx.str("method"),
+                ctx.str("method") == null ? (dipCm != null ? "DIP" : "MANUAL") : ctx.str("method"),
+                dipCm, ctx.str("waterDipCm"),
                 Money.litres(litres), Money.litres(book), Money.litres(Money.d(litres).subtract(book)),
                 Clock.nowIso(), ctx.str("note"), auth.userId, Clock.nowIso());
         ctx.created(Json.shape(Db.one("SELECT * FROM tank_measurements WHERE id = ?", id)));
@@ -415,6 +491,7 @@ public final class CatalogApi {
             }
         }
         String q = ctx.q("search");
+        if ((q == null || q.isBlank()) && ctx.q("q") != null) q = ctx.q("q");
         if (q != null && !q.isBlank() && search.length > 0) {
             List<String> likes = new ArrayList<>();
             for (String column : search) {
@@ -427,8 +504,13 @@ public final class CatalogApi {
         long total = Db.count("SELECT COUNT(*) AS count FROM " + table + " " + where, params.toArray());
         params.add(size);
         params.add((page - 1) * size);
-        String order = "expense_categories".equals(table) ? "name" : "id";
-        ctx.ok(Json.shapeAll(Db.all("SELECT * FROM " + table + " " + where + " ORDER BY " + order + " DESC LIMIT ? OFFSET ?", params.toArray())), Domain.page(total, page, size));
+        String order = switch (table) {
+            case "customers", "suppliers", "expense_categories" -> "name ASC";
+            case "nozzles" -> "number ASC";
+            case "fuel_products", "tanks", "dispensers" -> "code ASC";
+            default -> "id DESC";
+        };
+        ctx.ok(Json.shapeAll(Db.all("SELECT * FROM " + table + " " + where + " ORDER BY " + order + " LIMIT ? OFFSET ?", params.toArray())), Domain.page(total, page, size));
     }
 
     private static void crudCreate(Web.Ctx ctx, String table, String prefix, String permission, boolean tenant, boolean station, String... fields) {
@@ -455,6 +537,7 @@ public final class CatalogApi {
         }
         for (String field : fields) {
             if ("stationId".equals(field) || !ctx.body().containsKey(field)) continue;
+            if ("code".equals(field) && (ctx.body().get(field) == null || String.valueOf(ctx.body().get(field)).isBlank())) continue;
             columns.add(snake(field));
             marks.add("?");
             values.add(valueOf(field, ctx.body().get(field)));
@@ -463,6 +546,16 @@ public final class CatalogApi {
             columns.add("serial_number");
             marks.add("?");
             values.add("SN-" + id.substring(4, 12));
+        }
+        if ("customers".equals(table) && !columns.contains("code")) {
+            columns.add("code");
+            marks.add("?");
+            values.add("CUST-" + String.format("%03d", Db.count("SELECT COUNT(*) FROM customers WHERE tenant_id = ?", auth.tenantId()) + 1));
+        }
+        if ("suppliers".equals(table) && !columns.contains("code")) {
+            columns.add("code");
+            marks.add("?");
+            values.add("SUP-" + String.format("%03d", Db.count("SELECT COUNT(*) FROM suppliers WHERE tenant_id = ?", auth.tenantId()) + 1));
         }
         String now = Clock.nowIso();
         if (!"expense_categories".equals(table)) {
@@ -492,8 +585,10 @@ public final class CatalogApi {
             params.add(valueOf(field, ctx.body().get(field)));
         }
         if (!sets.isEmpty()) {
-            sets.add("updated_at = ?");
-            params.add(Clock.nowIso());
+            if (!"expense_categories".equals(table)) {
+                sets.add("updated_at = ?");
+                params.add(Clock.nowIso());
+            }
             params.add(existing.get("id"));
             Db.exec("UPDATE " + table + " SET " + String.join(", ", sets) + " WHERE id = ?", params.toArray());
         }
@@ -503,7 +598,8 @@ public final class CatalogApi {
     private static Object valueOf(String field, Object value) {
         if (value == null) return null;
         if (value instanceof Boolean flag) return flag ? 1 : 0;
-        if (field.endsWith("Litres") || field.endsWith("Limit") || "rate".equals(field)) return String.valueOf(value);
+        if (field.endsWith("Litres") || field.endsWith("Limit") || field.endsWith("Balance") || "rate".equals(field)) return String.valueOf(value);
+        if (value instanceof String s && s.isBlank() && List.of("email", "gstin", "phone", "address", "contactPerson", "calibrationReference", "model").contains(field)) return null;
         return value;
     }
 

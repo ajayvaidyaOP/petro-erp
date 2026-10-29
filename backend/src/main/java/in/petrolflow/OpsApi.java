@@ -43,7 +43,11 @@ public final class OpsApi {
         web.get("/readings", OpsApi::readings);
         web.post("/readings/manual", OpsApi::manualReading);
         web.post("/demo/simulate", OpsApi::simulate);
+        web.post("/gateway/heartbeat", OpsApi::gatewayHeartbeat);
+        web.post("/gateway/events", OpsApi::gatewayEvents);
+        web.post("/gateway/errors", OpsApi::gatewayErrors);
         web.get("/admin/metrics", OpsApi::metrics);
+        web.get("/admin/audit", OpsApi::adminAudit);
         web.get("/admin/plans", OpsApi::plans);
         web.post("/admin/plans", OpsApi::addPlan);
         web.patch("/admin/plans/:id", OpsApi::patchPlan);
@@ -52,10 +56,12 @@ public final class OpsApi {
         web.get("/admin/tenants/:id", OpsApi::tenant);
         web.patch("/admin/tenants/:id", OpsApi::patchTenant);
         web.post("/admin/tenants/:id/subscription", OpsApi::setSubscription);
+        web.patch("/admin/subscriptions/:id", OpsApi::patchSubscription);
         web.post("/admin/tenants/:id/invoices", OpsApi::addInvoice);
         web.get("/admin/subscriptions", OpsApi::subscriptions);
         web.get("/admin/invoices", OpsApi::invoices);
         web.post("/admin/invoices/:id/mark-paid", OpsApi::markPaid);
+        web.post("/admin/invoices/:id/overdue", OpsApi::markOverdue);
         web.get("/admin/stations", OpsApi::adminStations);
         web.post("/admin/stations", OpsApi::addStation);
         web.patch("/admin/stations/:id", OpsApi::patchStation);
@@ -69,8 +75,33 @@ public final class OpsApi {
         auth.require("audit.read");
         int page = Domain.pageOf(ctx);
         int size = Domain.pageSize(ctx);
-        long total = Db.count("SELECT COUNT(*) AS count FROM audit_logs WHERE tenant_id = ?", auth.tenantId());
-        ctx.ok(Json.shapeAll(Db.all("SELECT * FROM audit_logs WHERE tenant_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?", auth.tenantId(), size, (page - 1) * size)), Domain.page(total, page, size));
+        String where = "a.tenant_id = ?";
+        List<Object> params = new ArrayList<>(List.of(auth.tenantId()));
+        if (ctx.q("stationId") != null && !ctx.q("stationId").isBlank()) {
+            auth.station(ctx.q("stationId"));
+            where += " AND (a.station_id = ? OR a.station_id IS NULL)";
+            params.add(ctx.q("stationId"));
+        }
+        if (ctx.q("action") != null && !ctx.q("action").isBlank()) { where += " AND a.action = ?"; params.add(ctx.q("action")); }
+        if (ctx.q("from") != null && !ctx.q("from").isBlank()) { where += " AND a.created_at >= ?"; params.add(Clock.istDayStart(ctx.q("from"))); }
+        if (ctx.q("to") != null && !ctx.q("to").isBlank()) { where += " AND a.created_at <= ?"; params.add(Clock.istDayEnd(ctx.q("to"))); }
+        if (ctx.q("search") != null && !ctx.q("search").isBlank()) {
+            String s = "%" + ctx.q("search").trim() + "%";
+            where += " AND (a.summary LIKE ? OR a.actor_email LIKE ? OR a.entity LIKE ? OR a.action LIKE ?)";
+            params.addAll(List.of(s, s, s, s));
+        }
+        long total = Db.count("SELECT COUNT(*) AS count FROM audit_logs a WHERE " + where, params.toArray());
+        params.add(size);
+        params.add((page - 1) * size);
+        List<Map<String, Object>> rows = Json.shapeAll(Db.all(
+                "SELECT a.*, u.name AS actor_name FROM audit_logs a LEFT JOIN users u ON u.id = a.actor_id WHERE " + where + " ORDER BY a.created_at DESC LIMIT ? OFFSET ?",
+                params.toArray()), List.of("before_data", "after_data"));
+        List<Map<String, Object>> actions = Db.all(
+                "SELECT action, COUNT(*) AS count FROM audit_logs WHERE tenant_id = ? GROUP BY action ORDER BY count DESC LIMIT 30",
+                auth.tenantId());
+        Map<String, Object> meta = new LinkedHashMap<>(Domain.page(total, page, size));
+        meta.put("actions", actions);
+        ctx.ok(rows, meta);
     }
 
     private static void settings(Web.Ctx ctx) {
@@ -437,16 +468,32 @@ public final class OpsApi {
         ctx.created(Map.of("id", id));
     }
 
+    private static boolean isDeviceOnline(Map<String, Object> row) {
+        if ("DISABLED".equals(row.get("status"))) return false;
+        String hb = Db.str(row, "last_heartbeat_at");
+        if (hb == null || hb.isBlank()) return false;
+        try {
+            return (System.currentTimeMillis() - java.time.Instant.parse(hb).toEpochMilli()) <= 5 * 60_000L;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
     private static void devices(Web.Ctx ctx) {
         Auth auth = ctx.requireAuth();
         auth.require("devices.read");
-        Map<String, Object> station = auth.station(required(ctx));
+        String sid = ctx.q("stationId");
+        List<Map<String, Object>> raw = sid != null && !sid.isBlank()
+                ? Db.all("SELECT * FROM hardware_devices WHERE station_id = ? ORDER BY code", auth.station(sid).get("id"))
+                : Db.all("SELECT * FROM hardware_devices WHERE tenant_id = ? ORDER BY code", auth.tenantId());
         List<Map<String, Object>> rows = new ArrayList<>();
-        for (Map<String, Object> row : Db.all("SELECT * FROM hardware_devices WHERE station_id = ? ORDER BY code", station.get("id"))) {
+        for (Map<String, Object> row : raw) {
+            if (!auth.allStations && !auth.stationIds.contains(Db.str(row, "station_id"))) continue;
             Map<String, Object> item = Json.shape(row);
-            item.put("online", false);
-            item.put("pendingEvents", 0);
-            item.put("lastEventAt", null);
+            item.put("online", isDeviceOnline(row));
+            item.put("pendingEvents", Db.count("SELECT COUNT(*) FROM device_events WHERE device_id = ? AND status = 'RECEIVED'", row.get("id")));
+            Map<String, Object> lastEv = Db.one("SELECT received_at FROM device_events WHERE device_id = ? ORDER BY received_at DESC LIMIT 1", row.get("id"));
+            item.put("lastEventAt", lastEv == null ? null : lastEv.get("received_at"));
             rows.add(item);
         }
         ctx.ok(rows);
@@ -469,17 +516,22 @@ public final class OpsApi {
         auth.require("devices.write");
         Map<String, Object> station = auth.station(requiredBody(ctx, "stationId"));
         String id = Clock.newId("dev");
-        String key = Passwords.randomToken();
+        String key = "pfk_" + Passwords.randomToken();
         String now = Clock.nowIso();
+        int isSimulated = 1;
+        if (ctx.body().containsKey("isSimulated")) {
+            Object flag = ctx.body().get("isSimulated");
+            isSimulated = (flag instanceof Boolean b) ? (b ? 1 : 0) : ("0".equals(String.valueOf(flag)) || "false".equalsIgnoreCase(String.valueOf(flag)) ? 0 : 1);
+        }
         Db.exec(
                 """
                 INSERT INTO hardware_devices
                   (id, tenant_id, station_id, code, name, type, vendor, model, serial_number, protocol, status, api_key_hash, api_key_prefix, key_version, is_simulated, notes, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OFFLINE', ?, ?, 1, 1, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OFFLINE', ?, ?, 1, ?, ?, ?, ?)
                 """,
                 id, auth.tenantId(), station.get("id"), requiredBody(ctx, "code"), requiredBody(ctx, "name"),
                 ctx.str("type") == null ? "GATEWAY" : ctx.str("type"), ctx.str("vendor"), ctx.str("model"), ctx.str("serialNumber"), ctx.str("protocol"),
-                Passwords.sha256(key), key.substring(0, 8), ctx.str("notes"), now, now);
+                Passwords.sha256(key), key.substring(0, 12), isSimulated, ctx.str("notes"), now, now);
         Map<String, Object> created = Json.shape(Db.one("SELECT * FROM hardware_devices WHERE id = ?", id));
         created.put("apiKey", key);
         created.put("warning", "Copy this key now. It is stored only as a hash.");
@@ -490,20 +542,24 @@ public final class OpsApi {
     private static void patchDevice(Web.Ctx ctx) {
         Auth auth = ctx.requireAuth();
         auth.require("devices.write");
-        Db.exec("UPDATE hardware_devices SET status = COALESCE(?, status), updated_at = ? WHERE id = ? AND tenant_id = ?", ctx.str("status"), Clock.nowIso(), ctx.p("id"), auth.tenantId());
-        Map<String, Object> row = Json.shape(Db.one("SELECT * FROM hardware_devices WHERE id = ?", ctx.p("id")));
-        row.put("online", false);
+        Db.exec("UPDATE hardware_devices SET status = COALESCE(?, status), name = COALESCE(?, name), updated_at = ? WHERE id = ? AND tenant_id = ?",
+                ctx.str("status"), ctx.str("name"), Clock.nowIso(), ctx.p("id"), auth.tenantId());
+        Map<String, Object> raw = Db.one("SELECT * FROM hardware_devices WHERE id = ?", ctx.p("id"));
+        if (raw == null) throw ApiException.notFound("Device not found");
+        Map<String, Object> row = Json.shape(raw);
+        row.put("online", isDeviceOnline(raw));
         ctx.ok(row);
     }
 
     private static void rotateKey(Web.Ctx ctx) {
         Auth auth = ctx.requireAuth();
         auth.require("devices.write");
-        String key = Passwords.randomToken();
+        String key = "pfk_" + Passwords.randomToken();
         Db.exec("UPDATE hardware_devices SET api_key_hash = ?, api_key_prefix = ?, key_version = key_version + 1, updated_at = ? WHERE id = ? AND tenant_id = ?",
-                Passwords.sha256(key), key.substring(0, 8), Clock.nowIso(), ctx.p("id"), auth.tenantId());
+                Passwords.sha256(key), key.substring(0, 12), Clock.nowIso(), ctx.p("id"), auth.tenantId());
         Map<String, Object> row = Db.one("SELECT key_version FROM hardware_devices WHERE id = ?", ctx.p("id"));
-        ctx.ok(Map.of("apiKey", key, "keyVersion", row.get("key_version"), "warning", "Copy this key now. The previous key no longer works."));
+        if (row == null) throw ApiException.notFound("Device not found");
+        ctx.ok(Web.map("apiKey", key, "keyVersion", row.get("key_version"), "warning", "Copy this key now. The previous key no longer works."));
     }
 
     private static void replay(Web.Ctx ctx) {
@@ -543,15 +599,25 @@ public final class OpsApi {
         Map<String, Object> station = auth.station(required(ctx));
         int page = Domain.pageOf(ctx);
         int size = Domain.pageSize(ctx);
-        String where = "station_id = ?";
+        String where = "r.station_id = ?";
         List<Object> params = new ArrayList<>(List.of(station.get("id")));
-        if (ctx.q("nozzleId") != null) { where += " AND nozzle_id = ?"; params.add(ctx.q("nozzleId")); }
-        if (ctx.q("quality") != null) { where += " AND quality = ?"; params.add(ctx.q("quality")); }
-        if (ctx.q("source") != null) { where += " AND source = ?"; params.add(ctx.q("source")); }
-        long total = Db.count("SELECT COUNT(*) AS count FROM meter_readings WHERE " + where, params.toArray());
+        if (ctx.q("nozzleId") != null && !ctx.q("nozzleId").isBlank()) { where += " AND r.nozzle_id = ?"; params.add(ctx.q("nozzleId")); }
+        if (ctx.q("quality") != null && !ctx.q("quality").isBlank()) { where += " AND r.quality = ?"; params.add(ctx.q("quality")); }
+        if (ctx.q("source") != null && !ctx.q("source").isBlank()) { where += " AND r.source = ?"; params.add(ctx.q("source")); }
+        long total = Db.count("SELECT COUNT(*) AS count FROM meter_readings r WHERE " + where, params.toArray());
         params.add(size);
         params.add((page - 1) * size);
-        ctx.ok(Json.shapeAll(Db.all("SELECT * FROM meter_readings WHERE " + where + " ORDER BY reading_at DESC LIMIT ? OFFSET ?", params.toArray())), Domain.page(total, page, size));
+        ctx.ok(Json.shapeAll(Db.all(
+                """
+                SELECT r.*, n.label AS nozzle_label, d.code AS dispenser_code, p.name AS product_name,
+                       hd.name AS device_name, hd.code AS device_code
+                  FROM meter_readings r
+                  JOIN nozzles n ON n.id = r.nozzle_id
+                  JOIN dispensers d ON d.id = n.dispenser_id
+                  JOIN fuel_products p ON p.id = n.product_id
+                  LEFT JOIN hardware_devices hd ON hd.id = r.device_id
+                 WHERE %s ORDER BY r.reading_at DESC LIMIT ? OFFSET ?
+                """.formatted(where), params.toArray())), Domain.page(total, page, size));
     }
 
     private static void manualReading(Web.Ctx ctx) {
@@ -625,23 +691,142 @@ public final class OpsApi {
                 "generatedAt", Clock.nowIso()));
     }
 
+    private static Map<String, Object> requireGatewayDevice(Web.Ctx ctx) {
+        String key = ctx.header("x-device-key");
+        if (key == null || key.isBlank()) throw ApiException.unauthorized("Missing X-Device-Key header");
+        Map<String, Object> device = Db.one("SELECT * FROM hardware_devices WHERE api_key_hash = ?", Passwords.sha256(key.trim()));
+        if (device == null) throw ApiException.unauthorized("Invalid device API key");
+        if ("DISABLED".equals(device.get("status"))) throw ApiException.forbidden("Device is disabled");
+        return device;
+    }
+
+    private static void gatewayHeartbeat(Web.Ctx ctx) {
+        Map<String, Object> device = requireGatewayDevice(ctx);
+        String now = Clock.nowIso();
+        Db.exec("UPDATE hardware_devices SET status = 'ONLINE', firmware_version = COALESCE(?, firmware_version), last_heartbeat_at = ?, updated_at = ? WHERE id = ?",
+                ctx.str("firmwareVersion"), now, now, device.get("id"));
+        ctx.ok(Web.map("status", "ONLINE", "serverTime", now));
+    }
+
+    private static void gatewayEvents(Web.Ctx ctx) {
+        Map<String, Object> device = requireGatewayDevice(ctx);
+        String now = Clock.nowIso();
+        Object rawEvents = ctx.body().get("events");
+        List<?> list = rawEvents instanceof List<?> l ? l : List.of(ctx.body());
+        int accepted = 0;
+        int duplicates = 0;
+        for (Object item : list) {
+            Map<String, Object> ev = Json.object(item);
+            String eventId = Db.str(ev, "eventId");
+            if (eventId == null || eventId.isBlank()) throw ApiException.unprocessable("eventId is required");
+            if (Db.one("SELECT id FROM device_events WHERE device_id = ? AND event_id = ?", device.get("id"), eventId) != null) {
+                duplicates++;
+                continue;
+            }
+            String type = ev.get("eventType") == null ? "METER_READING" : String.valueOf(ev.get("eventType"));
+            String payloadJson = Json.stringify(ev.get("payload") == null ? ev : ev.get("payload"));
+            String occurredAt = ev.get("occurredAt") == null ? now : String.valueOf(ev.get("occurredAt"));
+            int seq = (int) Db.num(ev, "sequence");
+            String deId = Clock.newId("dev_ev");
+            Db.exec(
+                    """
+                    INSERT INTO device_events (id, tenant_id, station_id, device_id, event_id, event_type, sequence, occurred_at, received_at, payload, payload_hash, status, processed_at, source_ip)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PROCESSED', ?, ?)
+                    """,
+                    deId, device.get("tenant_id"), device.get("station_id"), device.get("id"), eventId, type, seq,
+                    occurredAt, now, payloadJson, Passwords.sha256(payloadJson), now, ctx.ip);
+            Map<String, Object> payload = Json.object(ev.get("payload") == null ? ev : ev.get("payload"));
+            String nozzleId = Db.str(payload, "nozzleId");
+            if (nozzleId == null && payload.get("nozzleLabel") != null) {
+                Map<String, Object> n = Db.one("SELECT id FROM nozzles WHERE station_id = ? AND label = ?", device.get("station_id"), payload.get("nozzleLabel"));
+                if (n != null) nozzleId = Db.str(n, "id");
+            }
+            if (nozzleId != null && payload.get("readingValue") != null) {
+                int sim = Db.num(device, "is_simulated") == 1 ? 1 : 0;
+                Db.exec(
+                        """
+                        INSERT INTO meter_readings
+                          (id, tenant_id, station_id, nozzle_id, device_id, device_event_id, reading_value, unit, quality, source, reading_at, sequence, is_countable, is_simulated, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 'L', 'VALID', ?, ?, ?, ?, ?, ?)
+                        """,
+                        Clock.newId("rdg"), device.get("tenant_id"), device.get("station_id"), nozzleId, device.get("id"), deId,
+                        Money.rate(payload.get("readingValue")), sim == 1 ? "SIMULATED" : "DEVICE", occurredAt, seq, sim == 1 ? 0 : 1, sim, now);
+            }
+            accepted++;
+        }
+        Db.exec("UPDATE hardware_devices SET status = 'ONLINE', last_heartbeat_at = ?, last_sync_at = ?, updated_at = ? WHERE id = ?",
+                now, now, now, device.get("id"));
+        ctx.ok(Web.map("accepted", accepted, "duplicates", duplicates, "serverTime", now));
+    }
+
+    private static void gatewayErrors(Web.Ctx ctx) {
+        Map<String, Object> device = requireGatewayDevice(ctx);
+        String id = Clock.newId("derr");
+        Db.exec("INSERT INTO device_error_logs (id, device_id, station_id, code, message, detail, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                id, device.get("id"), device.get("station_id"),
+                ctx.str("code") == null ? "GATEWAY_ERROR" : ctx.str("code"),
+                requiredBody(ctx, "message"), ctx.str("detail"), Clock.nowIso());
+        ctx.created(Web.map("id", id));
+    }
+
+    private static void adminAudit(Web.Ctx ctx) {
+        platform(ctx);
+        int page = Domain.pageOf(ctx);
+        int size = Domain.pageSize(ctx);
+        String where = "1 = 1";
+        List<Object> params = new ArrayList<>();
+        if (ctx.q("from") != null && !ctx.q("from").isBlank()) { where += " AND a.created_at >= ?"; params.add(Clock.istDayStart(ctx.q("from"))); }
+        if (ctx.q("to") != null && !ctx.q("to").isBlank()) { where += " AND a.created_at <= ?"; params.add(Clock.istDayEnd(ctx.q("to"))); }
+        if (ctx.q("search") != null && !ctx.q("search").isBlank()) {
+            String s = "%" + ctx.q("search").trim() + "%";
+            where += " AND (a.action LIKE ? OR a.actor_email LIKE ? OR a.summary LIKE ? OR a.entity LIKE ?)";
+            params.addAll(List.of(s, s, s, s));
+        }
+        long total = Db.count("SELECT COUNT(*) AS count FROM audit_logs a WHERE " + where, params.toArray());
+        params.add(size);
+        params.add((page - 1) * size);
+        List<Map<String, Object>> rows = Json.shapeAll(Db.all(
+                """
+                SELECT a.id, a.action, a.entity, a.entity_id, a.tenant_id, t.name AS tenant_name, a.summary, a.actor_email, a.created_at
+                  FROM audit_logs a LEFT JOIN tenants t ON t.id = a.tenant_id
+                 WHERE %s ORDER BY a.created_at DESC LIMIT ? OFFSET ?
+                """.formatted(where), params.toArray()));
+        ctx.ok(rows, Domain.page(total, page, size));
+    }
+
     private static void plans(Web.Ctx ctx) {
         platform(ctx);
-        ctx.ok(Json.shapeAll(Db.all("SELECT * FROM subscription_plans ORDER BY monthly_price")));
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Map<String, Object> raw : Db.all("SELECT * FROM subscription_plans ORDER BY CAST(monthly_price AS DECIMAL(18,2)) ASC")) {
+            Map<String, Object> shaped = Json.shape(raw, List.of("features"));
+            if (!(shaped.get("features") instanceof List<?>)) shaped.put("features", List.of());
+            shaped.put("subscribers", Db.count("SELECT COUNT(*) FROM subscriptions WHERE plan_id = ? AND status IN ('ACTIVE','TRIALING')", raw.get("id")));
+            rows.add(shaped);
+        }
+        ctx.ok(rows);
     }
 
     private static void addPlan(Web.Ctx ctx) {
         platform(ctx);
         String id = Clock.newId("pln");
         String now = Clock.nowIso();
-        Db.exec("INSERT INTO subscription_plans (id, code, name, monthly_price, annual_price, max_stations, max_users, max_dispensers, trial_days, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                id, requiredBody(ctx, "code"), requiredBody(ctx, "name"), Money.money(ctx.str("monthlyPrice") == null ? "0" : ctx.str("monthlyPrice")),
+        Object rawFeatures = ctx.body().get("features");
+        List<String> features = new ArrayList<>();
+        if (rawFeatures instanceof List<?> l) {
+            for (Object f : l) if (f != null && !String.valueOf(f).isBlank()) features.add(String.valueOf(f).trim());
+        } else if (rawFeatures instanceof String s && !s.isBlank()) {
+            for (String f : s.split("[,\\n]")) if (!f.trim().isEmpty()) features.add(f.trim());
+        }
+        Db.exec("INSERT INTO subscription_plans (id, code, name, description, monthly_price, annual_price, max_stations, max_users, max_dispensers, trial_days, features, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                id, requiredBody(ctx, "code").toUpperCase(), requiredBody(ctx, "name"), ctx.str("description"),
+                Money.money(ctx.str("monthlyPrice") == null ? "0" : ctx.str("monthlyPrice")),
                 Money.money(ctx.str("annualPrice") == null ? "0" : ctx.str("annualPrice")),
                 ctx.str("maxStations") == null ? 1 : Integer.parseInt(ctx.str("maxStations")),
                 ctx.str("maxUsers") == null ? 5 : Integer.parseInt(ctx.str("maxUsers")),
                 ctx.str("maxDispensers") == null ? 4 : Integer.parseInt(ctx.str("maxDispensers")),
-                ctx.str("trialDays") == null ? 14 : Integer.parseInt(ctx.str("trialDays")), now, now);
-        ctx.created(Json.shape(Db.one("SELECT * FROM subscription_plans WHERE id = ?", id)));
+                ctx.str("trialDays") == null ? 14 : Integer.parseInt(ctx.str("trialDays")),
+                Json.stringify(features), now, now);
+        ctx.created(Json.shape(Db.one("SELECT * FROM subscription_plans WHERE id = ?", id), List.of("features")));
     }
 
     private static void patchPlan(Web.Ctx ctx) {
@@ -649,7 +834,7 @@ public final class OpsApi {
         if (ctx.body().containsKey("isActive")) {
             Db.exec("UPDATE subscription_plans SET is_active = ?, updated_at = ? WHERE id = ?", Boolean.TRUE.equals(ctx.body().get("isActive")) ? 1 : 0, Clock.nowIso(), ctx.p("id"));
         }
-        ctx.ok(Json.shape(Db.one("SELECT * FROM subscription_plans WHERE id = ?", ctx.p("id"))));
+        ctx.ok(Json.shape(Db.one("SELECT * FROM subscription_plans WHERE id = ?", ctx.p("id")), List.of("features")));
     }
 
     private static void tenants(Web.Ctx ctx) {
@@ -658,20 +843,61 @@ public final class OpsApi {
         int size = Domain.pageSize(ctx);
         String where = "1 = 1";
         List<Object> params = new ArrayList<>();
-        if (ctx.q("status") != null && !ctx.q("status").isBlank()) { where += " AND status = ?"; params.add(ctx.q("status")); }
-        if (ctx.q("search") != null && !ctx.q("search").isBlank()) { where += " AND (name LIKE ? OR slug LIKE ?)"; params.add("%" + ctx.q("search") + "%"); params.add("%" + ctx.q("search") + "%"); }
-        long total = Db.count("SELECT COUNT(*) AS count FROM tenants WHERE " + where, params.toArray());
+        if (ctx.q("status") != null && !ctx.q("status").isBlank()) { where += " AND t.status = ?"; params.add(ctx.q("status")); }
+        if (ctx.q("search") != null && !ctx.q("search").isBlank()) { where += " AND (t.name LIKE ? OR t.slug LIKE ?)"; params.add("%" + ctx.q("search") + "%"); params.add("%" + ctx.q("search") + "%"); }
+        long total = Db.count("SELECT COUNT(*) AS count FROM tenants t WHERE " + where, params.toArray());
         params.add(size);
         params.add((page - 1) * size);
-        ctx.ok(Json.shapeAll(Db.all("SELECT * FROM tenants WHERE " + where + " ORDER BY created_at DESC LIMIT ? OFFSET ?", params.toArray())), Domain.page(total, page, size));
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Map<String, Object> row : Db.all("SELECT t.* FROM tenants t WHERE " + where + " ORDER BY t.created_at DESC LIMIT ? OFFSET ?", params.toArray())) {
+            Map<String, Object> item = Json.shape(row);
+            if (item.get("contactEmail") == null) item.put("contactEmail", "");
+            item.put("stationCount", Db.count("SELECT COUNT(*) FROM stations WHERE tenant_id = ?", row.get("id")));
+            item.put("userCount", Db.count("SELECT COUNT(*) FROM users WHERE tenant_id = ?", row.get("id")));
+            Map<String, Object> sub = Db.one(
+                    "SELECT s.status, s.trial_ends_at, s.ends_at, p.name AS plan_name, p.code AS plan_code FROM subscriptions s JOIN subscription_plans p ON p.id = s.plan_id WHERE s.tenant_id = ? ORDER BY s.created_at DESC LIMIT 1",
+                    row.get("id"));
+            item.put("planName", sub == null ? null : sub.get("plan_name"));
+            item.put("planCode", sub == null ? null : sub.get("plan_code"));
+            item.put("subscriptionStatus", sub == null ? null : sub.get("status"));
+            item.put("trialEndsAt", sub == null ? null : sub.get("trial_ends_at"));
+            item.put("subscriptionEndsAt", sub == null ? null : sub.get("ends_at"));
+            out.add(item);
+        }
+        ctx.ok(out, Domain.page(total, page, size));
     }
 
     private static void addTenant(Web.Ctx ctx) {
         platform(ctx);
         String id = Clock.newId("tnt");
         String now = Clock.nowIso();
-        Db.exec("INSERT INTO tenants (id, name, slug, status, is_demo, created_at, updated_at) VALUES (?, ?, ?, 'ACTIVE', 0, ?, ?)",
-                id, requiredBody(ctx, "name"), requiredBody(ctx, "slug"), now, now);
+        String name = requiredBody(ctx, "name");
+        String slug = requiredBody(ctx, "slug").toLowerCase().trim();
+        Db.tx(() -> {
+            Db.exec("INSERT INTO tenants (id, name, slug, legal_name, gstin, contact_email, contact_phone, status, is_demo, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', 0, ?, ?)",
+                    id, name, slug, ctx.str("legalName"), ctx.str("gstin"), ctx.str("contactEmail") == null ? "" : ctx.str("contactEmail"), ctx.str("contactPhone"), now, now);
+            Map<String, Object> plan = ctx.str("planCode") != null && !ctx.str("planCode").isBlank()
+                    ? Db.one("SELECT * FROM subscription_plans WHERE code = ?", ctx.str("planCode"))
+                    : Db.one("SELECT * FROM subscription_plans WHERE is_active = 1 ORDER BY CAST(monthly_price AS DECIMAL(18,2)) ASC LIMIT 1");
+            if (plan != null) {
+                Db.exec("INSERT INTO subscriptions (id, tenant_id, plan_id, status, starts_at, created_at, updated_at) VALUES (?, ?, ?, 'TRIALING', ?, ?, ?)",
+                        Clock.newId("sub"), id, plan.get("id"), now, now, now);
+            }
+            if (ctx.str("ownerEmail") != null && !ctx.str("ownerEmail").isBlank() && ctx.str("ownerPassword") != null && !ctx.str("ownerPassword").isBlank()) {
+                Passwords.assertStrength(ctx.str("ownerPassword"));
+                Db.exec("INSERT INTO users (id, tenant_id, email, name, password_hash, role_key, status, is_demo, granted_permissions, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'OWNER', 'ACTIVE', 0, '[]', ?, ?)",
+                        Clock.newId("usr"), id, ctx.str("ownerEmail").toLowerCase().trim(),
+                        ctx.str("ownerName") == null || ctx.str("ownerName").isBlank() ? name + " Owner" : ctx.str("ownerName"),
+                        Passwords.hash(ctx.str("ownerPassword")), now, now);
+            }
+            if (Boolean.TRUE.equals(ctx.body().get("createDefaultStation"))) {
+                Db.exec("INSERT INTO stations (id, tenant_id, code, name, city, state, timezone, status, is_demo, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'Asia/Kolkata', 'ACTIVE', 0, ?, ?)",
+                        Clock.newId("stn"), id, slug.substring(0, Math.min(6, slug.length())).toUpperCase() + "-01", name + " — Main Outlet",
+                        ctx.str("city"), ctx.str("state") == null ? "Maharashtra" : ctx.str("state"), now, now);
+            }
+            return null;
+        });
+        Auth.audit(ctx.auth, "TENANT_CREATED", "Tenant", id, null, "Onboarded " + name);
         ctx.created(Json.shape(Db.one("SELECT * FROM tenants WHERE id = ?", id)));
     }
 
@@ -737,7 +963,13 @@ public final class OpsApi {
 
     private static void subscriptions(Web.Ctx ctx) {
         platform(ctx);
-        ctx.ok(Json.shapeAll(Db.all("SELECT s.*, t.name AS tenant_name, p.name AS plan_name, p.code AS plan_code FROM subscriptions s JOIN tenants t ON t.id = s.tenant_id JOIN subscription_plans p ON p.id = s.plan_id ORDER BY s.created_at DESC")));
+        ctx.ok(Json.shapeAll(Db.all("SELECT s.*, t.name AS tenant_name, t.slug AS tenant_slug, p.name AS plan_name, p.code AS plan_code, p.monthly_price FROM subscriptions s JOIN tenants t ON t.id = s.tenant_id JOIN subscription_plans p ON p.id = s.plan_id ORDER BY s.created_at DESC")));
+    }
+
+    private static void patchSubscription(Web.Ctx ctx) {
+        platform(ctx);
+        Db.exec("UPDATE subscriptions SET status = COALESCE(?, status), updated_at = ? WHERE id = ?", ctx.str("status"), Clock.nowIso(), ctx.p("id"));
+        ctx.ok(Json.shape(Db.one("SELECT * FROM subscriptions WHERE id = ?", ctx.p("id"))));
     }
 
     private static void invoices(Web.Ctx ctx) {
@@ -752,12 +984,25 @@ public final class OpsApi {
         ctx.ok(Json.shape(Db.one("SELECT * FROM subscription_invoices WHERE id = ?", ctx.p("id"))));
     }
 
+    private static void markOverdue(Web.Ctx ctx) {
+        platform(ctx);
+        Db.exec("UPDATE subscription_invoices SET status = 'OVERDUE' WHERE id = ?", ctx.p("id"));
+        ctx.ok(Json.shape(Db.one("SELECT * FROM subscription_invoices WHERE id = ?", ctx.p("id"))));
+    }
+
     private static void adminStations(Web.Ctx ctx) {
         platform(ctx);
+        String base = """
+                SELECT s.*, t.name AS tenant_name, t.status AS tenant_status,
+                       (SELECT COUNT(*) FROM tanks tk WHERE tk.station_id = s.id) AS tank_count,
+                       (SELECT COUNT(*) FROM dispensers d WHERE d.station_id = s.id) AS dispenser_count,
+                       (SELECT COUNT(*) FROM hardware_devices h WHERE h.station_id = s.id) AS device_count
+                  FROM stations s JOIN tenants t ON t.id = s.tenant_id
+                """;
         if (ctx.q("tenantId") != null && !ctx.q("tenantId").isBlank()) {
-            ctx.ok(Json.shapeAll(Db.all("SELECT * FROM stations WHERE tenant_id = ? ORDER BY name", ctx.q("tenantId"))));
+            ctx.ok(Json.shapeAll(Db.all(base + " WHERE s.tenant_id = ? ORDER BY s.name", ctx.q("tenantId"))));
         } else {
-            ctx.ok(Json.shapeAll(Db.all("SELECT * FROM stations ORDER BY name")));
+            ctx.ok(Json.shapeAll(Db.all(base + " ORDER BY s.name")));
         }
     }
 
@@ -782,21 +1027,21 @@ public final class OpsApi {
         for (Map<String, Object> row : Db.all(
                 "SELECT d.*, s.name AS station_name, t.name AS tenant_name FROM hardware_devices d JOIN stations s ON s.id = d.station_id JOIN tenants t ON t.id = d.tenant_id ORDER BY d.code")) {
             Map<String, Object> item = Json.shape(row);
-            item.put("online", false);
-            item.put("eventCount", 0);
-            item.put("errorCount", 0);
+            item.put("online", isDeviceOnline(row));
+            item.put("eventCount", Db.count("SELECT COUNT(*) FROM device_events WHERE device_id = ?", row.get("id")));
+            item.put("errorCount", Db.count("SELECT COUNT(*) FROM device_error_logs WHERE device_id = ? AND resolved_at IS NULL", row.get("id")));
             devices.add(item);
         }
-        ctx.ok(Map.of("devices", devices, "onlineWindowMinutes", 5, "realHardwareVerified", false, "note", "Simulated until a certified controller is connected."));
+        ctx.ok(Web.map("devices", devices, "onlineWindowMinutes", 5, "realHardwareVerified", false, "note", "Simulated until a certified controller is connected."));
     }
 
     private static void errors(Web.Ctx ctx) {
         platform(ctx);
         int page = Domain.pageOf(ctx);
         int size = Domain.pageSize(ctx);
-        String where = "true".equals(ctx.q("resolved")) ? "1 = 1" : "resolved_at IS NULL";
-        long total = Db.count("SELECT COUNT(*) AS count FROM platform_errors WHERE " + where);
-        ctx.ok(Json.shapeAll(Db.all("SELECT * FROM platform_errors WHERE " + where + " ORDER BY created_at DESC LIMIT ? OFFSET ?", size, (page - 1) * size)), Domain.page(total, page, size));
+        String where = "true".equals(ctx.q("resolved")) ? "1 = 1" : "e.resolved_at IS NULL";
+        long total = Db.count("SELECT COUNT(*) AS count FROM platform_errors e WHERE " + where);
+        ctx.ok(Json.shapeAll(Db.all("SELECT e.*, t.name AS tenant_name FROM platform_errors e LEFT JOIN tenants t ON t.id = e.tenant_id WHERE " + where + " ORDER BY e.created_at DESC LIMIT ? OFFSET ?", size, (page - 1) * size)), Domain.page(total, page, size));
     }
 
     private static void resolveError(Web.Ctx ctx) {

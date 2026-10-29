@@ -25,6 +25,36 @@ public final class Domain {
         return total;
     }
 
+    public static BigDecimal convertDipToLitres(String tankId, String dipCm) {
+        List<Map<String, Object>> points = Db.all(
+                "SELECT dip_cm, litres FROM tank_calibration_points WHERE tank_id = ? ORDER BY CAST(dip_cm AS DECIMAL(18,4)) ASC",
+                tankId);
+        if (points.size() < 2) {
+            throw ApiException.unprocessable("No calibration table is configured for this tank — record measured litres instead");
+        }
+        BigDecimal dip = Money.d(dipCm);
+        BigDecimal firstDip = Money.d(points.get(0).get("dip_cm"));
+        BigDecimal lastDip = Money.d(points.get(points.size() - 1).get("dip_cm"));
+        if (dip.compareTo(firstDip) < 0 || dip.compareTo(lastDip) > 0) {
+            throw ApiException.unprocessable("Dip reading falls outside the calibrated range for this tank");
+        }
+        for (int i = 1; i < points.size(); i++) {
+            Map<String, Object> low = points.get(i - 1);
+            Map<String, Object> high = points.get(i);
+            BigDecimal lowDip = Money.d(low.get("dip_cm"));
+            BigDecimal highDip = Money.d(high.get("dip_cm"));
+            if (dip.compareTo(lowDip) >= 0 && dip.compareTo(highDip) <= 0) {
+                BigDecimal span = highDip.subtract(lowDip);
+                if (span.signum() == 0) return Money.d(low.get("litres"));
+                BigDecimal ratio = dip.subtract(lowDip).divide(span, 8, java.math.RoundingMode.HALF_UP);
+                BigDecimal lowLitres = Money.d(low.get("litres"));
+                BigDecimal highLitres = Money.d(high.get("litres"));
+                return lowLitres.add(highLitres.subtract(lowLitres).multiply(ratio));
+            }
+        }
+        return Money.d(points.get(points.size() - 1).get("litres"));
+    }
+
     public static List<Map<String, Object>> tankSummary(String stationId) {
         List<Map<String, Object>> out = new ArrayList<>();
         for (Map<String, Object> tank : Db.all(
@@ -50,6 +80,7 @@ public final class Domain {
             card.put("productColor", tank.get("product_color"));
             card.put("capacityLitres", String.valueOf(tank.get("capacity_litres")));
             card.put("deadStockLitres", String.valueOf(tank.get("dead_stock_litres")));
+            card.put("calibrationReference", tank.get("calibration_reference"));
             card.put("status", tank.get("status"));
             card.put("bookStockLitres", Money.litres(book));
             card.put("fillPct", Money.percent(book, tank.get("capacity_litres"), 1));

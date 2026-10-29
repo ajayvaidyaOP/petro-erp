@@ -2,33 +2,27 @@
   "name": "petroflow-erp",
   "private": true,
   "version": "1.0.0",
-  "description": "PetroFlow ERP — multi-tenant petrol pump management SaaS for India",
+  "description": "PetroFlow ERP — multi-tenant petrol pump management SaaS for India (React/Vite + Java 21 + MySQL 8)",
   "engines": {
     "node": ">=22.13.0"
   },
   "workspaces": [
-    "backend",
-    "frontend",
-    "backend/gateway"
+    "frontend"
   ],
   "scripts": {
     "dev": "concurrently -k -n backend,frontend -c blue,green \"npm:dev:backend\" \"npm:dev:frontend\"",
-    "dev:backend": "npm run dev -w @petroflow/server",
+    "dev:backend": "node scripts/gradle.mjs run --no-daemon",
     "dev:frontend": "npm run dev -w @petroflow/web",
     "dev:server": "npm run dev:backend",
     "dev:web": "npm run dev:frontend",
-    "dev:gateway": "npm run dev -w @petroflow/gateway",
-    "start": "npm run start -w @petroflow/server",
-    "build": "npm run build -w @petroflow/web && npm run build -w @petroflow/server",
-    "typecheck": "npm run typecheck -w @petroflow/server && npm run typecheck -w @petroflow/web && npm run typecheck -w @petroflow/gateway",
-    "test": "npm run test -w @petroflow/server",
+    "dev:gateway": "node scripts/gradle.mjs simulateGateway --no-daemon",
+    "start": "java -jar backend/build/libs/petroflow-1.0.0.jar",
+    "build": "npm run build -w @petroflow/web && node scripts/gradle.mjs jar --no-daemon",
+    "typecheck": "npm run typecheck -w @petroflow/web && node scripts/gradle.mjs classes testClasses --no-daemon",
+    "test": "node scripts/gradle.mjs verifyJava --no-daemon",
     "test:e2e": "playwright test",
-    "db:reset": "npm run db:reset -w @petroflow/server",
-    "db:seed": "npm run db:seed -w @petroflow/server",
-    "db:mysql-ddl": "node backend/scripts/generate-mysql-ddl.mjs",
-    "db:backup": "npm run db:backup -w @petroflow/server",
-    "db:restore": "npm run db:restore -w @petroflow/server",
-    "db:integrity": "npm run db:integrity -w @petroflow/server"
+    "db:reset": "node scripts/gradle.mjs run --args=\"--reset-db --check-only\" --no-daemon",
+    "db:seed": "node scripts/gradle.mjs run --args=\"--check-only\" --no-daemon"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",
