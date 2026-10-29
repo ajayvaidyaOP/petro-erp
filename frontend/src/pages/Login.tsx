@@ -37,10 +37,9 @@ interface DemoAccounts {
 }
 
 const PILLARS = [
-  { icon: Activity, label: 'Nozzle totalizer & 15°C density checks' },
-  { icon: Database, label: 'Underground tank dip & ullage ledger' },
-  { icon: Scale, label: 'Note-wise shift cash & UPI settlement' },
-  { icon: Users, label: 'Vehicle-wise fleet credit & FIFO ageing' },
+  { icon: Activity, label: 'Shifts & readings', detail: 'Every nozzle accounted for' },
+  { icon: Database, label: 'Stock & deliveries', detail: 'Know what’s in every tank' },
+  { icon: Scale, label: 'Sales & settlement', detail: 'Keep every rupee in view' },
 ];
 
 export default function Login() {
@@ -94,131 +93,69 @@ export default function Login() {
 
   return (
     <div className="grid min-h-dvh bg-navy-950 lg:grid-cols-[1.12fr_1fr]">
-      {/* Left Architectural Forecourt Showcase Panel */}
-      <section className="relative hidden flex-col justify-between overflow-hidden border-r border-panel-line bg-panel p-11 text-panel-text lg:flex xl:p-14">
-        {/* Precision blueprint grid + atmospheric radial glows */}
-        <div
-          className="pointer-events-none absolute inset-0 opacity-[0.07]"
-          style={{
-            backgroundImage:
-              'linear-gradient(to right, rgb(var(--panel-line)) 1px, transparent 1px), linear-gradient(to bottom, rgb(var(--panel-line)) 1px, transparent 1px)',
-            backgroundSize: '40px 40px',
-          }}
-          aria-hidden
-        />
-        <div
-          className="pointer-events-none absolute -top-36 right-[-5rem] h-[440px] w-[440px] rounded-full bg-panel-accent/14 blur-[125px]"
-          aria-hidden
-        />
-        <div
-          className="pointer-events-none absolute -bottom-36 left-[-6rem] h-[420px] w-[420px] rounded-full bg-cyan-400/10 blur-[130px]"
-          aria-hidden
-        />
+      {/* Brand illustration is decorative; no sample figures are presented as live data. */}
+      <section className="relative hidden min-h-dvh flex-col overflow-hidden bg-panel px-10 py-9 text-panel-text lg:flex xl:px-14 xl:py-11">
+        <div aria-hidden className="pointer-events-none absolute -right-32 -top-40 h-[430px] w-[430px] rounded-full bg-blue-500/20 blur-[100px]" />
+        <div aria-hidden className="pointer-events-none absolute -bottom-48 -left-20 h-[380px] w-[380px] rounded-full bg-orange-500/10 blur-[110px]" />
 
-        {/* Brand Header */}
-        <div className="relative flex items-center justify-between">
+        <div className="relative flex items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
-            <span className="brand-gradient relative grid h-11 w-11 place-items-center overflow-hidden rounded-2xl text-onaccent shadow-glow ring-1 ring-panel-accent/35">
-              <span aria-hidden className="absolute inset-0 bg-[linear-gradient(145deg,rgb(255_255_255/0.3),transparent_55%)]" />
-              <Fuel className="relative h-5 w-5" strokeWidth={2.3} />
+            <span className="brand-gradient grid h-11 w-11 place-items-center rounded-2xl text-onaccent shadow-glow">
+              <Fuel className="h-5 w-5" strokeWidth={2.3} aria-hidden />
             </span>
             <div>
               <p className="font-display text-xl font-extrabold tracking-[-0.03em] text-panel-text">
-                Petro<span className="text-panel-accent">Flow</span>
+                Petro<span className="text-panel-energy">Flow</span>
               </p>
-              <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.19em] text-panel-dim">
-                Forecourt Command ERP
-              </p>
+              <p className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-panel-dim">Fuel station ERP</p>
             </div>
           </div>
-          <span className="rounded-full border border-panel-line bg-panel-raised/80 px-3 py-1 font-mono text-[10px] font-semibold tracking-wider text-panel-muted backdrop-blur-md">
-            MULTI-OUTLET · INDIA
+          <span className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-panel-muted">
+            Made for fuel retail
           </span>
         </div>
 
-        {/* Center Pitch + Live Instrument Cockpit */}
-        <div className="relative my-auto py-8">
-          <span className="inline-flex items-center gap-2 rounded-full border border-panel-accent/25 bg-panel-accent/10 px-3.5 py-1 text-[11px] font-semibold text-panel-accent backdrop-blur-sm">
-            <span className="h-1.5 w-1.5 animate-pulse-soft rounded-full bg-panel-accent" />
-            Engineered for modern Indian fuel stations
+        <div className="relative flex flex-1 flex-col justify-center py-8">
+          <span className="inline-flex w-fit items-center gap-2 rounded-full border border-panel-energy/25 bg-panel-energy/10 px-3 py-1.5 text-[11px] font-semibold text-panel-energy">
+            <span className="h-1.5 w-1.5 rounded-full bg-panel-energy" aria-hidden />
+            YOUR FORECOURT, CONNECTED
           </span>
-
-          <h1 className="mt-5 max-w-xl font-display text-[38px] font-extrabold leading-[1.1] tracking-[-0.038em] text-panel-text xl:text-[44px]">
-            Every nozzle, tank and rupee —{' '}
-            <span className="bg-gradient-to-r from-[#20e0ac] to-[#22d3ee] bg-clip-text text-transparent">
-              reconciled
-            </span>{' '}
-            with precision.
+          <h1 className="mt-5 max-w-[600px] font-display text-[38px] font-extrabold leading-[1.12] tracking-[-0.04em] text-white xl:text-[46px]">
+            A brighter way to run <span className="text-panel-energy">your fuel station.</span>
           </h1>
-          <p className="mt-4 max-w-lg text-sm leading-relaxed text-panel-muted">
-            Run single or multi-outlet petrol pumps from one auditable command workspace: totalizer shifts, TT
-            decantation, 15°C density checks, and vehicle-level fleet credit.
+          <p className="mt-4 max-w-[550px] text-sm leading-relaxed text-panel-muted">
+            From the first nozzle reading to the final settlement, keep your people, pumps and numbers moving together.
           </p>
 
-          {/* Forecourt Telemetry Instrument Card */}
-          <div className="mt-7 overflow-hidden rounded-2.5xl border border-panel-line bg-panel-raised/75 shadow-[0_28px_70px_-24px_rgb(0_0_0/0.8),inset_0_1px_0_rgb(255_255_255/0.06)] backdrop-blur-md">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-panel-line/85 bg-panel-deep/45 px-4 py-3 text-[11px]">
-              <span className="flex items-center gap-2 font-semibold text-panel-text">
-                <span className="h-2 w-2 rounded-full bg-panel-accent shadow-[0_0_8px_rgb(32_224_172/0.7)]" />
-                Live Forecourt Telemetry · Baner Outlet
-              </span>
-              <div className="flex items-center gap-3 font-mono text-[10px]">
-                <span className="text-panel-muted">MS ₹104.20/L</span>
-                <span className="text-panel-dim">·</span>
-                <span className="text-panel-muted">HSD ₹90.75/L</span>
-                <span className="rounded-md border border-panel-accent/25 bg-panel-accent/12 px-1.5 py-0.5 font-bold text-panel-accent">
-                  SHIFT #2 LIVE
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-3 p-4">
-              <div className="rounded-xl border border-panel-line/85 bg-panel-deep/65 p-3">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-panel-dim">Nozzle MS-N1</p>
-                <p className="num mt-1.5 font-mono text-xs font-bold text-panel-text xl:text-[13px]">58,342.750 L</p>
-                <p className="mt-1 flex items-center gap-1 text-[10px] font-medium text-panel-accent">
-                  <CheckCircle2 className="h-3 w-3" /> Totalizer locked
-                </p>
-              </div>
-              <div className="rounded-xl border border-panel-line/85 bg-panel-deep/65 p-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-panel-dim">HSD Tank 01</p>
-                  <span className="font-mono text-[10px] font-bold text-panel-energy">78%</span>
-                </div>
-                <p className="num mt-1 font-mono text-xs font-bold text-panel-text xl:text-[13px]">15,600 L</p>
-                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-panel-line">
-                  <div className="h-full w-[78%] rounded-full bg-gradient-to-r from-[#20e0ac] to-[#22d3ee]" />
-                </div>
-              </div>
-              <div className="rounded-xl border border-panel-line/85 bg-panel-deep/65 p-3">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-panel-dim">Day Settlement</p>
-                <p className="num mt-1.5 font-mono text-xs font-bold text-panel-text xl:text-[13px]">₹1,84,250</p>
-                <p className="mt-1 text-[10px] font-medium text-panel-accent">Balanced · ₹0 diff</p>
-              </div>
+          <div className="relative mt-7 overflow-hidden rounded-2.5xl border border-white/10 bg-panel-deep shadow-[0_24px_55px_-22px_rgb(0_0_0/0.7)]">
+            <img
+              src="/forecourt-illustration.webp"
+              alt=""
+              className="aspect-[16/8.5] w-full object-cover object-[center_62%]"
+            />
+            <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-t from-panel-deep/55 via-transparent to-transparent" />
+            <div className="absolute bottom-4 left-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-panel-deep/75 px-3 py-1.5 text-[10px] font-semibold text-white backdrop-blur-sm">
+              <span className="h-1.5 w-1.5 rounded-full bg-panel-energy" aria-hidden />
+              ONE WORKSPACE. EVERY PUMP.
             </div>
           </div>
 
-          <div className="mt-6 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+          <div className="mt-5 grid grid-cols-3 gap-2.5">
             {PILLARS.map((item) => (
-              <div
-                key={item.label}
-                className="flex items-center gap-2.5 rounded-xl border border-panel-line/60 bg-panel-raised/40 px-3 py-2 text-xs text-panel-muted"
-              >
-                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-lg border border-panel-line bg-panel-deep text-panel-accent">
-                  <item.icon className="h-3.5 w-3.5" />
-                </span>
-                <span>{item.label}</span>
+              <div key={item.label} className="rounded-xl border border-white/10 bg-white/5 px-3 py-3">
+                <item.icon className="h-4 w-4 text-panel-energy" aria-hidden />
+                <p className="mt-2 text-xs font-bold text-panel-text">{item.label}</p>
+                <p className="mt-1 text-[10.5px] leading-snug text-panel-muted">{item.detail}</p>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Footer Governance Note */}
-        <div className="relative flex items-center justify-between gap-4 border-t border-panel-line/80 pt-5 text-xs text-panel-muted">
-          <div className="flex items-center gap-2.5">
-            <ShieldCheck className="h-4 w-4 shrink-0 text-panel-accent" />
-            <span>Two-role governance: Owner &amp; Station Manager with immutable server-side audit logs.</span>
-          </div>
+        <div className="relative flex items-center justify-between gap-4 border-t border-white/10 pt-4 text-xs text-panel-muted">
+          <span className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 shrink-0 text-panel-energy" aria-hidden />
+            Thoughtfully built for Indian fuel retailers
+          </span>
           <span className="font-mono text-[10px] font-semibold text-panel-dim">IST · INR</span>
         </div>
       </section>
@@ -247,7 +184,7 @@ export default function Login() {
                 Petro<span className="text-accent">Flow</span>
               </span>
               <span className="block text-[10px] font-bold uppercase tracking-[0.18em] text-ink-500">
-                Forecourt Command
+                Fuel Station ERP
               </span>
             </div>
           </div>
@@ -258,13 +195,13 @@ export default function Login() {
               className="brand-gradient absolute inset-x-0 top-0 h-[2.5px] opacity-90"
             />
             <div className="inline-flex items-center gap-1.5 rounded-full border border-accent/25 bg-accent/10 px-2.5 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-accent">
-              <Sparkles className="h-3 w-3" aria-hidden /> Operator &amp; Owner Access
+              <Sparkles className="h-3 w-3" aria-hidden /> Secure workspace
             </div>
             <h2 className="mt-3 font-display text-2xl font-extrabold tracking-[-0.03em] text-ink-100 sm:text-[27px]">
               Welcome back
             </h2>
             <p className="mt-1 text-xs leading-relaxed text-ink-400 sm:text-sm">
-              Sign in to command your fuel stations, shifts and financial ledgers.
+              Sign in to keep your station running smoothly.
             </p>
 
             <form onSubmit={submit} className="mt-6 space-y-4">
@@ -341,9 +278,9 @@ export default function Login() {
             <section className="card mt-4 p-5 sm:p-6" aria-label="Demo accounts">
               <div className="flex items-center justify-between gap-2">
                 <div>
-                  <p className="font-display text-[13px] font-bold text-ink-100">One-click demo workspace</p>
+                  <p className="font-display text-[13px] font-bold text-ink-100">Explore the demo</p>
                   <p className="mt-0.5 text-[11px] text-ink-500">
-                    Sunrise Fuels · 2 live outlets (Baner &amp; Hinjewadi)
+                    Try sample data from two Sunrise Fuels outlets
                   </p>
                 </div>
                 <span className="rounded-full border border-warn/30 bg-warn/10 px-2.5 py-0.5 text-[10px] font-bold tracking-wider text-warn">
@@ -382,8 +319,8 @@ export default function Login() {
                     </span>
                     <span className="mt-0.5 block text-[10.5px] text-ink-500">
                       {account.roleKey === 'OWNER'
-                        ? 'Both outlets, pricing & finance'
-                        : 'Shifts, stock & credit ops'}
+                        ? 'Both pumps, prices & finance'
+                        : 'Shifts, stock & daily operations'}
                     </span>
                     <span
                       title={account.email}
@@ -406,7 +343,7 @@ export default function Login() {
 
           <p className="mt-5 flex items-center justify-center gap-1.5 text-[11px] text-ink-500">
             <LockKeyhole className="h-3 w-3 text-accent" aria-hidden />
-            <span>Authenticated server-side sessions · Role-enforced API</span>
+            <span>Secure access for your team and your business</span>
           </p>
         </div>
       </main>

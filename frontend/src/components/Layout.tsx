@@ -118,10 +118,10 @@ function Brand({ collapsed = false }: { collapsed?: boolean }) {
       {!collapsed && (
         <div className="min-w-0">
           <p className="font-display text-[19px] font-extrabold leading-none tracking-[-0.03em] text-ink-100">
-            Petro<span className="text-accent">Flow</span>
+            Petro<span className="text-fuel">Flow</span>
           </p>
           <p className="mt-1 text-[9.5px] font-bold uppercase tracking-[0.17em] text-ink-500">
-            Forecourt Command
+            FUEL STATION ERP
           </p>
         </div>
       )}
@@ -141,7 +141,7 @@ function PrimaryNav({
 
   if (me?.isSuperAdmin) {
     return (
-      <nav aria-label="Primary" className="flex-1 space-y-5 overflow-y-auto px-3 py-4 scroll-thin">
+      <nav aria-label="Primary" className="flex-1 space-y-6 overflow-y-auto px-3 py-5 scroll-thin">
         {adminGroups.map((group) => (
           <div key={group.group}>
             {!collapsed && (
@@ -181,7 +181,7 @@ function PrimaryNav({
   const permitted = navigation.filter((item) => can(item.permission));
 
   return (
-    <nav aria-label="Primary" className="flex-1 space-y-5 overflow-y-auto px-3 py-4 scroll-thin">
+    <nav aria-label="Primary" className="flex-1 space-y-6 overflow-y-auto px-3 py-5 scroll-thin">
       {GROUP_ORDER.map((groupName) => {
         const items = permitted.filter((item) => item.group === groupName);
         if (items.length === 0) return null;
@@ -337,7 +337,7 @@ function HeaderShiftContext() {
   return (
     <Link
       to="/shifts"
-      className="hidden items-center gap-2 rounded-xl border border-navy-700/85 bg-navy-900 px-3 py-1.5 text-xs shadow-sheen transition hover:border-accent/45 hover:bg-navy-800/80 xl:inline-flex"
+      className="hidden items-center gap-2 rounded-xl border border-navy-700/85 bg-navy-900 px-3 py-1.5 text-xs shadow-sheen transition hover:border-accent/45 hover:bg-navy-800/80 2xl:inline-flex"
       title="Business date (IST) and active forecourt shift"
     >
       <Calendar className="h-3.5 w-3.5 shrink-0 text-ink-500" aria-hidden />
@@ -517,7 +517,7 @@ export function Layout() {
       {/* Desktop Sidebar */}
       <aside
         className={cn(
-          'sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-navy-700/75 bg-navy-900/95 backdrop-blur-xl transition-[width] duration-200 ease-smooth [background-image:radial-gradient(280px_180px_at_0%_0%,rgb(var(--accent)/0.075),transparent_75%)] md:flex',
+          'sidebar-surface sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-navy-700/60 transition-[width] duration-200 ease-smooth md:flex',
           collapsed ? 'w-[74px]' : 'w-[254px] xl:w-[264px]',
         )}
       >
@@ -544,11 +544,11 @@ export function Layout() {
         <PrimaryNav collapsed={collapsed} />
 
         {!collapsed && !me?.isSuperAdmin && station && (
-          <div className="hero-mesh mx-3 mb-3 rounded-2xl border border-navy-700/80 bg-navy-800/50 p-3.5 shadow-sheen">
+          <div className="mx-3 mb-3 rounded-2xl border border-white/10 bg-white/5 p-3.5">
             <div className="flex items-center justify-between gap-2">
               <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.13em] text-ink-500">
                 <span className="h-1.5 w-1.5 rounded-full bg-ok" aria-hidden />
-                Active outlet
+                Your active pump
               </span>
               <span className="rounded-md border border-accent/25 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] font-bold text-accent">
                 {station.code}
@@ -580,10 +580,8 @@ export function Layout() {
             </button>
           ) : (
             <>
-              <span className="font-semibold text-ink-400">PetroFlow ERP</span>
-              <span className="rounded border border-navy-700 bg-navy-800/70 px-1.5 py-0.5 font-mono text-[9.5px] font-semibold text-ink-500">
-                v2.4
-              </span>
+              <span className="font-semibold text-ink-400">Made for fuel retailers</span>
+              <Fuel className="h-4 w-4 text-fuel" aria-hidden />
             </>
           )}
         </div>
@@ -601,7 +599,7 @@ export function Layout() {
             role="dialog"
             aria-modal="true"
             aria-label="Navigation menu"
-            className="relative flex h-dvh w-[292px] max-w-[88vw] flex-col border-r border-navy-700 bg-navy-900 shadow-pop"
+            className="sidebar-surface relative flex h-dvh w-[292px] max-w-[88vw] flex-col border-r border-navy-700 shadow-pop"
           >
             <div className="flex items-center justify-between border-b border-navy-700/70 px-4 py-4">
               <Brand />
@@ -777,7 +775,7 @@ export function Layout() {
 
         <main
           id="main"
-          className="mx-auto w-full max-w-[1520px] flex-1 px-3.5 pb-24 pt-5 sm:px-6 md:pb-8 lg:px-8 lg:pt-6"
+          className="mx-auto w-full max-w-[1600px] flex-1 px-3.5 pb-24 pt-5 sm:px-6 md:pb-8 lg:px-8 lg:pt-7"
         >
           {!me?.isSuperAdmin && <SectionNav />}
           <div key={location.pathname} className="animate-fade-in">
@@ -787,8 +785,8 @@ export function Layout() {
 
         <footer className="hidden items-center justify-between gap-3 border-t border-navy-700/65 bg-navy-900/60 px-8 py-3 text-[11px] text-ink-500 backdrop-blur-md md:flex">
           <span>
-            PetroFlow Forecourt ERP
-            {isDemoTenant ? ' · Demo Sandbox (Simulated Hardware & Seeded Ledgers)' : ' · Multi-Outlet Fuel Retail Platform'}
+            PetroFlow · Fuel station management
+            {isDemoTenant ? ' · Demo workspace' : ''}
           </span>
           <span className="flex items-center gap-2.5">
             <span className="hidden items-center gap-1 text-ink-400 lg:inline-flex">

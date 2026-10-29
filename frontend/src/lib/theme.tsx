@@ -35,7 +35,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     root.dataset.theme = theme;
     root.style.colorScheme = theme;
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', theme === 'dark' ? '#080b12' : '#f6f8fc');
+    if (meta) meta.setAttribute('content', theme === 'dark' ? '#0a1223' : '#f3f6fc');
   }, [theme]);
 
   const setTheme = useCallback((next: Theme) => {
@@ -79,31 +79,31 @@ export interface ChartPalette {
 }
 
 const CHART_DARK: ChartPalette = {
-  grid: '#202d44',
-  axis: '#8a9ab4',
-  tooltipBg: '#111826',
-  tooltipBorder: '#2a3852',
-  tooltipLabel: '#f4f7fd',
-  accent: '#10d4a2',
-  teal: '#22d3ee',
-  secondary: '#4ca8ff',
-  energy: '#fbbf24',
-  warn: '#fbbf24',
-  danger: '#fb697a',
+  grid: '#304464',
+  axis: '#a8b9d2',
+  tooltipBg: '#142138',
+  tooltipBorder: '#304464',
+  tooltipLabel: '#f4f8ff',
+  accent: '#97b5ff',
+  teal: '#5cdacb',
+  secondary: '#ffb973',
+  energy: '#ffb973',
+  warn: '#ffb968',
+  danger: '#ff7b8d',
 };
 
 const CHART_LIGHT: ChartPalette = {
-  grid: '#e2e8f0',
-  axis: '#69788f',
+  grid: '#dae3f0',
+  axis: '#5b6f8a',
   tooltipBg: '#ffffff',
-  tooltipBorder: '#d6deea',
-  tooltipLabel: '#090e1a',
-  accent: '#047857',
-  teal: '#0891b2',
-  secondary: '#1d62d8',
-  energy: '#b45309',
-  warn: '#b45309',
-  danger: '#cd1d3a',
+  tooltipBorder: '#dae3f0',
+  tooltipLabel: '#142442',
+  accent: '#2455dd',
+  teal: '#0a7f82',
+  secondary: '#c35412',
+  energy: '#c35412',
+  warn: '#b4500d',
+  danger: '#c62b41',
 };
 
 export function useChartPalette(): ChartPalette {

@@ -65,32 +65,29 @@ Existing databases migrate automatically on boot (additive columns/tables + role
 
 ## Theming
 
-The UI is a **token-only "Forecourt Lux" system**: deep petrol jade as the brand colour, a warm
-sage-paper canvas in light mode, a green-graphite ink in dark mode, and amber-gold reserved as the
-"energy" highlight (rates, litres, revenue moments). Locally bundled Manrope display type + Inter
-body text, responsive sidebar/drawer/bottom navigation, keyboard-accessible dialogs. Light is the
-default; dark mode remains available. Nothing in a component references a raw Tailwind shade — every
-colour resolves through CSS custom properties in `frontend/src/index.css`, exposed to Tailwind in
-`frontend/tailwind.config.js`, so switching `data-theme` on `<html>` re-tints all 32 screens:
+The UI uses **Forecourt Blue**: an always-dark midnight navigation frame, clean cool-white
+work surfaces, cobalt-blue primary actions, and fuel-orange highlights. Teal, plum and semantic
+status colours add distinction without replacing labels. Manrope display type and Inter body text
+are locally bundled. Both the light workspace and a high-contrast dark theme share CSS custom
+properties in `frontend/src/index.css`, exposed to Tailwind in `frontend/tailwind.config.js`:
 
 | Token family | Meaning |
 | --- | --- |
 | `navy-*` | Surfaces (`950` page canvas → `600` strongest border) |
 | `ink-*` | Text (`100` strongest → `600` faintest) |
-| `accent*` | Brand colour |
-| `onaccent` | Foreground on brand-coloured surfaces |
-| `scrim` | Modal/drawer backdrop — always dark in both themes |
-| `inset` | Recessed surface for code blocks and inset panels |
-| `ok` / `warn` / `danger` / `info` | Status colours (invert with the theme to stay legible) |
-| `onaccent` / `onok` / `onwarn` / `ondanger` | Foreground for text on a solid status fill |
-| `energy` / `accent-energy` | Amber-gold fuel highlight — rates, litres, positive revenue |
-| `panel-*` | Brand ink panel (login split) — deliberately dark in **both** themes |
-| `chart-1…5` | Chart series; Recharts mirrors the same values in `frontend/src/lib/theme.tsx` |
+| `accent*` | Cobalt brand and teal secondary colours |
+| `fuel` / `energy` / `plum` | Fuel-orange highlight, readable orange text, and a supporting violet |
+| `onaccent` / `onfuel` | Foreground on solid action colours |
+| `scrim` / `inset` | Dialog backdrop and recessed surface |
+| `ok` / `warn` / `danger` / `info` | Status colours (retinted in dark mode) |
+| `onok` / `onwarn` / `ondanger` | Foreground on solid status fills |
+| `panel-*` | Always-dark showcase surfaces (login) |
+| `chart-1…5` | Chart series; Recharts mirrors theme values in `frontend/src/lib/theme.tsx` |
 
+The login illustration is a decorative, locally served WebP, not live station telemetry.
 Shadows and radii are tokens too (`shadow-card`, `shadow-card-hover`, `shadow-sheen`, `shadow-pop`,
-`shadow-glow`, `rounded-2.5xl`), and the page canvas carries three faint radial washes for depth.
-Chart colours live in `lib/theme.tsx` because SVG attributes cannot resolve CSS variables — keep
-those hexes in step with `index.css` when the palette changes.
+`shadow-glow`, `rounded-2.5xl`). Chart colours live in `lib/theme.tsx` because SVG attributes cannot
+resolve CSS variables — keep those hexes in step with `index.css` when the palette changes.
 
 Users switch from the sun/moon button in the header. The choice is stored in
 `localStorage` under `petroflow.theme`; with no stored choice the readable
