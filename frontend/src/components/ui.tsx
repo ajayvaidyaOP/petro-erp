@@ -30,14 +30,16 @@ import {
 import { cn } from '../lib/utils';
 
 /* ------------------------------------------------------------------ button */
-type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'outline';
+type ButtonVariant = 'primary' | 'gold' | 'secondary' | 'ghost' | 'danger' | 'success' | 'outline';
 type ButtonSize = 'sm' | 'md' | 'lg';
 
 const buttonVariants: Record<ButtonVariant, string> = {
   primary:
-    'brand-gradient text-onbrand font-semibold shadow-glow border border-fuel/40 hover:brightness-[1.06] active:scale-[.985]',
+    'brand-gradient text-onbrand font-semibold shadow-glow border border-accent-soft/50 hover:brightness-[1.06] active:scale-[.985]',
+  gold:
+    'gold-cta font-bold active:scale-[.985]',
   secondary:
-    'bg-carbon-800/90 text-ink-100 font-semibold border border-carbon-600/75 shadow-sheen hover:bg-carbon-750/80 hover:border-accent/45 active:scale-[.985]',
+    'bg-carbon-800/95 text-ink-100 font-semibold border border-carbon-600/75 shadow-sheen hover:bg-carbon-750/85 hover:border-accent/45 active:scale-[.985]',
   ghost:
     'text-ink-300 font-medium hover:bg-carbon-800/85 hover:text-ink-100 border border-transparent',
   danger:
@@ -45,7 +47,7 @@ const buttonVariants: Record<ButtonVariant, string> = {
   success:
     'bg-ok text-onok font-semibold border border-ok shadow-[inset_0_1px_0_rgb(255_255_255/0.2)] hover:brightness-110 active:scale-[.985]',
   outline:
-    'bg-carbon-900/80 border border-carbon-600/80 text-ink-200 font-semibold shadow-sheen hover:bg-carbon-800/70 hover:border-accent/55 hover:text-ink-100 active:scale-[.985]',
+    'bg-carbon-900/90 border border-carbon-600/80 text-ink-200 font-semibold shadow-sheen hover:bg-carbon-800/75 hover:border-accent/55 hover:text-ink-100 active:scale-[.985]',
 };
 
 const buttonSizes: Record<ButtonSize, string> = {
@@ -99,11 +101,13 @@ export function Card({ className, children, ...props }: React.HTMLAttributes<HTM
 }
 
 export function CardHeader({
+  eyebrow,
   title,
   subtitle,
   action,
   className,
 }: {
+  eyebrow?: ReactNode;
   title: ReactNode;
   subtitle?: ReactNode;
   action?: ReactNode;
@@ -112,12 +116,17 @@ export function CardHeader({
   return (
     <div
       className={cn(
-        'flex flex-wrap items-center justify-between gap-3 border-b border-carbon-700/60 px-4 py-3.5 sm:px-5 sm:py-4',
+        'flex flex-wrap items-center justify-between gap-3 border-b border-carbon-700/70 px-4 py-3.5 sm:px-5 sm:py-4',
         className,
       )}
     >
       <div className="min-w-0">
-        <h2 className="font-display text-[15px] font-bold tracking-[-0.015em] text-ink-100">{title}</h2>
+        {eyebrow && (
+          <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-500">{eyebrow}</p>
+        )}
+        <h2 className="font-display text-[15.5px] font-bold tracking-[-0.02em] text-ink-100 sm:text-[16.5px]">
+          {title}
+        </h2>
         {subtitle && <p className="mt-0.5 text-xs leading-relaxed text-ink-400">{subtitle}</p>}
       </div>
       {action && <div className="flex min-w-0 flex-wrap items-center gap-2 max-sm:w-full">{action}</div>}
@@ -133,13 +142,13 @@ export function CardBody({ className, children }: { className?: string; children
 export type BadgeTone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger' | 'info' | 'muted';
 
 const toneClasses: Record<BadgeTone, string> = {
-  neutral: 'bg-carbon-800/90 text-ink-200 border-carbon-600/70',
+  neutral: 'bg-carbon-800/95 text-ink-200 border-carbon-600/70',
   accent: 'bg-accent/12 text-accent border-accent/25',
   success: 'bg-ok/12 text-ok border-ok/25',
   warning: 'bg-warn/12 text-warn border-warn/25',
   danger: 'bg-danger/12 text-danger border-danger/25',
   info: 'bg-info/12 text-info border-info/25',
-  muted: 'bg-carbon-800/65 text-ink-500 border-carbon-700/80',
+  muted: 'bg-carbon-800/70 text-ink-500 border-carbon-700/80',
 };
 
 export function Badge({
@@ -799,14 +808,14 @@ export function PageHeader({
   breadcrumb?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-4 border-b border-carbon-700/65 pb-4">
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-4 border-b border-carbon-700/75 pb-4">
       <div className="min-w-0">
         {breadcrumb && (
-          <div className="mb-1.5 inline-flex items-center gap-1.5 rounded-full border border-accent/20 bg-accent/10 px-2.5 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-accent">
+          <div className="mb-1.5 inline-flex items-center gap-1.5 rounded-full border border-accent/25 bg-accent/10 px-2.5 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-accent">
             {breadcrumb}
           </div>
         )}
-        <h1 className="font-display text-[25px] font-extrabold leading-8 tracking-[-0.03em] text-ink-100 sm:text-[28px] sm:leading-9">
+        <h1 className="font-display text-[24px] font-extrabold leading-8 tracking-[-0.03em] text-ink-100 sm:text-[27px] sm:leading-9">
           {title}
         </h1>
         {description && <p className="mt-1 max-w-3xl text-xs leading-relaxed text-ink-400 sm:text-[13.5px]">{description}</p>}
@@ -822,6 +831,7 @@ export function StatCard({
   hint,
   icon,
   tone = 'default',
+  badge,
   footer,
 }: {
   label: string;
@@ -829,37 +839,50 @@ export function StatCard({
   hint?: ReactNode;
   icon?: ReactNode;
   tone?: 'default' | 'accent' | 'success' | 'warning' | 'danger';
+  badge?: ReactNode;
   footer?: ReactNode;
 }) {
   const iconTones = {
-    default: 'bg-info/10 text-info',
-    accent: 'bg-accent/12 text-accent',
-    success: 'bg-ok/12 text-ok',
-    warning: 'bg-warn/12 text-warn',
-    danger: 'bg-danger/12 text-danger',
+    default: 'bg-info/10 text-info border border-info/15',
+    accent: 'bg-accent/10 text-accent border border-accent/15',
+    success: 'bg-ok/10 text-ok border border-ok/15',
+    warning: 'bg-fuel/15 text-energy border border-fuel/25',
+    danger: 'bg-danger/10 text-danger border border-danger/15',
   };
-  const surfaces = {
-    default: '',
-    accent: 'border-accent/20 bg-gradient-to-br from-accent/[0.09] via-carbon-850 to-carbon-850',
-    success: 'border-ok/20 bg-gradient-to-br from-ok/[0.08] via-carbon-850 to-carbon-850',
-    warning: 'border-warn/20 bg-gradient-to-br from-warn/[0.09] via-carbon-850 to-carbon-850',
-    danger: 'border-danger/20 bg-gradient-to-br from-danger/[0.08] via-carbon-850 to-carbon-850',
+  const barTones = {
+    default: 'bg-info',
+    accent: 'bg-accent',
+    success: 'bg-ok',
+    warning: 'bg-fuel',
+    danger: 'bg-danger',
   };
   return (
-    <div className={cn('card relative h-full overflow-hidden p-4 sm:p-5', surfaces[tone])}>
-      <div className="relative flex items-start justify-between gap-3">
-        <p className="pt-0.5 text-[12px] font-semibold leading-snug text-ink-400">{label}</p>
-        {icon && (
-          <div className={cn('grid h-10 w-10 shrink-0 place-items-center rounded-xl', iconTones[tone])}>
-            {icon}
+    <div className="card relative flex h-full min-w-0 flex-col justify-between overflow-hidden p-3.5 sm:p-5">
+      <div>
+        <div className="flex items-start justify-between gap-2.5">
+          <div className="min-w-0">
+            <p className="truncate text-[10.5px] font-bold uppercase tracking-[0.075em] text-ink-500 sm:text-[11px]">
+              {label}
+            </p>
+            {badge && <div className="mt-1.5">{badge}</div>}
           </div>
-        )}
+          {icon && (
+            <div className={cn('grid h-9 w-9 shrink-0 place-items-center rounded-xl sm:h-10 sm:w-10', iconTones[tone])}>
+              {icon}
+            </div>
+          )}
+        </div>
+        <p className="num mt-3 break-words font-display text-[19px] font-extrabold leading-tight tracking-[-0.035em] text-ink-100 sm:text-[25px]">
+          {value}
+        </p>
+        <div aria-hidden className={cn('mt-2.5 h-[3.5px] w-11 rounded-full', barTones[tone])} />
       </div>
-      <p className="num relative mt-2 break-words font-display text-[21px] font-extrabold leading-tight tracking-[-0.035em] text-ink-100 sm:text-[27px]">
-        {value}
-      </p>
-      {hint && <p className="mt-1.5 text-[11.5px] leading-snug text-ink-500">{hint}</p>}
-      {footer && <div className="mt-3 border-t border-carbon-700/60 pt-2.5 text-xs text-ink-500">{footer}</div>}
+      {(hint || footer) && (
+        <div className="mt-2.5">
+          {hint && <p className="text-[11.5px] font-medium leading-snug text-ink-500">{hint}</p>}
+          {footer && <div className="mt-2.5 border-t border-carbon-700/60 pt-2 text-xs text-ink-500">{footer}</div>}
+        </div>
+      )}
     </div>
   );
 }
@@ -876,7 +899,7 @@ export function Tabs({
   return (
     <div
       role="tablist"
-      className="inline-flex max-w-full gap-1 overflow-x-auto rounded-2xl border border-carbon-700/80 bg-carbon-800/75 p-1 shadow-sheen scroll-thin"
+      className="inline-flex max-w-full gap-1 overflow-x-auto rounded-2xl border border-carbon-700/80 bg-carbon-800/85 p-1 shadow-sheen scroll-thin"
     >
       {tabs.map((tab) => {
         const isSelected = active === tab.key;

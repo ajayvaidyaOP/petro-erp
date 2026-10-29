@@ -100,13 +100,13 @@ Password kam se kam 10 characters, ek letter aur ek number.
 
 ## Colour
 
-UI **Ink & Petrol** hai. Pehle wala ember orange hata diya — woh action colour ki tarah cheekh raha tha.
+UI **Imperial Forest & Burnished Gold** hai — clean executive ERP style.
 
-- Teal: button, active menu, focus. Matlab aapka kaam.
-- Green: settled, healthy stock, paid. Sirf theek hone pe.
-- Brass: fuel price cue. Button pe nahi.
-- Ink: text aur sidebar.
-- Stone: page background.
+- Forest Emerald: primary buttons, Quick Entry, active links aur focus.
+- Burnished Gold: hero primary CTA, active menu indicator aur fuel rate accents.
+- Lush Jade: settled, paid aur healthy stock.
+- Ruby Crimson: unpaid dues, payables aur critical alerts.
+- Porcelain & Pure White: calm daytime canvas aur crisp elevated cards.
 
 Light default hai. Header ka sun/moon dark karta hai. Choice `localStorage` key `petroflow.theme` mein rehti hai.
 

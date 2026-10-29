@@ -90,7 +90,14 @@ export default {
         9.5: '2.375rem',
       },
       fontFamily: {
-        display: ['Manrope Variable', 'Inter Variable', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        display: [
+          'Plus Jakarta Sans Variable',
+          'Manrope Variable',
+          'Inter Variable',
+          'ui-sans-serif',
+          'system-ui',
+          'sans-serif',
+        ],
         sans: [
           'Inter Variable',
           'Inter',
@@ -103,7 +110,14 @@ export default {
           'Arial',
           'sans-serif',
         ],
-        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
+        mono: [
+          'JetBrains Mono Variable',
+          'ui-monospace',
+          'SFMono-Regular',
+          'Menlo',
+          'Consolas',
+          'monospace',
+        ],
       },
       fontSize: {
         'stat-sm': ['1.125rem', { lineHeight: '1.5rem', letterSpacing: '-0.025em' }],

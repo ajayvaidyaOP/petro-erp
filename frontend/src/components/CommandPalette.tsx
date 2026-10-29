@@ -392,7 +392,7 @@ export function CommandPalette({
               <kbd className="kbd mr-1">↵</kbd> Open
             </span>
           </span>
-          <span className="font-medium text-ink-400">PetroFlow Command</span>
+          <span className="font-medium text-ink-400">All Modules Hub · PetroFlow ERP</span>
         </div>
       </div>
     </div>,

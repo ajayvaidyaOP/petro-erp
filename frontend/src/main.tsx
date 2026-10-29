@@ -8,7 +8,9 @@ import { AuthProvider } from './lib/auth';
 import { ThemeProvider } from './lib/theme';
 import { ToastProvider } from './components/ui';
 import '@fontsource-variable/inter';
+import '@fontsource-variable/plus-jakarta-sans';
 import '@fontsource-variable/manrope';
+import '@fontsource-variable/jetbrains-mono';
 import './index.css';
 
 const queryClient = new QueryClient({

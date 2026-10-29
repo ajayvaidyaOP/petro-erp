@@ -95,20 +95,21 @@ export default function Login() {
   return (
     <div className="grid min-h-dvh bg-carbon-950 lg:grid-cols-[1.12fr_1fr]">
       {/* Brand illustration is decorative; no sample figures are presented as live data. */}
-      <section className="relative hidden min-h-dvh flex-col overflow-hidden bg-panel px-10 py-9 text-panel-text lg:flex xl:px-14 xl:py-11">
-        <div aria-hidden className="pointer-events-none absolute -right-32 -top-40 h-[430px] w-[430px] rounded-full bg-teal-400/20 blur-[100px]" />
-        <div aria-hidden className="pointer-events-none absolute -bottom-48 -left-20 h-[380px] w-[380px] rounded-full bg-emerald-500/12 blur-[110px]" />
+      <section className="sidebar-surface relative hidden min-h-dvh flex-col overflow-hidden px-10 py-9 text-panel-text lg:flex xl:px-14 xl:py-11">
+        <div aria-hidden className="pointer-events-none absolute -right-28 -top-36 h-[420px] w-[420px] rounded-full bg-[#f2be58]/14 blur-[110px]" />
+        <div aria-hidden className="pointer-events-none absolute -bottom-44 -left-20 h-[390px] w-[390px] rounded-full bg-ok/16 blur-[110px]" />
 
         <div className="relative flex items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
-            <span className="brand-gradient grid h-11 w-11 place-items-center rounded-2xl text-onbrand shadow-glow">
-              <Fuel className="h-5 w-5" strokeWidth={2.3} aria-hidden />
+            <span className="relative grid h-11 w-11 place-items-center overflow-hidden rounded-2xl border border-white/15 bg-white/10 text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.25),0_8px_18px_-8px_rgb(0_0_0/0.5)]">
+              <Fuel className="h-5 w-5 text-[#f3c464]" strokeWidth={2.3} aria-hidden />
             </span>
             <div>
-              <p className="font-display text-xl font-extrabold tracking-[-0.03em] text-panel-text">
-                Petro<span className="text-panel-energy">Flow</span>
+              <p className="font-display text-xl font-extrabold tracking-[-0.03em] text-white">
+                Petro<span className="text-[#f2be58]">Flow</span>{' '}
+                <span className="text-sm font-bold text-white/80">ERP</span>
               </p>
-              <p className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-panel-dim">Fuel station ERP</p>
+              <p className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.2em] text-panel-dim">Enterprise</p>
             </div>
           </div>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-panel-muted">
