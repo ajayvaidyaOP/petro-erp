@@ -128,7 +128,7 @@ export default function Tenants() {
         title="Organizations"
         description="Tenant lifecycle for the platform. Suspension blocks every tenant session immediately; no station data is deleted."
         actions={
-          <Button onClick={() => setCreateOpen(true)}>
+          <Button variant="primary" size="sm" onClick={() => setCreateOpen(true)}>
             <Plus className="h-4 w-4" /> Onboard organization
           </Button>
         }

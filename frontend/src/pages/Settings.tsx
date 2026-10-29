@@ -94,7 +94,7 @@ export default function Settings() {
         description="Set up your pump once. Keep advanced tools out of the way of everyday work."
         actions={
           can('settings.write') ? (
-            <Button loading={save.isPending} onClick={() => save.mutate()}>
+            <Button variant="primary" size="sm" loading={save.isPending} onClick={() => save.mutate()}>
               <Save className="h-4 w-4" /> Save settings
             </Button>
           ) : null

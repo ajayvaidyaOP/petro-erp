@@ -106,8 +106,8 @@ interface PriceRow {
 
 const MODE_LABELS: Record<string, string> = {
   CASH: 'Cash',
-  UPI: 'UPI',
-  CARD: 'Card',
+  UPI: 'UPI / QR',
+  CARD: 'Card POS',
   BANK: 'Bank / NEFT',
   CREDIT: 'Fleet Credit',
 };
@@ -125,6 +125,7 @@ export default function Dashboard() {
   const { stations, station, stationId } = useStations();
   const [date, setDate] = useState(todayIst());
   const [days, setDays] = useState(7);
+  const [chartMetric, setChartMetric] = useState<'value' | 'litres'>('value');
   const [compare, setCompare] = useState(false);
   const chart = useChartPalette();
 
@@ -255,121 +256,128 @@ export default function Dashboard() {
     },
   ];
 
+  const activeStroke = chartMetric === 'value' ? chart.accent : chart.teal;
+
   return (
     <>
-      {/* Operational Command Header */}
-      <div className="mb-5 flex flex-wrap items-end justify-between gap-4 border-b border-navy-700/65 pb-4">
-        <div className="min-w-0">
-          <div className="mb-1.5 flex flex-wrap items-center gap-2 text-xs text-ink-400">
-            <span className="rounded border border-accent/25 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] font-bold text-accent">
-              {station?.code ?? data.station.code}
-            </span>
-            <span className="font-semibold text-ink-200">{station?.name ?? data.station.name}</span>
-            <span className="text-ink-600">·</span>
-            <span className="num text-ink-400">{formatDate(date)}</span>
-          </div>
+      {/* Hero Forecourt Command Banner */}
+      <div className="card hero-mesh relative mb-5 overflow-hidden p-4 sm:p-6">
+        <span aria-hidden className="brand-gradient absolute inset-x-0 top-0 h-[2.5px] opacity-90" />
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="min-w-0">
+            <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-ink-400">
+              <span className="rounded-md border border-accent/25 bg-accent/10 px-2 py-0.5 font-mono text-[10.5px] font-bold text-accent">
+                {station?.code ?? data.station.code}
+              </span>
+              <span className="font-semibold text-ink-200">{station?.name ?? data.station.name}</span>
+              <span className="text-ink-600">·</span>
+              <span className="num font-medium text-ink-400">{formatDate(date)}</span>
+            </div>
 
-          <h1 className="font-display text-2xl font-extrabold tracking-tight text-ink-100 sm:text-[28px]">
-            {greeting}, {firstName}
-            <span className="text-accent">.</span>
-          </h1>
+            <h1 className="font-display text-2xl font-extrabold tracking-[-0.032em] text-ink-100 sm:text-[30px] sm:leading-9">
+              {greeting}, {firstName}
+              <span className="text-accent">.</span>
+            </h1>
 
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-ink-400">
-            <span className="inline-flex items-center gap-1.5 rounded-md border border-navy-700 bg-navy-900 px-2 py-0.5 font-medium text-ink-200">
-              <span
-                className={cn(
-                  'h-2 w-2 rounded-full',
-                  openShift ? 'bg-ok shadow-[0_0_0_3px_rgb(var(--ok)/0.16)]' : 'bg-ink-600',
+            <div className="mt-2.5 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-xs text-ink-400">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-navy-700/85 bg-navy-900/90 px-2.5 py-1 font-semibold text-ink-200 shadow-sheen">
+                <span
+                  className={cn(
+                    'h-2 w-2 rounded-full',
+                    openShift ? 'animate-pulse-soft bg-ok shadow-[0_0_0_3px_rgb(var(--ok)/0.18)]' : 'bg-ink-600',
+                  )}
+                  aria-hidden
+                />
+                {openShift ? (
+                  <>
+                    Shift #{String(openShift.shiftNumber)} open
+                    {openShift.operatorName ? (
+                      <span className="font-medium text-ink-500"> · {String(openShift.operatorName)}</span>
+                    ) : null}
+                  </>
+                ) : (
+                  'No shift open'
                 )}
-                aria-hidden
-              />
-              {openShift ? (
-                <>
-                  Shift #{String(openShift.shiftNumber)} open
-                  {openShift.operatorName ? (
-                    <span className="text-ink-500"> · {String(openShift.operatorName)}</span>
-                  ) : null}
-                </>
-              ) : (
-                'No shift open'
+              </span>
+              {data.flaggedShifts > 0 && (
+                <Link to="/shifts">
+                  <Badge tone="warning" dot>
+                    {data.flaggedShifts} flagged {data.flaggedShifts === 1 ? 'shift' : 'shifts'}
+                  </Badge>
+                </Link>
               )}
-            </span>
-            {data.flaggedShifts > 0 && (
-              <Link to="/shifts">
-                <Badge tone="warning" dot>
-                  {data.flaggedShifts} flagged {data.flaggedShifts === 1 ? 'shift' : 'shifts'}
-                </Badge>
-              </Link>
-            )}
-            <span className="num text-[11px] text-ink-500">
-              Synced {formatClockTime(dashboard.dataUpdatedAt)} IST
-            </span>
+              <span className="num text-[11px] font-medium text-ink-500">
+                Synced {formatClockTime(dashboard.dataUpdatedAt)} IST
+              </span>
+            </div>
           </div>
-        </div>
 
-        <div className="flex flex-wrap items-center gap-2 max-sm:w-full">
-          {me?.user.roleKey === 'OWNER' && stations.length > 1 && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setCompare(true)}
-              icon={<Store className="h-3.5 w-3.5" />}
-            >
-              Compare both pumps
-            </Button>
-          )}
-          <Input
-            type="date"
-            aria-label="Business date"
-            value={date}
-            max={todayIst()}
-            onChange={(event) => {
-              if (event.target.value) setDate(event.target.value);
-            }}
-            className="h-9.5 w-auto text-xs"
-          />
-          <Link to={openShift ? '/shifts' : '/shifts?new=shift'}>
-            <Button
-              size="sm"
-              variant="primary"
-              className="h-9.5 px-3.5"
-              icon={openShift ? <ArrowUpRight className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-            >
-              {openShift ? 'Manage shift' : 'Open shift'}
-            </Button>
-          </Link>
+          <div className="flex flex-wrap items-center gap-2 max-sm:w-full">
+            {me?.user.roleKey === 'OWNER' && stations.length > 1 && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setCompare(true)}
+                icon={<Store className="h-3.5 w-3.5" />}
+              >
+                Compare both pumps
+              </Button>
+            )}
+            <Input
+              type="date"
+              aria-label="Business date"
+              value={date}
+              max={todayIst()}
+              onChange={(event) => {
+                if (event.target.value) setDate(event.target.value);
+              }}
+              className="h-9.5 w-auto text-xs"
+            />
+            <Link to={openShift ? '/shifts' : '/shifts?new=shift'}>
+              <Button
+                size="sm"
+                variant="primary"
+                className="h-9.5 px-4"
+                icon={openShift ? <ArrowUpRight className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              >
+                {openShift ? 'Manage shift' : 'Open shift'}
+              </Button>
+            </Link>
+          </div>
         </div>
       </div>
 
-      {/* Forecourt Rate Board */}
+      {/* Digital Forecourt Rate Totem */}
       {rates.length > 0 && (
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-navy-700/80 bg-navy-900/75 px-4 py-2.5 shadow-card">
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-ink-500">
-              <Tags className="h-3.5 w-3.5 text-accent" aria-hidden />
-              Forecourt rates
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-navy-700/80 bg-navy-850 px-4 py-3 shadow-card">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3.5">
+            <span className="inline-flex items-center gap-1.5 rounded-lg bg-accent/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.13em] text-accent">
+              <Tags className="h-3.5 w-3.5" aria-hidden />
+              Live Rates
             </span>
             {rates.map((rate) => {
               const matchingTank = data.stock.find((t) => t.productName === rate.productName);
+              const dotColor = matchingTank?.productColor ?? 'rgb(var(--accent))';
               return (
-                <div key={rate.id} className="flex items-baseline gap-2">
-                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-ink-300">
-                    <span
-                      className="h-2 w-2 rounded-full"
-                      style={{ backgroundColor: matchingTank?.productColor ?? 'rgb(var(--accent))' }}
-                      aria-hidden
-                    />
-                    {rate.productName}
-                  </span>
+                <div
+                  key={rate.id}
+                  className="inline-flex items-center gap-2 rounded-xl border border-navy-700/75 bg-navy-800/55 px-3 py-1.5"
+                >
+                  <span
+                    className="h-2.5 w-2.5 rounded-full shadow-sm"
+                    style={{ backgroundColor: dotColor }}
+                    aria-hidden
+                  />
+                  <span className="text-xs font-semibold text-ink-300">{rate.productName}</span>
                   <span className="num font-display text-sm font-extrabold text-ink-100">
                     {formatINR(rate.ratePerLitre)}
-                    <span className="ml-0.5 font-sans text-[10px] font-normal text-ink-500">/L</span>
+                    <span className="ml-0.5 font-sans text-[10px] font-medium text-ink-500">/L</span>
                   </span>
                 </div>
               );
             })}
           </div>
-          <Link to="/products" className="text-xs font-semibold text-accent hover:text-accent-soft">
+          <Link to="/products" className="link text-xs">
             {can('prices.write') ? 'Update prices →' : 'Price history →'}
           </Link>
         </div>
@@ -416,24 +424,26 @@ export default function Dashboard() {
 
       {/* Quick Operational Workflows */}
       <section className="mt-6" aria-labelledby="quick-actions-title">
-        <div className="mb-2.5 flex items-center justify-between">
-          <h2 id="quick-actions-title" className="text-xs font-bold uppercase tracking-[0.1em] text-ink-400">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 id="quick-actions-title" className="text-[11px] font-bold uppercase tracking-[0.12em] text-ink-400">
             Quick workflows
           </h2>
-          <span className="text-[11px] text-ink-500">Direct operational entry</span>
+          <span className="text-[11px] font-medium text-ink-500">Direct forecourt entry</span>
         </div>
         <div className="grid grid-cols-1 gap-3 min-[440px]:grid-cols-2 xl:grid-cols-4">
           {actions.map((action) => (
             <Link key={action.to} to={action.to} className="quick-action group">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-accent/25 bg-accent/10 text-accent transition group-hover:bg-accent group-hover:text-onaccent">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-accent/25 bg-accent/10 text-accent shadow-sheen transition-all duration-200 group-hover:scale-105 group-hover:bg-accent group-hover:text-onaccent">
                 {action.icon}
               </span>
               <span className="min-w-0">
-                <span className="block text-[13px] font-bold text-ink-100">{action.label}</span>
+                <span className="block font-display text-[13.5px] font-bold tracking-tight text-ink-100">
+                  {action.label}
+                </span>
                 <span className="mt-0.5 block text-xs text-ink-500">{action.detail}</span>
               </span>
               <ChevronRight
-                className="ml-auto h-4 w-4 shrink-0 text-ink-500 transition group-hover:translate-x-0.5 group-hover:text-accent"
+                className="ml-auto h-4 w-4 shrink-0 text-ink-500 transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-accent"
                 aria-hidden
               />
             </Link>
@@ -441,64 +451,90 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* Primary Analytics & Underground Tank Telemetry */}
-      <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,1fr)]">
+      {/* Primary Analytics & Underground Tank Silo Telemetry */}
+      <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(330px,1fr)]">
         <Card className="flex flex-col">
           <CardHeader
             title="Sales & volume trend"
-            subtitle="Daily estimated sales derived from closed and flagged shift totalizers"
+            subtitle="Daily estimated performance derived from shift totalizers"
             action={
-              <div
-                className="flex rounded-lg border border-navy-700/80 bg-navy-800/75 p-0.5"
-                aria-label="Chart period"
-              >
-                {[7, 14].map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setDays(value)}
-                    aria-pressed={days === value}
-                    className={cn(
-                      'min-h-7 rounded-md px-2.5 text-[11px] font-semibold transition',
-                      days === value
-                        ? 'bg-navy-900 text-accent shadow-sm'
-                        : 'text-ink-500 hover:text-ink-200',
-                    )}
-                  >
-                    {value} days
-                  </button>
-                ))}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <div
+                  className="flex rounded-xl border border-navy-700/80 bg-navy-800/75 p-0.5"
+                  aria-label="Chart metric"
+                >
+                  {[
+                    { key: 'value' as const, label: 'Revenue' },
+                    { key: 'litres' as const, label: 'Litres' },
+                  ].map((m) => (
+                    <button
+                      key={m.key}
+                      type="button"
+                      onClick={() => setChartMetric(m.key)}
+                      aria-pressed={chartMetric === m.key}
+                      className={cn(
+                        'min-h-7 rounded-lg px-2.5 text-[11px] font-semibold transition',
+                        chartMetric === m.key
+                          ? 'bg-navy-900 text-ink-100 shadow-sm'
+                          : 'text-ink-500 hover:text-ink-200',
+                      )}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+                <div
+                  className="flex rounded-xl border border-navy-700/80 bg-navy-800/75 p-0.5"
+                  aria-label="Chart period"
+                >
+                  {[7, 14].map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setDays(value)}
+                      aria-pressed={days === value}
+                      className={cn(
+                        'min-h-7 rounded-lg px-2.5 text-[11px] font-semibold transition',
+                        days === value
+                          ? 'bg-navy-900 text-accent shadow-sm'
+                          : 'text-ink-500 hover:text-ink-200',
+                      )}
+                    >
+                      {value}d
+                    </button>
+                  ))}
+                </div>
               </div>
             }
           />
           <CardBody className="flex flex-1 flex-col">
-            <div className="mb-4 grid grid-cols-3 gap-2 rounded-lg border border-navy-700/70 bg-navy-900/60 p-3">
+            <div className="mb-4 grid grid-cols-3 gap-2.5 rounded-2xl border border-navy-700/70 bg-navy-800/45 p-3.5">
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">
-                  {days}d Total
+                <p className="text-[10px] font-bold uppercase tracking-wider text-ink-500">
+                  {days}d Revenue
                 </p>
-                <p className="num mt-0.5 font-display text-sm font-bold text-ink-100 sm:text-base">
+                <p className="num mt-0.5 font-display text-sm font-extrabold text-ink-100 sm:text-base">
                   {formatINR(periodStats.totalVal, true)}
                 </p>
               </div>
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">Daily Avg</p>
-                <p className="num mt-0.5 font-display text-sm font-bold text-ink-100 sm:text-base">
+              <div className="border-x border-navy-700/60 px-2.5">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-ink-500">Daily Avg</p>
+                <p className="num mt-0.5 font-display text-sm font-extrabold text-ink-100 sm:text-base">
                   {formatINR(periodStats.avgVal, true)}
                 </p>
               </div>
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">
+              <div className="pl-1">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-ink-500">
                   {days}d Volume
                 </p>
-                <p className="num mt-0.5 font-display text-sm font-bold text-accent sm:text-base">
+                <p className="num mt-0.5 font-display text-sm font-extrabold text-accent sm:text-base">
                   {formatLitres(periodStats.totalLitres)}
                 </p>
               </div>
             </div>
 
             <div
-              className="h-[235px] w-full flex-1"
+              className="h-[240px] w-full flex-1"
               role="img"
               aria-label={`${days}-day estimated sales chart. ${trend.map((row) => `${row.date}: ${formatINR(row.value)}`).join('; ')}`}
             >
@@ -506,8 +542,8 @@ export default function Dashboard() {
                 <AreaChart data={trend} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
                   <defs>
                     <linearGradient id="salesFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={chart.accent} stopOpacity={0.22} />
-                      <stop offset="100%" stopColor={chart.accent} stopOpacity={0.01} />
+                      <stop offset="0%" stopColor={activeStroke} stopOpacity={0.26} />
+                      <stop offset="100%" stopColor={activeStroke} stopOpacity={0.01} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 4" stroke={chart.grid} vertical={false} />
@@ -524,29 +560,40 @@ export default function Dashboard() {
                     axisLine={false}
                     tickLine={false}
                     tickFormatter={(value) =>
-                      `₹${Number(value) >= 100000 ? `${(value / 100000).toFixed(1)}L` : `${Math.round(value / 1000)}k`}`
+                      chartMetric === 'value'
+                        ? `₹${Number(value) >= 100000 ? `${(value / 100000).toFixed(1)}L` : `${Math.round(value / 1000)}k`}`
+                        : `${Number(value) >= 1000 ? `${(value / 1000).toFixed(1)}k` : Math.round(value)}L`
                     }
                   />
                   <Tooltip
                     contentStyle={{
                       background: chart.tooltipBg,
                       border: `1px solid ${chart.tooltipBorder}`,
-                      borderRadius: 10,
+                      borderRadius: 12,
                       fontSize: 12,
-                      boxShadow: '0 10px 28px rgb(0 0 0 / 0.16)',
+                      boxShadow: '0 14px 34px rgb(0 0 0 / 0.18)',
                     }}
                     labelStyle={{ color: chart.tooltipLabel, fontWeight: 700, marginBottom: 4 }}
-                    formatter={(value: number, _name, item) => [
-                      `${formatINR(value)} (${formatLitres((item?.payload as { litres?: number })?.litres ?? 0)})`,
-                      'Est. sales',
-                    ]}
+                    formatter={(value: number, _name, item) => {
+                      const payload = item?.payload as { litres?: number; value?: number } | undefined;
+                      if (chartMetric === 'litres') {
+                        return [
+                          `${formatLitres(value)} (${formatINR(payload?.value ?? 0)})`,
+                          'Dispensed',
+                        ];
+                      }
+                      return [
+                        `${formatINR(value)} (${formatLitres(payload?.litres ?? 0)})`,
+                        'Est. sales',
+                      ];
+                    }}
                   />
                   <Area
                     type="monotone"
-                    dataKey="value"
-                    stroke={chart.accent}
+                    dataKey={chartMetric}
+                    stroke={activeStroke}
                     fill="url(#salesFill)"
-                    strokeWidth={2.4}
+                    strokeWidth={2.5}
                     dot={false}
                     activeDot={{ r: 5, strokeWidth: 2.5, stroke: chart.tooltipBg }}
                   />
@@ -554,32 +601,32 @@ export default function Dashboard() {
               </ResponsiveContainer>
             </div>
 
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-navy-700/70 pt-3.5">
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-navy-700/65 pt-3.5">
               <span className="text-xs text-ink-500">
                 Selected date recorded tx:{' '}
                 <strong className="num ml-1 font-semibold text-ink-100">
                   {formatINR(data.sales.transactionValue)}
                 </strong>
               </span>
-              <Link to="/reports" className="inline-flex items-center gap-1 text-xs font-semibold text-accent hover:text-accent-soft">
+              <Link to="/reports" className="link text-xs">
                 Open Daily Sales Report <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
               </Link>
             </div>
           </CardBody>
         </Card>
 
-        {/* Underground Tank Telemetry */}
+        {/* Underground Tank Silo Telemetry */}
         <Card className="flex flex-col">
           <CardHeader
             title="Underground tank stock"
-            subtitle="Ledger book stock, capacity & safe ullage"
+            subtitle="Book stock, silo level & safe ullage"
             action={
               <Link to="/tanks" className="link text-xs">
                 Tank ledger →
               </Link>
             }
           />
-          <CardBody className="flex-1 space-y-3.5">
+          <CardBody className="flex-1 space-y-3">
             {data.stock.length === 0 ? (
               <EmptyState title="No tanks yet" description="Add a tank in Settings to start tracking stock." />
             ) : (
@@ -588,43 +635,68 @@ export default function Dashboard() {
                 const ullage = Math.max(0, Number(tank.capacityLitres) - Number(tank.bookStockLitres));
                 const isLow = fill < 15;
                 const isWatch = !isLow && fill < 25;
+                const liquidColor = isLow
+                  ? 'rgb(var(--danger))'
+                  : isWatch
+                    ? 'rgb(var(--warn))'
+                    : tank.productColor || 'rgb(var(--accent))';
                 return (
                   <div
                     key={tank.id}
-                    className="rounded-lg border border-navy-700/75 bg-navy-900/55 p-3.5"
+                    className="flex items-center gap-3.5 rounded-2xl border border-navy-700/75 bg-navy-800/40 p-3.5 transition hover:border-navy-600"
                   >
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span
-                          className="h-2.5 w-2.5 shrink-0 rounded-full"
-                          style={{ backgroundColor: tank.productColor || 'rgb(var(--accent))' }}
-                          aria-hidden
-                        />
-                        <span className="truncate text-xs font-bold text-ink-100">{tank.productName}</span>
-                        <span className="rounded border border-navy-700 bg-navy-800 px-1.5 py-0.5 font-mono text-[10px] font-medium text-ink-400">
-                          {tank.code}
-                        </span>
+                    {/* Visual Vertical Tank Silo */}
+                    <div
+                      aria-hidden
+                      className="relative h-14 w-9 shrink-0 overflow-hidden rounded-xl border border-navy-600/80 bg-inset shadow-inner"
+                    >
+                      <div
+                        className="absolute inset-x-0 bottom-0 transition-all duration-500"
+                        style={{
+                          height: `${Math.max(6, fill)}%`,
+                          backgroundColor: liquidColor,
+                          opacity: 0.85,
+                        }}
+                      >
+                        <div className="h-[2px] w-full bg-white/45" />
                       </div>
-                      <Badge tone={isLow ? 'danger' : isWatch ? 'warning' : 'success'} dot>
-                        {isLow ? 'Low stock' : isWatch ? 'Reorder' : `${formatNumber(fill, 0)}%`}
-                      </Badge>
+                      <span className="relative z-[1] grid h-full place-items-center font-mono text-[9.5px] font-extrabold text-ink-100 drop-shadow-[0_1px_2px_rgb(0_0_0/0.35)]">
+                        {formatNumber(fill, 0)}%
+                      </span>
                     </div>
 
-                    <MeterBar
-                      value={fill}
-                      tone={isLow ? 'danger' : isWatch ? 'warn' : 'accent'}
-                      color={!isLow && !isWatch ? tank.productColor : undefined}
-                      label={`${tank.productName} tank fill`}
-                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-1.5 flex items-center justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          <span className="truncate font-display text-xs font-bold text-ink-100">
+                            {tank.productName}
+                          </span>
+                          <span className="rounded border border-navy-700 bg-navy-900 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-ink-400">
+                            {tank.code}
+                          </span>
+                        </div>
+                        <Badge tone={isLow ? 'danger' : isWatch ? 'warning' : 'success'} dot>
+                          {isLow ? 'Low' : isWatch ? 'Reorder' : 'Optimal'}
+                        </Badge>
+                      </div>
 
-                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-ink-500">
-                      <span className="num">
-                        <strong className="font-semibold text-ink-100">
-                          {formatLitres(tank.bookStockLitres)}
-                        </strong>{' '}
-                        / {formatLitres(tank.capacityLitres)}
-                      </span>
-                      <span className="num">Ullage {formatNumber(ullage, 0)} L</span>
+                      <MeterBar
+                        value={fill}
+                        tone={isLow ? 'danger' : isWatch ? 'warn' : 'accent'}
+                        color={!isLow && !isWatch ? tank.productColor : undefined}
+                        height="sm"
+                        label={`${tank.productName} tank fill`}
+                      />
+
+                      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 text-[11px] text-ink-500">
+                        <span className="num">
+                          <strong className="font-semibold text-ink-100">
+                            {formatLitres(tank.bookStockLitres)}
+                          </strong>{' '}
+                          / {formatLitres(tank.capacityLitres)}
+                        </span>
+                        <span className="num font-medium">Ullage {formatNumber(ullage, 0)} L</span>
+                      </div>
                     </div>
                   </div>
                 );
@@ -651,10 +723,10 @@ export default function Dashboard() {
             {openShift ? (
               <>
                 <div>
-                  <div className="flex items-center justify-between gap-2 rounded-lg border border-navy-700/75 bg-navy-900/60 p-3">
-                    <div className="flex items-center gap-2.5">
-                      <span className="grid h-9 w-9 place-items-center rounded-lg border border-accent/25 bg-accent/10 text-accent">
-                        <ListChecks className="h-4 w-4" />
+                  <div className="hero-mesh flex items-center justify-between gap-2 rounded-2xl border border-navy-700/75 bg-navy-800/45 p-3.5">
+                    <div className="flex items-center gap-3">
+                      <span className="grid h-10 w-10 place-items-center rounded-xl border border-accent/25 bg-accent/10 text-accent shadow-sheen">
+                        <ListChecks className="h-4.5 w-4.5" />
                       </span>
                       <div>
                         <p className="font-display text-sm font-bold text-ink-100">
@@ -668,18 +740,18 @@ export default function Dashboard() {
                     <StatusBadge status="OPEN" />
                   </div>
                   <p className="mt-3 text-xs text-ink-400">
-                    Opened <span className="num text-ink-200">{formatDateTime(String(openShift.openedAt))}</span>
+                    Opened <span className="num font-medium text-ink-200">{formatDateTime(String(openShift.openedAt))}</span>
                   </p>
                   <div className="mt-3 grid grid-cols-2 gap-2">
                     <Link
                       to="/readings"
-                      className="flex items-center gap-1.5 rounded-lg border border-navy-700/75 bg-navy-900/50 px-2.5 py-2 text-xs font-medium text-ink-300 transition hover:border-accent/40 hover:text-ink-100"
+                      className="flex items-center gap-2 rounded-xl border border-navy-700/80 bg-navy-800/40 px-3 py-2 text-xs font-semibold text-ink-300 transition hover:border-accent/45 hover:bg-navy-800 hover:text-ink-100"
                     >
                       <Gauge className="h-3.5 w-3.5 text-accent" aria-hidden /> Meter readings
                     </Link>
                     <Link
                       to="/density"
-                      className="flex items-center gap-1.5 rounded-lg border border-navy-700/75 bg-navy-900/50 px-2.5 py-2 text-xs font-medium text-ink-300 transition hover:border-accent/40 hover:text-ink-100"
+                      className="flex items-center gap-2 rounded-xl border border-navy-700/80 bg-navy-800/40 px-3 py-2 text-xs font-semibold text-ink-300 transition hover:border-accent/45 hover:bg-navy-800 hover:text-ink-100"
                     >
                       <Thermometer className="h-3.5 w-3.5 text-accent" aria-hidden /> Density check
                     </Link>
@@ -687,18 +759,18 @@ export default function Dashboard() {
                 </div>
                 <Link
                   to="/shifts"
-                  className="mt-4 flex min-h-10 items-center justify-center gap-2 rounded-lg border border-accent/30 bg-accent/10 text-xs font-semibold text-accent transition hover:bg-accent/16"
+                  className="mt-4 flex min-h-10 items-center justify-center gap-2 rounded-xl border border-accent/30 bg-accent/10 text-xs font-bold text-accent transition hover:bg-accent/16"
                 >
                   Continue shift &amp; settle <ArrowRight className="h-3.5 w-3.5" aria-hidden />
                 </Link>
               </>
             ) : (
-              <div className="flex flex-1 flex-col items-center justify-center py-5 text-center">
-                <span className="grid h-10 w-10 place-items-center rounded-xl border border-navy-700 bg-navy-800/70 text-accent">
+              <div className="flex flex-1 flex-col items-center justify-center py-6 text-center">
+                <span className="grid h-11 w-11 place-items-center rounded-2xl border border-accent/20 bg-accent/10 text-accent">
                   <CheckCircle2 className="h-5 w-5" />
                 </span>
-                <p className="mt-2.5 font-display text-sm font-bold text-ink-100">No shift currently open</p>
-                <p className="mt-1 max-w-xs text-xs text-ink-500">
+                <p className="mt-3 font-display text-sm font-bold text-ink-100">No shift currently open</p>
+                <p className="mt-1 max-w-xs text-xs leading-relaxed text-ink-400">
                   Open a shift to capture nozzle opening totalizers for the incoming crew.
                 </p>
                 <Link to="/shifts?new=shift" className="mt-4">
@@ -749,22 +821,22 @@ export default function Dashboard() {
                   <Link
                     key={alert.id}
                     to={alert.to}
-                    className={cn('group flex items-start gap-2.5 rounded-lg border p-2.5 transition', rowStyle)}
+                    className={cn('group flex items-start gap-2.5 rounded-xl border p-3 transition', rowStyle)}
                   >
                     {body}
                   </Link>
                 ) : (
-                  <div key={alert.id} className={cn('flex items-start gap-2.5 rounded-lg border p-2.5', rowStyle)}>
+                  <div key={alert.id} className={cn('flex items-start gap-2.5 rounded-xl border p-3', rowStyle)}>
                     {body}
                   </div>
                 );
               })
             ) : (
               <div className="flex h-full flex-col items-center justify-center py-6 text-center">
-                <span className="grid h-10 w-10 place-items-center rounded-xl border border-ok/25 bg-ok/10 text-ok">
+                <span className="grid h-11 w-11 place-items-center rounded-2xl border border-ok/25 bg-ok/10 text-ok">
                   <CheckCircle2 className="h-5 w-5" />
                 </span>
-                <p className="mt-2.5 text-xs font-semibold text-ink-100">All checks passing</p>
+                <p className="mt-3 font-display text-xs font-bold text-ink-100">All checks passing</p>
                 <p className="mt-0.5 text-[11px] text-ink-500">Nothing requires immediate intervention.</p>
               </div>
             )}
@@ -784,34 +856,38 @@ export default function Dashboard() {
           />
           <CardBody className="flex flex-1 flex-col justify-between">
             {paymentTotal > 0 ? (
-              <div className="space-y-3.5">
-                {/* Stacked distribution bar */}
-                <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-navy-800 ring-1 ring-inset ring-navy-700/60">
+              <div className="space-y-4">
+                <div className="flex h-3 w-full gap-0.5 overflow-hidden rounded-full bg-navy-800 p-0.5 ring-1 ring-inset ring-navy-700/65">
                   {paymentEntries.map(([mode, amount]) => (
                     <div
                       key={mode}
-                      className={cn('h-full', MODE_COLORS[mode] ?? 'bg-accent')}
+                      className={cn('h-full rounded-full transition-all duration-300', MODE_COLORS[mode] ?? 'bg-accent')}
                       style={{ width: `${(Number(amount) / paymentTotal) * 100}%` }}
                       title={`${MODE_LABELS[mode] ?? mode}: ${formatINR(amount)}`}
                     />
                   ))}
                 </div>
 
-                <div className="space-y-2.5">
+                <div className="space-y-2">
                   {paymentEntries.map(([mode, amount]) => {
                     const share = (Number(amount) / paymentTotal) * 100;
                     return (
-                      <div key={mode} className="flex items-center justify-between text-xs">
-                        <span className="inline-flex items-center gap-2 text-ink-300">
+                      <div
+                        key={mode}
+                        className="flex items-center justify-between rounded-xl border border-navy-700/55 bg-navy-800/35 px-3 py-2 text-xs"
+                      >
+                        <span className="inline-flex items-center gap-2 font-medium text-ink-200">
                           <span
-                            className={cn('h-2 w-2 rounded-full', MODE_COLORS[mode] ?? 'bg-accent')}
+                            className={cn('h-2.5 w-2.5 rounded-full', MODE_COLORS[mode] ?? 'bg-accent')}
                             aria-hidden
                           />
                           {MODE_LABELS[mode] ?? mode}
                         </span>
-                        <span className="num">
-                          <span className="mr-2 text-[11px] text-ink-500">{formatNumber(share, 0)}%</span>
-                          <strong className="font-semibold text-ink-100">{formatINR(amount)}</strong>
+                        <span className="num flex items-center gap-2">
+                          <span className="rounded bg-navy-800 px-1.5 py-0.5 text-[10px] font-semibold text-ink-400">
+                            {formatNumber(share, 0)}%
+                          </span>
+                          <strong className="font-bold text-ink-100">{formatINR(amount)}</strong>
                         </span>
                       </div>
                     );
@@ -820,25 +896,27 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="flex flex-1 flex-col items-center justify-center py-6 text-center">
-                <Droplets className="h-6 w-6 text-ink-500" aria-hidden />
-                <p className="mt-2 text-xs font-medium text-ink-300">No transaction-level sales on this date</p>
-                <p className="mt-0.5 text-[11px] text-ink-500">
+                <span className="grid h-10 w-10 place-items-center rounded-2xl border border-navy-700 bg-navy-800/60 text-ink-500">
+                  <Droplets className="h-5 w-5" aria-hidden />
+                </span>
+                <p className="mt-2.5 text-xs font-semibold text-ink-300">No transaction-level sales on this date</p>
+                <p className="mt-0.5 max-w-xs text-[11px] leading-relaxed text-ink-500">
                   Totalizer shifts capture aggregate volume; mode splits come from settlements &amp; credit slips.
                 </p>
               </div>
             )}
 
-            <div className="mt-4 flex items-center justify-between border-t border-navy-700/70 pt-3 text-xs">
-              <span className="text-ink-500">Recorded total</span>
-              <span className="num font-bold text-ink-100">{formatINR(paymentTotal)}</span>
+            <div className="mt-4 flex items-center justify-between border-t border-navy-700/65 pt-3 text-xs">
+              <span className="font-medium text-ink-500">Recorded total</span>
+              <span className="num font-display text-sm font-extrabold text-ink-100">{formatINR(paymentTotal)}</span>
             </div>
           </CardBody>
         </Card>
       </div>
 
-      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-navy-700/60 bg-navy-900/40 px-4 py-2.5 text-[11px] text-ink-500">
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-navy-700/65 bg-navy-850/70 px-4 py-3 text-[11px] text-ink-500 shadow-sheen">
         <p>{data.disclaimer} Tank levels reflect ledger book stock.</p>
-        <span className="num shrink-0 font-medium text-ink-400">
+        <span className="num shrink-0 font-semibold text-ink-400">
           {lowStock.length ? `${lowStock.length} tanks below 15%` : `${data.stock.length} underground tanks monitored`}
         </span>
       </div>
@@ -871,7 +949,10 @@ function MetricCard({
     />
   );
   return to ? (
-    <Link to={to} className="block rounded-xl transition hover:-translate-y-0.5 [&>.card]:hover:border-accent/45 [&>.card]:hover:shadow-pop">
+    <Link
+      to={to}
+      className="block rounded-2xl transition-all duration-200 ease-smooth hover:-translate-y-0.5 [&>.card]:hover:border-accent/45 [&>.card]:hover:shadow-card-hover"
+    >
       {card}
     </Link>
   ) : (
@@ -933,30 +1014,33 @@ function CombinedDashboard({
 
   return (
     <>
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4 border-b border-navy-700/65 pb-4">
-        <div>
-          <p className="eyebrow mb-1 text-accent">Multi-Outlet Executive Overview</p>
-          <h1 className="font-display text-2xl font-extrabold tracking-tight text-ink-100 sm:text-[28px]">
-            Both pumps. One clear picture.
-          </h1>
-          <p className="mt-1 text-xs text-ink-400 sm:text-sm">
-            Side-by-side forecourt sales, tank positions and cash settlement for {formatDate(date)}.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Input
-            type="date"
-            aria-label="Business date"
-            value={date}
-            max={todayIst()}
-            onChange={(event) => {
-              if (event.target.value) setDate(event.target.value);
-            }}
-            className="h-9.5 w-auto text-xs"
-          />
-          <Button size="sm" onClick={onBack} variant="outline" className="h-9.5">
-            Single pump
-          </Button>
+      <div className="card hero-mesh relative mb-6 overflow-hidden p-5 sm:p-6">
+        <span aria-hidden className="brand-gradient absolute inset-x-0 top-0 h-[2.5px] opacity-90" />
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="eyebrow mb-1.5 text-accent">Multi-Outlet Executive Overview</p>
+            <h1 className="font-display text-2xl font-extrabold tracking-[-0.03em] text-ink-100 sm:text-[28px]">
+              Both pumps. One clear picture.
+            </h1>
+            <p className="mt-1 text-xs text-ink-400 sm:text-sm">
+              Side-by-side forecourt sales, tank positions and cash settlement for {formatDate(date)}.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              type="date"
+              aria-label="Business date"
+              value={date}
+              max={todayIst()}
+              onChange={(event) => {
+                if (event.target.value) setDate(event.target.value);
+              }}
+              className="h-9.5 w-auto text-xs"
+            />
+            <Button size="sm" onClick={onBack} variant="outline" className="h-9.5">
+              Single pump
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -988,9 +1072,21 @@ function CombinedDashboard({
           <CardHeader
             title="Outlet sales comparison"
             subtitle="Selected business date vs month-to-date performance (INR)"
+            action={
+              <div className="flex items-center gap-3 text-xs text-ink-400">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: chart.accent }} />
+                  Selected date
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: chart.secondary }} />
+                  Month to date
+                </span>
+              </div>
+            }
           />
           <CardBody>
-            <div className="h-[190px] w-full">
+            <div className="h-[195px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartRows} margin={{ top: 8, right: 12, bottom: 0, left: -10 }}>
                   <CartesianGrid strokeDasharray="3 4" stroke={chart.grid} vertical={false} />
@@ -1007,7 +1103,7 @@ function CombinedDashboard({
                     contentStyle={{
                       background: chart.tooltipBg,
                       border: `1px solid ${chart.tooltipBorder}`,
-                      borderRadius: 10,
+                      borderRadius: 12,
                       fontSize: 12,
                     }}
                     formatter={(value: number, key: string) => [
@@ -1039,21 +1135,21 @@ function CombinedDashboard({
                 }
               />
               <CardBody className="flex flex-1 flex-col justify-between space-y-4">
-                <div className="grid grid-cols-2 gap-3 rounded-lg border border-navy-700/75 bg-navy-900/55 p-3.5 sm:grid-cols-3">
+                <div className="grid grid-cols-2 gap-3 rounded-2xl border border-navy-700/75 bg-navy-800/45 p-3.5 sm:grid-cols-3">
                   <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">Day sales</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-ink-500">Day sales</p>
                     <p className="num mt-0.5 font-display text-lg font-extrabold text-ink-100">
                       {formatINR(pump.value)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">Dispensed</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-ink-500">Dispensed</p>
                     <p className="num mt-0.5 font-display text-lg font-extrabold text-accent">
                       {formatLitres(pump.litres)}
                     </p>
                   </div>
                   <div className="col-span-2 sm:col-span-1">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">Cash variance</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-ink-500">Cash variance</p>
                     <p
                       className={cn(
                         'num mt-0.5 text-sm font-bold',
@@ -1076,7 +1172,7 @@ function CombinedDashboard({
                     return (
                       <div key={tank.id}>
                         <div className="mb-1 flex justify-between text-xs">
-                          <span className="font-medium text-ink-200">
+                          <span className="font-semibold text-ink-200">
                             {tank.code} · {tank.productName}
                           </span>
                           <span className="num text-ink-400">

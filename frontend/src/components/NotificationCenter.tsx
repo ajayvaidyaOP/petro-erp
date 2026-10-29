@@ -30,11 +30,6 @@ const levelStyle: Record<
   },
 };
 
-/**
- * Header notification centre. Lists live attention items for the selected pump
- * (the same data as the Overview "Needs attention" card). No fake read state:
- * an item clears automatically when the underlying operational condition is resolved.
- */
 export function NotificationCenter() {
   const { can, me } = useAuth();
   const { station, stationId } = useStations();
@@ -83,10 +78,10 @@ export function NotificationCenter() {
         aria-expanded={open}
         aria-label={count ? `Notifications, ${count} need attention` : 'Notifications, all clear'}
         className={cn(
-          'relative grid h-9.5 w-9.5 shrink-0 place-items-center rounded-lg border transition',
+          'relative grid h-9.5 w-9.5 shrink-0 place-items-center rounded-xl border shadow-sheen transition-all duration-150',
           open
-            ? 'border-accent/45 bg-accent/10 text-accent'
-            : 'border-navy-700/80 bg-navy-900 text-ink-400 hover:border-navy-600 hover:bg-navy-800 hover:text-ink-100',
+            ? 'border-accent/45 bg-accent/12 text-accent'
+            : 'border-navy-700/85 bg-navy-900 text-ink-400 hover:border-navy-600 hover:bg-navy-800 hover:text-ink-100',
         )}
       >
         <Bell className="h-[17px] w-[17px]" aria-hidden />
@@ -94,7 +89,7 @@ export function NotificationCenter() {
           <span
             aria-hidden
             className={cn(
-              'num absolute -right-1 -top-1 grid h-[18px] min-w-[18px] place-items-center rounded-full border-2 border-navy-900 px-1 text-[10px] font-bold leading-none text-white',
+              'num absolute -right-1 -top-1 grid h-[18px] min-w-[18px] place-items-center rounded-full border-2 border-navy-900 px-1 text-[10px] font-bold leading-none text-white shadow-sm',
               hasError ? 'bg-danger' : 'bg-warn',
             )}
           >
@@ -107,14 +102,14 @@ export function NotificationCenter() {
         <div
           role="dialog"
           aria-label="Notifications"
-          className="animate-scale-in absolute right-0 top-12 z-50 w-[min(384px,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-navy-700 bg-navy-850 shadow-pop"
+          className="animate-scale-in absolute right-0 top-12 z-50 w-[min(392px,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-navy-700/90 bg-navy-850 shadow-pop"
         >
-          <div className="flex items-start justify-between gap-3 border-b border-navy-700/80 bg-navy-900/60 px-4 py-3.5">
+          <div className="hero-mesh flex items-start justify-between gap-3 border-b border-navy-700/75 bg-navy-900/65 px-4 py-3.5">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <p className="font-display text-sm font-bold text-ink-100">Operational alerts</p>
                 {station?.code && (
-                  <span className="rounded border border-navy-700 bg-navy-800 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-ink-400">
+                  <span className="rounded-md border border-accent/25 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-accent">
                     {station.code}
                   </span>
                 )}
@@ -129,7 +124,7 @@ export function NotificationCenter() {
               type="button"
               onClick={() => attention.refetch()}
               aria-label="Refresh notifications"
-              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-navy-700/80 bg-navy-900 text-ink-400 transition hover:border-navy-600 hover:bg-navy-800 hover:text-ink-100"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-navy-700/80 bg-navy-900 text-ink-400 transition hover:border-navy-600 hover:bg-navy-800 hover:text-ink-100"
             >
               <RefreshCw className={cn('h-3.5 w-3.5', attention.isFetching && 'animate-spin')} aria-hidden />
             </button>
@@ -137,19 +132,19 @@ export function NotificationCenter() {
 
           <div className="max-h-[360px] overflow-y-auto scroll-thin">
             {attention.isLoading ? (
-              <p className="px-4 py-7 text-center text-xs text-ink-500">Checking outlet telemetry…</p>
+              <p className="px-4 py-8 text-center text-xs text-ink-500">Checking outlet telemetry…</p>
             ) : attention.isError ? (
-              <p className="px-4 py-7 text-center text-xs text-danger">Could not load notifications. Try refresh.</p>
+              <p className="px-4 py-8 text-center text-xs text-danger">Could not load notifications. Try refresh.</p>
             ) : count === 0 ? (
-              <div className="px-4 py-9 text-center">
-                <span className="mx-auto grid h-10 w-10 place-items-center rounded-xl border border-ok/25 bg-ok/10 text-ok">
+              <div className="px-4 py-10 text-center">
+                <span className="mx-auto grid h-11 w-11 place-items-center rounded-2xl border border-ok/25 bg-ok/10 text-ok">
                   <CheckCircle2 className="h-5 w-5" aria-hidden />
                 </span>
-                <p className="mt-2.5 text-xs font-semibold text-ink-100">All clear</p>
+                <p className="mt-3 font-display text-xs font-bold text-ink-100">All systems nominal</p>
                 <p className="mt-0.5 text-[11px] text-ink-500">No open shift, tank, device or compliance alerts.</p>
               </div>
             ) : (
-              <ul className="divide-y divide-navy-700/60">
+              <ul className="divide-y divide-navy-700/55">
                 {attention.items.map((item) => {
                   const style = levelStyle[item.level];
                   const Icon = style.icon;
@@ -157,7 +152,7 @@ export function NotificationCenter() {
                     <>
                       <span
                         className={cn(
-                          'mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg border',
+                          'mt-0.5 grid h-7.5 w-7.5 shrink-0 place-items-center rounded-xl border p-1.5',
                           style.badgeBg,
                         )}
                       >
@@ -182,12 +177,12 @@ export function NotificationCenter() {
                       {item.to ? (
                         <Link
                           to={item.to}
-                          className="group flex items-start gap-3 px-4 py-3 transition hover:bg-navy-800/70"
+                          className="group flex items-start gap-3 px-4 py-3.5 transition hover:bg-navy-800/70"
                         >
                           {body}
                         </Link>
                       ) : (
-                        <div className="flex items-start gap-3 px-4 py-3">{body}</div>
+                        <div className="flex items-start gap-3 px-4 py-3.5">{body}</div>
                       )}
                     </li>
                   );
@@ -196,7 +191,7 @@ export function NotificationCenter() {
             )}
           </div>
 
-          <div className="flex items-center justify-between border-t border-navy-700/75 bg-navy-900/50 px-4 py-2 text-[10px] text-ink-500">
+          <div className="flex items-center justify-between border-t border-navy-700/75 bg-navy-900/55 px-4 py-2.5 text-[10.5px] text-ink-500">
             <span>{updated ? `Synced ${timeAgo(updated)}` : 'Live status'}</span>
             <span>Auto-resolves when cleared</span>
           </div>

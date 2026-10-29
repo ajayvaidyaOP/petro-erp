@@ -180,7 +180,7 @@ export default function Subscriptions() {
         title="Subscriptions & Billing"
         description="Plans, tenant subscriptions and platform invoices. Subscription revenue is tracked separately from tenant fuel sales."
         actions={
-          <Button onClick={() => setPlanOpen(true)}>
+          <Button variant="primary" size="sm" onClick={() => setPlanOpen(true)}>
             <Plus className="h-4 w-4" /> New plan
           </Button>
         }

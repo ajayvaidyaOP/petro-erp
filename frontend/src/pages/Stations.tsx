@@ -92,7 +92,7 @@ export default function Stations() {
         description="Each station has its own tanks, dispensers, shifts, staff access and financial ledger. Data never crosses between stations or organizations."
         actions={
           can('stations.write') ? (
-            <Button onClick={() => setCreateOpen(true)}>
+            <Button variant="primary" size="sm" onClick={() => setCreateOpen(true)}>
               <Plus className="h-4 w-4" /> New station
             </Button>
           ) : null
