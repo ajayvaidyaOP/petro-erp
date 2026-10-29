@@ -21,7 +21,7 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     resolve: {
       alias: {
-        '@petroflow/shared': path.resolve(frontendRoot, '../backend/src/shared/index.ts'),
+        '@petroflow/shared': path.resolve(frontendRoot, './src/shared/index.ts'),
       },
     },
     server: {

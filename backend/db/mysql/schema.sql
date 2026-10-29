@@ -1,8 +1,6 @@
 -- ============================================================================
--- GENERATED FILE — do not edit by hand.
--- Produced by scripts/generate-mysql-ddl.mjs from db/schema.sql (the source of truth).
--- The application currently ships a SQLite adapter (node:sqlite); this DDL exists for a
--- future MySQL deployment and must be reviewed — see the header of the generator.
+-- PetroFlow ERP — Authoritative MySQL 8.0 Schema (Java 21 API)
+-- Applied idempotently at startup by in.petrolflow.Main.
 -- ============================================================================
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
@@ -32,7 +30,7 @@ CREATE TABLE IF NOT EXISTS `subscription_plans` (
   `description` TEXT,
   `monthly_price` VARCHAR(255) NOT NULL DEFAULT '0',
   `annual_price` VARCHAR(255) NOT NULL DEFAULT '0',
-  `max_stations` TINYINT(1) NOT NULL DEFAULT 1,
+  `max_stations` INT NOT NULL DEFAULT 1,
   `max_users` INT NOT NULL DEFAULT 5,
   `max_dispensers` INT NOT NULL DEFAULT 4,
   `features` VARCHAR(1024) NOT NULL DEFAULT '[]',
@@ -340,7 +338,7 @@ CREATE TABLE IF NOT EXISTS `hardware_devices` (
   `status` VARCHAR(255) NOT NULL DEFAULT 'OFFLINE',
   `api_key_hash` VARCHAR(255) NOT NULL,
   `api_key_prefix` VARCHAR(255) NOT NULL,
-  `key_version` TINYINT(1) NOT NULL DEFAULT 1,
+  `key_version` INT NOT NULL DEFAULT 1,
   `last_heartbeat_at` VARCHAR(40),
   `last_sync_at` VARCHAR(40),
   `firmware_version` VARCHAR(255),
@@ -380,7 +378,7 @@ CREATE TABLE IF NOT EXISTS `device_events` (
   `device_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `event_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `event_type` VARCHAR(255) NOT NULL,
-  `sequence` TINYINT(1) NOT NULL DEFAULT 0,
+  `sequence` INT NOT NULL DEFAULT 0,
   `occurred_at` VARCHAR(40) NOT NULL,
   `received_at` VARCHAR(40) NOT NULL,
   `payload` TEXT NOT NULL,
@@ -438,7 +436,7 @@ CREATE TABLE IF NOT EXISTS `meter_readings` (
   `source` VARCHAR(255) NOT NULL DEFAULT 'DEVICE',
   `quality` VARCHAR(255) NOT NULL DEFAULT 'VALID',
   `reading_at` VARCHAR(40) NOT NULL,
-  `sequence` TINYINT(1) NOT NULL DEFAULT 0,
+  `sequence` INT NOT NULL DEFAULT 0,
   `delta_litres` VARCHAR(255),
   `previous_reading_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin,
   `is_countable` TINYINT(1) NOT NULL DEFAULT 1,
@@ -595,7 +593,7 @@ CREATE TABLE IF NOT EXISTS `suppliers` (
   `phone` VARCHAR(255),
   `email` VARCHAR(255),
   `address` TEXT,
-  `credit_days` TINYINT(1) NOT NULL DEFAULT 0,
+  `credit_days` INT NOT NULL DEFAULT 0,
   `opening_balance` VARCHAR(255) NOT NULL DEFAULT '0',
   `is_active` TINYINT(1) NOT NULL DEFAULT 1,
   `is_demo` TINYINT(1) NOT NULL DEFAULT 0,
@@ -695,7 +693,7 @@ CREATE TABLE IF NOT EXISTS `customers` (
   `gstin` VARCHAR(255),
   `address` TEXT,
   `credit_limit` VARCHAR(255) NOT NULL DEFAULT '0',
-  `credit_days` TINYINT(1) NOT NULL DEFAULT 0,
+  `credit_days` INT NOT NULL DEFAULT 0,
   `balance` VARCHAR(255) NOT NULL DEFAULT '0',
   `status` VARCHAR(255) NOT NULL DEFAULT 'ACTIVE',
   `is_demo` TINYINT(1) NOT NULL DEFAULT 0,
@@ -944,7 +942,7 @@ CREATE TABLE IF NOT EXISTS `shift_cash_denominations` (
   `id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
   `shift_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `denomination` INT NOT NULL,
-  `count` TINYINT(1) NOT NULL DEFAULT 0,
+  `count` INT NOT NULL DEFAULT 0,
   `amount` VARCHAR(255) NOT NULL DEFAULT '0',
   UNIQUE KEY `uq_shift_cash_denominations_shift_id__denomination` (shift_id, denomination),
     CONSTRAINT `fk_shift_cash_denominations_shift_id` FOREIGN KEY (`shift_id`) REFERENCES `shifts` (`id`) ON DELETE CASCADE

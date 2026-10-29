@@ -1,7 +1,7 @@
 import { defineConfig } from '@playwright/test';
 
-// These servers use a dedicated database and ports; they never reset the user's
-// development database. The test database is recreated once per test run.
+// E2E tests run against the Java 21 API + dedicated MySQL test schema (petroflow_e2e)
+// so they never touch the developer's main database.
 const apiPort = 4101;
 const webPort = 5174;
 const origin = `http://127.0.0.1:${webPort}`;
@@ -26,23 +26,24 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: 'npm run db:reset && npm run start -w @petroflow/server',
+      command: 'node scripts/start-e2e-api.mjs',
       url: `http://127.0.0.1:${apiPort}/api/v1/health`,
-      timeout: 90_000,
+      timeout: 120_000,
       reuseExistingServer: false,
       env: {
-        DATABASE_FILE: 'backend/db/e2e-petroflow.db',
         NODE_ENV: 'development',
         PORT: String(apiPort),
         HOST: '0.0.0.0',
+        MYSQL_HOST: process.env.MYSQL_HOST ?? '127.0.0.1',
+        MYSQL_PORT: process.env.MYSQL_PORT ?? '3306',
+        MYSQL_DATABASE: process.env.E2E_MYSQL_DATABASE ?? 'petroflow_e2e',
+        MYSQL_USER: process.env.MYSQL_USER ?? 'root',
+        MYSQL_PASSWORD: process.env.MYSQL_PASSWORD ?? '',
         APP_ORIGIN: origin,
-        ALLOWED_ORIGINS: origin,
         COOKIE_SECURE: 'false',
         ENABLE_DEMO_TOOLS: 'true',
         DEMO_PASSWORD: 'PetroFlow@2025',
         SEED_DEMO_DATA: 'true',
-        LOGIN_RATE_LIMIT_MAX: '200',
-        LOG_LEVEL: 'silent',
       },
     },
     {

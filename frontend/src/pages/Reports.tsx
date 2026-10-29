@@ -628,7 +628,7 @@ function ExportsCard({ stationId }: { stationId: string }) {
               <p className="text-sm font-bold text-ink-100">{item.name}</p>
               <p className="mt-0.5 text-xs text-ink-500">{item.detail}</p>
               <div className="mt-2 flex flex-wrap gap-2">
-                <Button size="sm" variant="secondary" disabled={busy === item.slug} onClick={() => void download(item.slug, filenameOf(item.slug))}>Download</Button>
+                <Button size="sm" variant="secondary" aria-label={`Download ${item.name}`} disabled={busy === item.slug} onClick={() => void download(item.slug, filenameOf(item.slug))}>Download</Button>
                 <Button size="sm" variant="ghost" icon={<Share2 className="h-3.5 w-3.5" />} disabled={busy === `share-${item.slug}`} onClick={() => void share(item.slug, item.name)}>Share</Button>
               </div>
             </div>

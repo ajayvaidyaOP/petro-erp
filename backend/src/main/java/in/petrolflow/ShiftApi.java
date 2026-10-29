@@ -222,17 +222,62 @@ public final class ShiftApi {
                         op.get("value"), op.get("variance"), op.get("status"), op.get("note"), Clock.nowIso(), op.get("rowId"));
             }
             String status = flagged ? "FLAGGED" : "CLOSED";
+            String closingCash = Money.money(ctx.str("closingCash") == null ? "0" : ctx.str("closingCash"));
+            BigDecimal nonCashReceived = BigDecimal.ZERO;
+            String now = Clock.nowIso();
+            if (ctx.body().get("denominations") instanceof List<?> denoms) {
+                Db.exec("DELETE FROM shift_cash_denominations WHERE shift_id = ?", shift.get("id"));
+                for (Object item : denoms) {
+                    Map<String, Object> d = Json.object(item);
+                    int denom = (int) Db.num(d, "denomination");
+                    int count = (int) Db.num(d, "count");
+                    if (denom > 0 && count > 0) {
+                        Db.exec("INSERT INTO shift_cash_denominations (id, shift_id, denomination, count, amount) VALUES (?, ?, ?, ?, ?)",
+                                Clock.newId("scd"), shift.get("id"), denom, count, Money.money(BigDecimal.valueOf((long) denom * count)));
+                    }
+                }
+            }
+            Map<String, String> recvByMode = new LinkedHashMap<>();
+            if (ctx.body().get("settlements") instanceof List<?> stmts) {
+                for (Object item : stmts) {
+                    Map<String, Object> s = Json.object(item);
+                    String m = Db.str(s, "mode");
+                    String r = s.get("received") != null ? String.valueOf(s.get("received")) : Db.str(s, "receivedAmount");
+                    if (m != null && r != null && !r.isBlank()) recvByMode.put(m, Money.money(r));
+                }
+            }
+            recvByMode.putIfAbsent("CASH", closingCash);
+            for (String m : List.of("UPI", "CARD", "BANK", "CREDIT")) {
+                if (recvByMode.containsKey(m)) nonCashReceived = nonCashReceived.add(Money.d(recvByMode.get(m)));
+            }
+            BigDecimal expectedCash = Money.d(shift.get("opening_cash")).add(value).subtract(nonCashReceived);
+            BigDecimal shortExcess = Money.d(closingCash).subtract(expectedCash);
+            Db.exec("DELETE FROM shift_settlements WHERE shift_id = ?", shift.get("id"));
+            for (String m : List.of("CASH", "UPI", "CARD", "BANK", "CREDIT")) {
+                if (!recvByMode.containsKey(m) && !"CASH".equals(m)) continue;
+                String exp = "CASH".equals(m) ? Money.money(expectedCash) : recvByMode.get(m);
+                String rec = recvByMode.get(m);
+                String diff = Money.money(Money.d(rec).subtract(Money.d(exp)));
+                Db.exec(
+                        """
+                        INSERT INTO shift_settlements (id, shift_id, tenant_id, station_id, mode, expected_amount, received_amount, difference_amount, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        Clock.newId("stl"), shift.get("id"), shift.get("tenant_id"), shift.get("station_id"), m, exp, rec, diff, now);
+            }
             Db.exec(
                     """
                     UPDATE shifts SET status = ?, closed_at = ?, closed_by = ?, total_litres = ?, total_value = ?,
-                           closing_cash = ?, close_notes = ?, updated_at = ? WHERE id = ?
+                           closing_cash = ?, cash_counted = ?, short_excess = ?, close_notes = ?, updated_at = ? WHERE id = ?
                     """,
-                    status, Clock.nowIso(), auth.userId, Money.litres(litres), Money.money(value),
-                    Money.rate(ctx.str("closingCash") == null ? "0" : ctx.str("closingCash")), ctx.str("notes"), Clock.nowIso(), shift.get("id"));
+                    status, now, auth.userId, Money.litres(litres), Money.money(value),
+                    closingCash, closingCash, Money.money(shortExcess), ctx.str("notes"), now, shift.get("id"));
             return status;
         });
         Auth.audit(auth, "SHIFT_CLOSED", "Shift", Db.str(shift, "id"), Db.str(shift, "station_id"), "Shift closed");
-        ctx.ok(detailOf(Db.one("SELECT * FROM shifts WHERE id = ?", shift.get("id"))));
+        Map<String, Object> out = detailOf(Db.one("SELECT * FROM shifts WHERE id = ?", shift.get("id")));
+        out.put("warnings", List.of());
+        ctx.ok(out);
     }
 
     private static void approve(Web.Ctx ctx) {

@@ -247,7 +247,9 @@ function PersonCard({ employee, stations, you, onEdit, onReset }: {
         <Badge tone={employee.roleKey === 'OWNER' ? 'accent' : 'neutral'} dot>{roleTitle[employee.roleKey] ?? employee.roleKey}</Badge>
       </div>
       <div className="flex flex-wrap gap-2 border-t border-carbon-700/60 px-5 py-3">
-        <Button size="sm" variant="outline" onClick={onEdit} icon={<Pencil className="h-3.5 w-3.5" />}>{employee.status !== 'ACTIVE' ? 'Re-enable' : 'Edit'}</Button>
+        <Button size="sm" variant="outline" onClick={onEdit} icon={<Pencil className="h-3.5 w-3.5" />}>
+          {employee.status !== 'ACTIVE' ? 'Re-enable' : employee.roleKey === 'MANAGER' ? 'Edit access' : 'Edit'}
+        </Button>
         <Button size="sm" variant="ghost" onClick={onReset} icon={<KeyRound className="h-3.5 w-3.5" />}>Reset password</Button>
       </div>
     </Card>
@@ -282,7 +284,7 @@ function StaffRow({ employee, stations, you, canWrite, onEdit, onReset, onDisabl
         </div>
         {canWrite && (
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={onEdit} icon={<Pencil className="h-3.5 w-3.5" />}>{employee.status === 'ACTIVE' ? 'Edit access' : 'Re-enable'}</Button>
+            <Button size="sm" variant="outline" onClick={onEdit} icon={<Pencil className="h-3.5 w-3.5" />}>{employee.status === 'ACTIVE' ? 'Edit permissions' : 'Re-enable'}</Button>
             <Button size="sm" variant="ghost" onClick={onReset} icon={<KeyRound className="h-3.5 w-3.5" />}>Password</Button>
             {employee.status === 'ACTIVE' && !you && <Button size="sm" variant="ghost" onClick={onDisable}>Disable</Button>}
           </div>

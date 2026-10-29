@@ -44,7 +44,10 @@ public final class AuthRoutes {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("user", auth.publicUser());
         body.put("sessionExpiresAt", session.get("expiresAt"));
-        if (!ctx.config.production) body.put("sessionToken", session.get("token"));
+        if (!ctx.config.production) {
+            body.put("sessionToken", session.get("token"));
+            if (ctx.preview) body.put("previewToken", session.get("token"));
+        }
         ctx.ok(body);
     }
 

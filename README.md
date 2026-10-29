@@ -8,22 +8,22 @@ Repo mein sirf do kaam ke folders hain:
 
 | Folder | Kya hai |
 | --- | --- |
-| `frontend/` | Jo screen pe dikhta hai. Login, dashboard, shifts, stock, udhaar, reports. |
-| `backend/` | Java API (`src/main/java`, `gradlew`), MySQL schema/seed, aur pump hardware ka optional local agent (`backend/gateway`). |
+| `frontend/` | Jo screen pe dikhta hai (React + Vite + TypeScript). Login, dashboard, shifts, stock, udhaar, reports. |
+| `backend/` | Pure Java 21 API (`src/main/java/in/petrolflow`, `gradlew`), MySQL 8 schema/seed (`db/mysql/`), Java tests (`src/test/java/`), aur Java gateway simulator (`GatewaySimulator`). |
 
 Root pe `package.json`, `README.md` aur `.env.example` isliye hain taaki dono ek saath start ho sakein. Ye alag apps nahi hain.
 
 ```text
 petrolflow-erp/
-├── frontend/          screens
-├── backend/           API + database + tests + hardware agent
-├── package.json       dono ko start karne ka switch
+├── frontend/          screens (React / Vite)
+├── backend/           Java 21 API + MySQL schema/seed + Java tests + gateway simulator
+├── package.json       Java API + frontend start/build/test commands
 └── README.md
 ```
 
-Chalane ka poora tarika neeche **Deployment** mein hai. Windows Command Prompt (`cmd`) ke commands wahi se copy karo. Browser screens **http://localhost:5173** (dev) ya **http://localhost:4173** (built). API port **4000** pe sunti hai. Browser seedha 4000 nahi bulata — frontend `/api` ko aage bhej deta hai.
+Chalane ka poora tarika neeche **Deployment** mein hai. Windows Command Prompt (`cmd`) ke commands wahi se copy karo. Browser screens **http://localhost:5173** (dev) ya **http://localhost:4173** (built). Java API port **4000** pe sunti hai. Browser seedha 4000 nahi bulata — frontend `/api` ko aage bhej deta hai.
 
-`npm run dev` purana Express + SQLite server start karta hai. Java API ke saath mat chalao. Dono port 4000 maangte hain.
+`npm run dev` ab seedha Java 21 API (`gradlew run`) aur Vite frontend dono ek saath start karta hai.
 
 Demo login (khali database pe):
 
@@ -73,7 +73,7 @@ Ye jaan-bujh kar nahi banaya. Pump pe kaam chalane ke liye ye pehle zaroori nahi
 
 | Cheez | Status | Baad mein kaise |
 | --- | --- | --- |
-| Asli nozzle hardware (Gilbarco / Tokheim / ATG) | Simulator only. `backend/gateway` local agent hai, physical adapter throw karta hai | Vendor register map certify karke `backend/gateway/src/adapters` mein adapter |
+| Asli nozzle hardware (Gilbarco / Tokheim / ATG) | Simulator only (`GatewaySimulator.java`). | Vendor register map certify karke Java gateway adapter jodo |
 | P&L / dealer margin per litre | Nahi. Sales estimate hai, munafa nahi | Purchase rate already delivery pe hai. Report mein sales minus cost jodna hai |
 | Fuel VAT / GSTR-1 / e-invoice | Nahi. Lubricant GST CSV hai | CA export kaafi hai. Filing portal khud mat banao |
 | OMC bill payment ageing | Adhura. Supplier hai, bill se payment link nahi | `payments` ko delivery se jodna |
@@ -82,7 +82,7 @@ Ye jaan-bujh kar nahi banaya. Pump pe kaam chalane ke liye ye pehle zaroori nahi
 | Payroll, PF, ESI, payslip | Nahi. Attendance aur payable days hain | Staff pay rate table, phir payslip print |
 | Shop POS, car wash, rent income | Nahi | Alag income head. Lubricant already hai |
 | Forgot password / 2FA | Nahi. Owner password reset karta hai | Email provider ke bina mat jodo |
-| Do database ek saath | Java API MySQL use karti hai. Purana Express server SQLite file use karta hai | Ek waqt pe ek hi API chalao. Port 4000 share mat karo |
+| Database | Backend pure Java 21 + MySQL 8 use karta hai (`backend/db/mysql/schema.sql`) | Roz `mysqldump` backup rakho |
 | Hindi UI | Nahi. Labels English hain | Baad mein, hisaab pehle |
 
 Full double-entry accounting, loyalty wallet, native mobile app, aur drag-drop report builder is pump ke liye overkill hain. Tally export aur yeh screens kaafi hain.
@@ -351,36 +351,32 @@ mysqldump -u root -p --routines --databases petroflow > /var/backups/petroflow.s
 
 ## Commands
 
-Roz ka start **Deployment** section se karo. Neeche wale `npm` commands purane Express + SQLite server ke hain. Unhe Java API ke saath mat chalao — dono port 4000 lete hain.
+Roz ka start **Deployment** section se ya root `npm` scripts se karo — sabhi commands ab Java 21 + MySQL 8 backend aur React/Vite frontend chalate hain:
 
 ```cmd
 cd /d C:\petroflow-erp\backend
 gradlew.bat run
 ```
 
+Ya root folder se:
+
 ```cmd
 cd /d C:\petroflow-erp
+npm run dev
+npm run dev:backend
 npm run dev:frontend
-npm run build -w @petroflow/web
-npm run preview -w @petroflow/web
-```
-
-MySQL schema: `backend/db/mysql/schema.sql`. Demo seed: `backend/db/mysql/seed.sql`. API khali database pe schema aur seed khud lagati hai.
-
-Purana Node server (tests / SQLite file `backend/db/petroflow.db`):
-
-```cmd
-npm test
+npm run dev:gateway
 npm run typecheck
-npm run db:backup
-npm run db:reset
+npm test
+npm run build
+npm run test:e2e
 ```
 
-`npm test` alag test database use karta hai. MySQL demo data nahi mit-ta.
+MySQL schema: `backend/db/mysql/schema.sql`. Demo seed: `backend/db/mysql/seed.sql`. Java API khali database pe schema aur seed khud lagati hai.
 
 ## Domain rules — inhe mat todna
 
-1. Paisa aur litre `TEXT` + Decimal.js. Float nahi.
+1. Paisa aur litre `VARCHAR` + Java `BigDecimal` (`Money.java`). Float kabhi nahi.
 2. Sale meter se aati hai, invoice se nahi. Galat reading sales nahi banti, flag hoti hai.
 3. Tank stock sirf `stock_movements` se. Dip variance hai, edit nahi.
 4. Band business date pe mutation nahi. Reopen reason ke saath, audit mein.
@@ -390,12 +386,12 @@ npm run db:reset
 
 ## Hardware
 
-`backend/gateway` pump ke LAN pe chal sakta hai. Abhi simulator verified hai. Asli dispenser controller certify hone tak readings haath se daalo. Simulated data ko live meter mat bolo.
+`in.petrolflow.GatewaySimulator` (`npm run dev:gateway`) pump ke LAN pe chal sakta hai. Abhi simulator verified hai. Asli dispenser controller certify hone tak readings haath se daalo. Simulated data ko live meter mat bolo.
 
 ## Production se pehle
 
 - Demo password hatao. `ENABLE_DEMO_TOOLS=false`, `SEED_DEMO_DATA=false`.
 - `COOKIE_SECURE=true` sirf HTTPS pe. Pump LAN `http://` pe `false`, warna login cookie nahi tikegi.
 - Roz `mysqldump` (Deployment §6) aur backup ko pump ke disk se bahar copy karo.
-- Ek hi Java API process. `npm run dev` usi port pe mat chalao. MySQL port 3306 LAN pe mat kholo.
+- Ek hi Java API process chalao. MySQL port 3306 LAN pe mat kholo.
 - Ye audited accounts nahi hain. CA ko CSV do, Tally mein final books rakho.

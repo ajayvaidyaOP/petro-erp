@@ -5,9 +5,15 @@ import com.sun.net.httpserver.HttpServer;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.net.InetSocketAddress;
+import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -19,9 +25,22 @@ import java.util.concurrent.Executors;
 public final class Web {
     private final Config config;
     private final List<Route> routes = new ArrayList<>();
+    private final Path spaDist;
+    private HttpServer server;
 
     public Web(Config config) {
         this.config = config;
+        Path candidate = Path.of("..", "frontend", "dist").normalize();
+        if (!Files.isDirectory(candidate)) candidate = Path.of("frontend", "dist").normalize();
+        this.spaDist = Files.isDirectory(candidate) ? candidate : null;
+    }
+
+    public static Map<String, Object> map(Object... kv) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        for (int i = 0; i + 1 < kv.length; i += 2) {
+            out.put(String.valueOf(kv[i]), kv[i + 1]);
+        }
+        return out;
     }
 
     public void get(String pattern, Handler handler) { routes.add(new Route("GET", pattern, handler)); }
@@ -31,24 +50,35 @@ public final class Web {
     public void delete(String pattern, Handler handler) { routes.add(new Route("DELETE", pattern, handler)); }
 
     public void listen() throws IOException {
-        HttpServer server = HttpServer.create(new InetSocketAddress(config.host, config.port), 0);
+        server = HttpServer.create(new InetSocketAddress(config.host, config.port), 0);
         server.createContext("/", this::dispatch);
         server.setExecutor(Executors.newFixedThreadPool(16));
         server.start();
-        System.out.println("PetroFlow API listening on http://" + config.host + ":" + config.port);
+        System.out.println("PetroFlow Java API listening on http://" + config.host + ":" + config.port);
+    }
+
+    public void stop() {
+        if (server != null) server.stop(0);
     }
 
     private void dispatch(HttpExchange exchange) throws IOException {
-        Ctx ctx = new Ctx(config, exchange);
+        Ctx ctx = null;
         try {
+            ctx = new Ctx(config, exchange);
             if ("OPTIONS".equals(ctx.method)) {
-                ctx.raw(204, "text/plain", new byte[0]);
+                ctx.raw(204, "text/plain; charset=utf-8", new byte[0]);
+                return;
+            }
+            if (!ctx.path.startsWith("/api/")) {
+                if (serveSpa(ctx)) return;
+                ctx.error(404, "NOT_FOUND", "No route for " + ctx.method + " " + ctx.path);
                 return;
             }
             if (!ctx.path.startsWith("/api/v1")) {
                 ctx.error(404, "NOT_FOUND", "No route for " + ctx.method + " " + ctx.path);
                 return;
             }
+            ctx.enforceOrigin();
             String path = ctx.path.substring("/api/v1".length());
             if (path.isEmpty()) path = "/";
             for (Route route : routes) {
@@ -62,12 +92,68 @@ public final class Web {
             }
             ctx.error(404, "NOT_FOUND", "No route for " + ctx.method + " " + ctx.path);
         } catch (ApiException error) {
-            if (!ctx.sent) ctx.error(error.status, error.code, error.getMessage(), error.details);
+            if (ctx != null && !ctx.sent) ctx.error(error.status, error.code, error.getMessage(), error.details);
         } catch (Exception error) {
             error.printStackTrace();
-            if (!ctx.sent) ctx.error(500, "INTERNAL_ERROR", config.production ? "An unexpected error occurred" : error.getMessage());
+            capturePlatformError(ctx, error);
+            if (ctx != null && !ctx.sent) {
+                String message = error.getMessage();
+                if (message != null && (message.contains("Duplicate entry") || message.contains("UNIQUE"))) {
+                    ctx.error(409, "DUPLICATE", "A record with these details already exists");
+                } else if (message != null && (message.contains("foreign key constraint") || message.contains("FOREIGN KEY"))) {
+                    ctx.error(409, "IN_USE", "This record is referenced by other records and cannot be changed");
+                } else {
+                    ctx.error(500, "INTERNAL_ERROR", config.production ? "An unexpected error occurred" : (message == null ? "Internal server error" : message));
+                }
+            }
         } finally {
             exchange.close();
+        }
+    }
+
+    private boolean serveSpa(Ctx ctx) throws IOException {
+        if (spaDist == null || (!"GET".equals(ctx.method) && !"HEAD".equals(ctx.method))) return false;
+        String rel = ctx.path.startsWith("/") ? ctx.path.substring(1) : ctx.path;
+        Path target = rel.isEmpty() ? spaDist.resolve("index.html") : spaDist.resolve(rel).normalize();
+        if (!target.startsWith(spaDist) || !Files.isRegularFile(target)) {
+            target = spaDist.resolve("index.html");
+        }
+        if (!Files.isRegularFile(target)) return false;
+        byte[] bytes = "HEAD".equals(ctx.method) ? new byte[0] : Files.readAllBytes(target);
+        ctx.raw(200, contentType(target.getFileName().toString()), bytes);
+        return true;
+    }
+
+    private static String contentType(String name) {
+        String lower = name.toLowerCase();
+        if (lower.endsWith(".html")) return "text/html; charset=utf-8";
+        if (lower.endsWith(".js")) return "application/javascript; charset=utf-8";
+        if (lower.endsWith(".css")) return "text/css; charset=utf-8";
+        if (lower.endsWith(".svg")) return "image/svg+xml";
+        if (lower.endsWith(".json")) return "application/json; charset=utf-8";
+        if (lower.endsWith(".woff2")) return "font/woff2";
+        if (lower.endsWith(".png")) return "image/png";
+        if (lower.endsWith(".ico")) return "image/x-icon";
+        return "application/octet-stream";
+    }
+
+    private static void capturePlatformError(Ctx ctx, Exception error) {
+        try {
+            StringWriter sw = new StringWriter();
+            error.printStackTrace(new PrintWriter(sw));
+            String msg = error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage();
+            Db.exec(
+                    """
+                    INSERT INTO platform_errors (id, tenant_id, source, message, detail, path, severity, created_at)
+                    VALUES (?, ?, 'api', ?, ?, ?, 'ERROR', ?)
+                    """,
+                    Clock.newId("err"),
+                    ctx != null && ctx.auth != null ? ctx.auth.tenantId : null,
+                    msg.length() > 500 ? msg.substring(0, 500) : msg,
+                    sw.toString().length() > 4000 ? sw.toString().substring(0, 4000) : sw.toString(),
+                    ctx == null ? null : ctx.path,
+                    Clock.nowIso());
+        } catch (RuntimeException ignored) {
         }
     }
 
@@ -99,7 +185,7 @@ public final class Web {
         public Auth auth;
         private final HttpExchange exchange;
         private boolean sent;
-        private boolean preview;
+        public final boolean preview;
 
         Ctx(Config config, HttpExchange exchange) throws IOException {
             this.config = config;
@@ -108,8 +194,14 @@ public final class Web {
             this.path = exchange.getRequestURI().getPath();
             this.query = parseQuery(exchange.getRequestURI().getRawQuery());
             this.headers = new LinkedHashMap<>();
-            exchange.getRequestHeaders().forEach((key, values) -> headers.put(key.toLowerCase(), values.get(0)));
-            this.ip = header("x-forwarded-for") != null ? header("x-forwarded-for").split(",")[0].trim() : exchange.getRemoteAddress().getAddress().getHostAddress();
+            exchange.getRequestHeaders().forEach((key, values) -> {
+                if (values != null && !values.isEmpty()) headers.put(key.toLowerCase(), values.get(0));
+            });
+            this.ip = header("x-forwarded-for") != null
+                    ? header("x-forwarded-for").split(",")[0].trim()
+                    : exchange.getRemoteAddress().getAddress().getHostAddress();
+            this.preview = computePreview();
+            cors();
             byte[] raw = exchange.getRequestBody().readNBytes(2_000_001);
             if (raw.length > 2_000_000) throw ApiException.badRequest("Request body is too large");
             String text = new String(raw, StandardCharsets.UTF_8).trim();
@@ -121,14 +213,12 @@ public final class Web {
                     throw ApiException.badRequest("Request body is not valid JSON");
                 }
             }
-            this.preview = isPreview();
-            cors();
             String token = cookie(config.cookieName);
-            if (!config.production) {
+            if (token == null && !config.production) {
                 String authz = header("authorization");
                 if (authz != null && authz.regionMatches(true, 0, "Bearer ", 0, 7)) token = authz.substring(7).trim();
             }
-            if (token != null) this.auth = Auth.fromToken(token);
+            if (token != null && !token.isBlank()) this.auth = Auth.fromToken(token);
         }
 
         public Auth requireAuth() {
@@ -165,7 +255,7 @@ public final class Web {
             error.put("code", code);
             error.put("message", message);
             if (details != null) error.put("details", details);
-            raw(status, "application/json; charset=utf-8", Json.stringify(Map.of("error", error)).getBytes(StandardCharsets.UTF_8));
+            raw(status, "application/json; charset=utf-8", Json.stringify(Web.map("error", error)).getBytes(StandardCharsets.UTF_8));
         }
 
         public void csv(String filename, String text) {
@@ -177,8 +267,9 @@ public final class Web {
             StringBuilder cookie = new StringBuilder();
             cookie.append(name).append('=').append(value).append("; Path=/; HttpOnly");
             if (expiresAt != null) cookie.append("; Expires=").append(httpDate(expiresAt));
-            if (preview) cookie.append("; SameSite=None; Secure; Partitioned");
-            else {
+            if (preview) {
+                cookie.append("; SameSite=None; Secure");
+            } else {
                 cookie.append("; SameSite=Lax");
                 if (config.cookieSecure) cookie.append("; Secure");
             }
@@ -186,7 +277,7 @@ public final class Web {
         }
 
         public void clearCookie(String name) {
-            String same = preview ? "; SameSite=None; Secure; Partitioned" : "; SameSite=Lax";
+            String same = preview ? "; SameSite=None; Secure" : "; SameSite=Lax";
             exchange.getResponseHeaders().add("Set-Cookie", name + "=; Path=/; HttpOnly; Max-Age=0" + same);
         }
 
@@ -198,17 +289,28 @@ public final class Web {
                 exchange.getResponseHeaders().set("Cache-Control", "no-store");
                 cors();
                 exchange.sendResponseHeaders(status, bytes.length);
-                try (OutputStream out = exchange.getResponseBody()) {
-                    out.write(bytes);
+                if (!"HEAD".equals(method) && bytes.length > 0) {
+                    try (OutputStream out = exchange.getResponseBody()) {
+                        out.write(bytes);
+                    }
+                } else {
+                    exchange.getResponseBody().close();
                 }
             } catch (IOException error) {
                 throw new RuntimeException(error);
             }
         }
 
+        void enforceOrigin() {
+            if ("GET".equals(method) || "HEAD".equals(method) || "OPTIONS".equals(method)) return;
+            String origin = header("origin");
+            if (origin == null || origin.isBlank()) return;
+            if (!allowed(origin)) throw new ApiException(403, "BAD_ORIGIN", "Cross-origin request blocked");
+        }
+
         private void cors() {
             String origin = header("origin");
-            if (origin == null) return;
+            if (origin == null || origin.isBlank()) return;
             if (allowed(origin)) {
                 exchange.getResponseHeaders().set("Access-Control-Allow-Origin", origin);
                 exchange.getResponseHeaders().set("Access-Control-Allow-Credentials", "true");
@@ -219,25 +321,48 @@ public final class Web {
         }
 
         private boolean allowed(String origin) {
-            if (origin.startsWith("http://localhost") || origin.startsWith("http://127.0.0.1") || preview) return !config.production || preview;
+            if (config.allowedOrigins != null && config.allowedOrigins.contains(origin)) return true;
+            String host = effectiveHost();
+            if (host != null && (origin.equalsIgnoreCase("http://" + host) || origin.equalsIgnoreCase("https://" + host))) {
+                return true;
+            }
+            if (!config.production) {
+                if (origin.matches("(?i)^https?://(localhost|127\\.0\\.0\\.1|\\[::1\\])(:\\d+)?$")) return true;
+                if (preview) return true;
+            }
             return false;
         }
 
-        private boolean isPreview() {
+        private String effectiveHost() {
+            String fwd = header("x-forwarded-host");
+            if (fwd != null && !fwd.isBlank()) return fwd.split(",")[0].trim();
+            return header("host");
+        }
+
+        private boolean computePreview() {
             if (config.production) return false;
-            String origin = header("origin");
-            String host = header("host");
-            if (origin == null) return host != null && host.matches("(?i)[\\w.-]+\\.e2b\\.app(?::\\d+)?");
-            try {
-                java.net.URI uri = java.net.URI.create(origin);
-                if (!"https".equalsIgnoreCase(uri.getScheme())) return false;
-                String hostname = uri.getHost() == null ? "" : uri.getHost().toLowerCase();
-                if (!hostname.matches("[\\w.-]+\\.e2b\\.app")) return false;
-                if (host != null && host.toLowerCase().startsWith(hostname)) return true;
-                return config.sandboxId != null && hostname.endsWith("-" + config.sandboxId.toLowerCase() + ".e2b.app");
-            } catch (RuntimeException ignored) {
-                return false;
+            String host = effectiveHost();
+            String hostOnly = host == null ? "" : host.split(":")[0].trim().toLowerCase();
+            if (isPreviewHost(hostOnly)) return true;
+            for (String candidate : new String[]{header("origin"), header("referer")}) {
+                if (candidate == null || candidate.isBlank()) continue;
+                try {
+                    URI uri = URI.create(candidate);
+                    if ("https".equalsIgnoreCase(uri.getScheme()) && uri.getHost() != null && isPreviewHost(uri.getHost().toLowerCase())) {
+                        return true;
+                    }
+                } catch (RuntimeException ignored) {
+                }
             }
+            return false;
+        }
+
+        private boolean isPreviewHost(String hostname) {
+            if (hostname == null || !hostname.matches("[\\w.-]+\\.e2b\\.app")) return false;
+            if (config.sandboxId != null && !config.sandboxId.isBlank()) {
+                return hostname.endsWith("-" + config.sandboxId.toLowerCase() + ".e2b.app") || hostname.endsWith(".e2b.app");
+            }
+            return true;
         }
 
         private String cookie(String name) {
@@ -254,9 +379,10 @@ public final class Web {
     private static Map<String, String> parseQuery(String raw) {
         Map<String, String> out = new LinkedHashMap<>();
         if (raw == null || raw.isEmpty()) return out;
-        for (String part : raw.split("&")) {
-            String[] pair = part.split("=", 2);
-            out.put(decode(pair[0]), pair.length == 2 ? decode(pair[1]) : "");
+        for (String pair : raw.split("&")) {
+            if (pair.isEmpty()) continue;
+            String[] parts = pair.split("=", 2);
+            out.put(decode(parts[0]), parts.length > 1 ? decode(parts[1]) : "");
         }
         return out;
     }
@@ -266,6 +392,6 @@ public final class Web {
     }
 
     private static String httpDate(String iso) {
-        return DateTimeFormatter.RFC_1123_DATE_TIME.format(java.time.Instant.parse(iso).atZone(ZoneOffset.UTC));
+        return DateTimeFormatter.RFC_1123_DATE_TIME.withZone(ZoneOffset.UTC).format(Instant.parse(iso));
     }
 }

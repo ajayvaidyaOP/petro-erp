@@ -198,22 +198,64 @@ public final class ReportApi {
                 value = value.add(Money.d(shift.get("total_value")));
             }
         }
+        List<Map<String, Object>> transactions = Json.shapeAll(Db.all(
+                """
+                SELECT ft.*, p.name AS product_name, c.name AS customer_name
+                  FROM fuel_transactions ft
+                  LEFT JOIN fuel_products p ON p.id = ft.product_id
+                  LEFT JOIN customers c ON c.id = ft.customer_id
+                 WHERE ft.station_id = ? AND ft.occurred_at >= ? AND ft.occurred_at <= ? AND ft.voided_at IS NULL
+                 ORDER BY ft.occurred_at DESC
+                """, station.get("id"), start, end));
+        List<Map<String, Object>> expenses = Json.shapeAll(Db.all(
+                "SELECT * FROM expenses WHERE station_id = ? AND occurred_at >= ? AND occurred_at <= ? ORDER BY occurred_at DESC",
+                station.get("id"), start, end));
+        List<Map<String, Object>> deliveries = Json.shapeAll(Db.all(
+                """
+                SELECT d.*, p.name AS product_name, s.name AS supplier_name
+                  FROM deliveries d
+                  LEFT JOIN fuel_products p ON p.id = d.product_id
+                  LEFT JOIN suppliers s ON s.id = d.supplier_id
+                 WHERE d.station_id = ? AND d.invoice_date = ?
+                 ORDER BY d.created_at DESC
+                """, station.get("id"), date));
+        List<Map<String, Object>> receipts = Json.shapeAll(Db.all(
+                """
+                SELECT pay.*, c.name AS customer_name
+                  FROM payments pay LEFT JOIN customers c ON c.id = pay.customer_id
+                 WHERE pay.station_id = ? AND pay.direction = 'RECEIPT' AND pay.status != 'REVERSED'
+                   AND pay.occurred_at >= ? AND pay.occurred_at <= ?
+                 ORDER BY pay.occurred_at DESC
+                """, station.get("id"), start, end));
+        BigDecimal expSum = BigDecimal.ZERO;
+        for (Map<String, Object> e : expenses) expSum = expSum.add(Money.d(e.get("amount")));
+        BigDecimal recSum = BigDecimal.ZERO;
+        for (Map<String, Object> r : receipts) recSum = recSum.add(Money.d(r.get("amount")));
+        BigDecimal purSum = BigDecimal.ZERO;
+        for (Map<String, Object> d : deliveries) if ("RECEIVED".equals(d.get("status"))) purSum = purSum.add(Money.d(d.get("totalAmount")));
+        Map<String, Object> recon = Db.one("SELECT * FROM reconciliations WHERE station_id = ? AND business_date = ?", station.get("id"), date);
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("station", Map.of("name", station.get("name"), "code", station.get("code"), "address", station.get("address") == null ? "" : station.get("address"), "city", station.get("city") == null ? "" : station.get("city"), "state", station.get("state") == null ? "" : station.get("state")));
+        data.put("station", Web.map("name", station.get("name"), "code", station.get("code"), "address", station.get("address") == null ? "" : station.get("address"), "city", station.get("city") == null ? "" : station.get("city"), "state", station.get("state") == null ? "" : station.get("state")));
         data.put("date", date);
         data.put("generatedAt", Clock.nowIso());
         data.put("nozzleSales", nozzleSales);
         data.put("productTotals", productTotals);
         data.put("shifts", Json.shapeAll(shifts));
+        data.put("transactions", transactions);
+        data.put("expenses", expenses);
+        data.put("deliveries", deliveries);
+        data.put("receipts", receipts);
+        data.put("stock", Domain.tankSummary(Db.str(station, "id")));
+        data.put("reconciliation", recon == null ? null : Json.shape(recon));
         data.put("paymentMix", byMode(Db.str(station, "id"), start, end));
-        data.put("totals", Map.of(
+        data.put("totals", Web.map(
                 "aggregateLitres", Money.litres(litres),
                 "aggregateEstimatedValue", Money.money(value),
                 "transactionLitres", Money.litres(tx.get("litres")),
                 "transactionValue", Money.money(tx.get("value")),
-                "expenses", "0.00",
-                "receipts", "0.00",
-                "purchases", "0.00"));
+                "expenses", Money.money(expSum),
+                "receipts", Money.money(recSum),
+                "purchases", Money.money(purSum)));
         data.put("notes", List.of(ACCOUNTING));
         ctx.ok(data);
     }
@@ -223,18 +265,85 @@ public final class ReportApi {
         auth.require("reports.read");
         Map<String, Object> station = auth.station(required(ctx, "stationId"));
         String month = ctx.q("month") == null ? Clock.todayIst().substring(0, 7) : ctx.q("month");
+        String monthStartIso = Clock.istDayStart(month + "-01");
+        String nextMonthIso = Clock.istDayStart(Clock.addDays(month + "-28", 4).substring(0, 8) + "01");
+        List<Map<String, Object>> products = Db.all(
+                """
+                SELECT DISTINCT p.id, p.name, p.code, p.category
+                  FROM tanks t JOIN fuel_products p ON p.id = t.product_id
+                 WHERE t.station_id = ? ORDER BY p.code
+                """, station.get("id"));
         List<Map<String, Object>> rows = new ArrayList<>();
-        for (Map<String, Object> tank : Domain.tankSummary(Db.str(station, "id"))) {
+        for (Map<String, Object> prod : products) {
+            String pid = Db.str(prod, "id");
+            BigDecimal opening = BigDecimal.ZERO;
+            BigDecimal receipts = BigDecimal.ZERO;
+            BigDecimal dispensed = BigDecimal.ZERO;
+            BigDecimal adjustments = BigDecimal.ZERO;
+            for (Map<String, Object> m : Db.all(
+                    "SELECT type, quantity_litres, occurred_at FROM stock_movements WHERE station_id = ? AND product_id = ? AND occurred_at < ?",
+                    station.get("id"), pid, nextMonthIso)) {
+                String occ = Db.str(m, "occurred_at");
+                String type = Db.str(m, "type");
+                BigDecimal signed = Domain.signedLitres(type, m.get("quantity_litres"));
+                if (occ.compareTo(monthStartIso) < 0) {
+                    opening = opening.add(signed);
+                } else if ("OPENING".equals(type)) {
+                    opening = opening.add(signed);
+                } else if ("DELIVERY".equals(type) || "TRANSFER_IN".equals(type)) {
+                    receipts = receipts.add(signed);
+                } else if ("DISPENSED".equals(type) || "TRANSFER_OUT".equals(type)) {
+                    dispensed = dispensed.add(signed.abs());
+                } else if ("ADJUSTMENT".equals(type)) {
+                    adjustments = adjustments.add(signed);
+                }
+            }
+            BigDecimal closingBook = opening.add(receipts).subtract(dispensed).add(adjustments);
+            List<Map<String, Object>> prodTanks = Db.all("SELECT id FROM tanks WHERE station_id = ? AND product_id = ?", station.get("id"), pid);
+            BigDecimal physical = BigDecimal.ZERO;
+            boolean allMeasured = !prodTanks.isEmpty();
+            for (Map<String, Object> t : prodTanks) {
+                Map<String, Object> tm = Db.one(
+                        "SELECT measured_litres FROM tank_measurements WHERE tank_id = ? AND measured_at < ? ORDER BY measured_at DESC LIMIT 1",
+                        t.get("id"), nextMonthIso);
+                if (tm == null || tm.get("measured_litres") == null) { allMeasured = false; break; }
+                physical = physical.add(Money.d(tm.get("measured_litres")));
+            }
+            String normPct = "PETROL".equalsIgnoreCase(Db.str(prod, "category")) ? "0.75" : "0.25";
+            String physicalStr = allMeasured ? Money.litres(physical) : null;
+            String lossGainStr = null;
+            String pctStr = null;
+            String status = "NO_DIP";
+            if (allMeasured) {
+                BigDecimal lg = physical.subtract(closingBook);
+                lossGainStr = Money.litres(lg);
+                if (dispensed.signum() > 0) {
+                    BigDecimal pct = lg.multiply(new BigDecimal("100")).divide(dispensed, 2, java.math.RoundingMode.HALF_UP);
+                    pctStr = pct.toPlainString();
+                    if (pct.compareTo(new BigDecimal("-" + normPct)) < 0) status = "BEYOND_NORM";
+                    else if (pct.compareTo(new BigDecimal(normPct)) > 0) status = "GAIN_CHECK";
+                    else status = "WITHIN_NORM";
+                } else {
+                    status = "WITHIN_NORM";
+                }
+            }
             Map<String, Object> row = new LinkedHashMap<>();
-            row.put("tankCode", tank.get("code"));
-            row.put("productName", tank.get("productName"));
-            row.put("bookStockLitres", tank.get("bookStockLitres"));
-            row.put("physicalLitres", tank.get("lastMeasuredLitres"));
-            row.put("varianceLitres", tank.get("lastVarianceLitres"));
+            row.put("productCode", prod.get("code"));
+            row.put("productName", prod.get("name"));
             row.put("stationName", station.get("name"));
+            row.put("openingLitres", Money.litres(opening));
+            row.put("receiptsLitres", Money.litres(receipts));
+            row.put("dispensedLitres", Money.litres(dispensed));
+            row.put("adjustmentsLitres", Money.litres(adjustments));
+            row.put("closingBookLitres", Money.litres(closingBook));
+            row.put("physicalLitres", physicalStr);
+            row.put("lossGainLitres", lossGainStr);
+            row.put("lossGainPctOfSales", pctStr);
+            row.put("normPct", normPct);
+            row.put("status", status);
             rows.add(row);
         }
-        ctx.ok(Map.of("month", month, "rows", rows));
+        ctx.ok(Web.map("month", month, "rows", rows));
     }
 
     private static void ageing(Web.Ctx ctx) {
@@ -255,17 +364,19 @@ public final class ReportApi {
         for (Map<String, Object> customer : Db.all("SELECT id, code, name, phone, credit_limit FROM customers WHERE tenant_id = ? AND status = 'ACTIVE' ORDER BY name", tenantId)) {
             BigDecimal paid = BigDecimal.ZERO;
             for (Map<String, Object> payment : Db.all("SELECT amount FROM credit_entries WHERE customer_id = ? AND type = 'PAYMENT' AND status = 'POSTED'", customer.get("id"))) {
-                paid = paid.add(Money.d(payment.get("amount")));
+                paid = paid.add(Money.d(payment.get("amount")).abs());
             }
             BigDecimal d0 = BigDecimal.ZERO, d31 = BigDecimal.ZERO, d61 = BigDecimal.ZERO, d90 = BigDecimal.ZERO, due = BigDecimal.ZERO;
+            String oldestUnpaidAt = null;
             for (Map<String, Object> sale : Db.all("SELECT amount, occurred_at FROM credit_entries WHERE customer_id = ? AND type = 'CREDIT_SALE' AND status = 'POSTED' ORDER BY occurred_at", customer.get("id"))) {
-                BigDecimal remaining = Money.d(sale.get("amount"));
+                BigDecimal remaining = Money.d(sale.get("amount")).abs();
                 if (paid.signum() > 0) {
                     BigDecimal used = remaining.min(paid);
                     remaining = remaining.subtract(used);
                     paid = paid.subtract(used);
                 }
                 if (remaining.signum() <= 0) continue;
+                if (oldestUnpaidAt == null) oldestUnpaidAt = Db.str(sale, "occurred_at");
                 due = due.add(remaining);
                 long age = (today - Instant.parse(Db.str(sale, "occurred_at")).toEpochMilli()) / 86_400_000L;
                 if (age <= 30) d0 = d0.add(remaining);
@@ -274,16 +385,20 @@ public final class ReportApi {
                 else d90 = d90.add(remaining);
             }
             if (due.signum() <= 0) continue;
+            BigDecimal limit = Money.d(customer.get("credit_limit"));
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("customerId", customer.get("id"));
             row.put("code", customer.get("code"));
             row.put("name", customer.get("name"));
             row.put("phone", customer.get("phone"));
+            row.put("creditLimit", Money.money(limit));
             row.put("outstanding", Money.money(due));
             row.put("bucket0To30", Money.money(d0));
             row.put("bucket31To60", Money.money(d31));
             row.put("bucket61To90", Money.money(d61));
             row.put("bucket90Plus", Money.money(d90));
+            row.put("oldestUnpaidAt", oldestUnpaidAt);
+            row.put("overLimit", limit.signum() > 0 && due.compareTo(limit) > 0);
             rows.add(row);
             outstanding = outstanding.add(due);
             b0 = b0.add(d0);
@@ -291,10 +406,10 @@ public final class ReportApi {
             b61 = b61.add(d61);
             b90 = b90.add(d90);
         }
-        return Map.of(
+        return Web.map(
                 "asOf", Clock.todayIst(),
                 "rows", rows,
-                "totals", Map.of("outstanding", Money.money(outstanding), "bucket0To30", Money.money(b0), "bucket31To60", Money.money(b31), "bucket61To90", Money.money(b61), "bucket90Plus", Money.money(b90)),
+                "totals", Web.map("outstanding", Money.money(outstanding), "bucket0To30", Money.money(b0), "bucket31To60", Money.money(b31), "bucket61To90", Money.money(b61), "bucket90Plus", Money.money(b90)),
                 "note", "Payments FIFO tareeke se sabse purani udhaar me lage mane gaye hain.");
     }
 
@@ -302,30 +417,74 @@ public final class ReportApi {
         Auth auth = ctx.requireAuth();
         auth.require("stock.read");
         Map<String, Object> station = auth.station(required(ctx, "stationId"));
-        ctx.ok(Map.of("stationId", station.get("id"), "tanks", Domain.tankSummary(Db.str(station, "id"))));
+        int days = 14;
+        String sinceIso = Clock.istDayStart(Clock.addDays(Clock.todayIst(), -days));
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Map<String, Object> tank : Domain.tankSummary(Db.str(station, "id"))) {
+            Map<String, Object> disp = Db.one(
+                    "SELECT COALESCE(SUM(ABS(CAST(quantity_litres AS DECIMAL(20,3)))), 0) AS litres FROM stock_movements WHERE tank_id = ? AND type = 'DISPENSED' AND occurred_at >= ?",
+                    tank.get("id"), sinceIso);
+            BigDecimal avgDaily = Money.d(disp.get("litres")).divide(BigDecimal.valueOf(days), 3, java.math.RoundingMode.HALF_UP);
+            BigDecimal cap = Money.d(tank.get("capacityLitres"));
+            BigDecimal book = Money.d(tank.get("bookStockLitres"));
+            BigDecimal ullage = cap.multiply(new BigDecimal("0.95")).subtract(book).max(BigDecimal.ZERO);
+            BigDecimal cover = avgDaily.signum() > 0 ? book.divide(avgDaily, 1, java.math.RoundingMode.HALF_UP) : null;
+            BigDecimal suggested = ullage.divide(new BigDecimal("1000"), 0, java.math.RoundingMode.FLOOR).multiply(new BigDecimal("1000"));
+            String priority = cover != null && cover.compareTo(new BigDecimal("2")) < 0 ? "ORDER_NOW"
+                    : (cover != null && cover.compareTo(new BigDecimal("4")) < 0 ? "ORDER_SOON" : "ADEQUATE");
+            rows.add(Web.map(
+                    "tankId", tank.get("id"),
+                    "tankCode", tank.get("code"),
+                    "productName", tank.get("productName"),
+                    "productColor", tank.get("productColor"),
+                    "bookStockLitres", tank.get("bookStockLitres"),
+                    "capacityLitres", tank.get("capacityLitres"),
+                    "fillPct", tank.get("fillPct"),
+                    "ullageLitres", Money.litres(ullage),
+                    "avgDailySalesLitres", Money.litres(avgDaily),
+                    "daysOfCover", cover == null ? null : cover.toPlainString(),
+                    "suggestedOrderLitres", Money.litres(suggested),
+                    "priority", priority));
+        }
+        ctx.ok(Web.map("stationId", station.get("id"), "basedOnDays", days, "rows", rows));
+    }
+
+    private static List<Map<String, Object>> exportStations(Auth auth, Web.Ctx ctx) {
+        String sid = ctx.q("stationId");
+        if (sid == null || sid.isBlank() || "all".equalsIgnoreCase(sid)) {
+            List<Map<String, Object>> out = new ArrayList<>();
+            for (Map<String, Object> s : Db.all("SELECT * FROM stations WHERE tenant_id = ? ORDER BY name", auth.tenantId())) {
+                if (auth.allStations || auth.stationIds.contains(Db.str(s, "id"))) out.add(s);
+            }
+            return out;
+        }
+        return List.of(auth.station(sid));
     }
 
     private static void csvSales(Web.Ctx ctx) {
         Auth auth = ctx.requireAuth();
         auth.require("reports.read");
-        Map<String, Object> station = auth.station(required(ctx, "stationId"));
+        List<Map<String, Object>> stations = exportStations(auth, ctx);
         String month = ctx.q("month") == null ? Clock.todayIst().substring(0, 7) : ctx.q("month");
-        StringBuilder csv = new StringBuilder("date,shift,product,litres,amount\n");
-        for (Map<String, Object> row : Db.all(
-                """
-                SELECT s.business_date, s.shift_number, p.name AS product, snr.litres_sold, snr.sales_value
-                  FROM shift_nozzle_readings snr
-                  JOIN shifts s ON s.id = snr.shift_id
-                  JOIN nozzles n ON n.id = snr.nozzle_id
-                  JOIN fuel_products p ON p.id = n.product_id
-                 WHERE s.station_id = ? AND s.business_date LIKE ? AND s.status IN ('CLOSED','FLAGGED')
-                 ORDER BY s.business_date, s.shift_number, p.name
-                """, station.get("id"), month + "%")) {
-            csv.append(csvCell(row.get("business_date"))).append(',')
-                    .append(csvCell(row.get("shift_number"))).append(',')
-                    .append(csvCell(row.get("product"))).append(',')
-                    .append(csvCell(row.get("litres_sold"))).append(',')
-                    .append(csvCell(row.get("sales_value"))).append('\n');
+        StringBuilder csv = new StringBuilder("station,date,shift,product,litres,amount\n");
+        for (Map<String, Object> station : stations) {
+            for (Map<String, Object> row : Db.all(
+                    """
+                    SELECT s.business_date, s.shift_number, p.name AS product, snr.litres_sold, snr.sales_value
+                      FROM shift_nozzle_readings snr
+                      JOIN shifts s ON s.id = snr.shift_id
+                      JOIN nozzles n ON n.id = snr.nozzle_id
+                      JOIN fuel_products p ON p.id = n.product_id
+                     WHERE s.station_id = ? AND s.business_date LIKE ? AND s.status IN ('CLOSED','FLAGGED')
+                     ORDER BY s.business_date, s.shift_number, p.name
+                    """, station.get("id"), month + "%")) {
+                csv.append(csvCell(station.get("code"))).append(',')
+                        .append(csvCell(row.get("business_date"))).append(',')
+                        .append(csvCell(row.get("shift_number"))).append(',')
+                        .append(csvCell(row.get("product"))).append(',')
+                        .append(csvCell(row.get("litres_sold"))).append(',')
+                        .append(csvCell(row.get("sales_value"))).append('\n');
+            }
         }
         ctx.csv("sales-register.csv", csv.toString());
     }
@@ -333,14 +492,17 @@ public final class ReportApi {
     private static void csvStock(Web.Ctx ctx) {
         Auth auth = ctx.requireAuth();
         auth.require("reports.read");
-        Map<String, Object> station = auth.station(required(ctx, "stationId"));
-        StringBuilder csv = new StringBuilder("tank,product,book_litres,physical_litres,variance_litres\n");
-        for (Map<String, Object> tank : Domain.tankSummary(Db.str(station, "id"))) {
-            csv.append(csvCell(tank.get("code"))).append(',')
-                    .append(csvCell(tank.get("productName"))).append(',')
-                    .append(csvCell(tank.get("bookStockLitres"))).append(',')
-                    .append(csvCell(tank.get("lastMeasuredLitres"))).append(',')
-                    .append(csvCell(tank.get("lastVarianceLitres"))).append('\n');
+        List<Map<String, Object>> stations = exportStations(auth, ctx);
+        StringBuilder csv = new StringBuilder("station,tank,product,book_litres,physical_litres,variance_litres\n");
+        for (Map<String, Object> station : stations) {
+            for (Map<String, Object> tank : Domain.tankSummary(Db.str(station, "id"))) {
+                csv.append(csvCell(station.get("code"))).append(',')
+                        .append(csvCell(tank.get("code"))).append(',')
+                        .append(csvCell(tank.get("productName"))).append(',')
+                        .append(csvCell(tank.get("bookStockLitres"))).append(',')
+                        .append(csvCell(tank.get("lastMeasuredLitres"))).append(',')
+                        .append(csvCell(tank.get("lastVarianceLitres"))).append('\n');
+            }
         }
         ctx.csv("stock-statement.csv", csv.toString());
     }

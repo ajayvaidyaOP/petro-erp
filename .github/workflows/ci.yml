@@ -1,10 +1,8 @@
 name: CI
 
-# Everything in this repo is verified locally with these four commands; CI runs the
-# same ones so a green badge means the same thing as a green laptop.
 on:
   push:
-    branches: [main]
+    branches: [main, 'arena/**']
   pull_request:
   workflow_dispatch:
 
@@ -19,36 +17,56 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: petroflow
+          MYSQL_DATABASE: petroflow
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -ppetroflow"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=15
+    env:
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_PORT: '3306'
+      MYSQL_DATABASE: petroflow
+      MYSQL_USER: root
+      MYSQL_PASSWORD: petroflow
     steps:
       - uses: actions/checkout@v4
 
-      # The backend uses Node's built-in node:sqlite, which requires 22.13+.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22.13.0'
           cache: npm
 
-      - name: Install (clean, from the lockfile)
+      - name: Install frontend & test dependencies
         run: npm ci
 
-      - name: Typecheck (backend, frontend, gateway)
+      - name: Typecheck frontend & compile Java 21 backend
         run: npm run typecheck
 
-      - name: Unit + API tests
+      - name: Java 21 unit + MySQL HTTP integration tests
         run: npm test
 
-      - name: Build (frontend assets + backend compile)
+      - name: Build frontend assets & package Java API jar
         run: npm run build
 
-      - name: Database backup tooling smoke test
+      - name: MySQL schema, seed & mysqldump smoke test
         run: |
           npm run db:seed
-          npm run db:backup
-          npm run db:integrity
-
-      - name: Dependency audit (production tree)
-        continue-on-error: true
-        run: npm audit --omit=dev
+          mysqldump --no-tablespaces -h 127.0.0.1 -P 3306 -u root -ppetroflow petroflow > /tmp/petroflow-backup.sql
+          test -s /tmp/petroflow-backup.sql
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -58,23 +76,54 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  # Browser suites need a downloaded Chromium and are slower; they run on demand and
-  # on PRs so a flaky browser download can never block a docs-only change.
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     needs: verify
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: petroflow
+          MYSQL_DATABASE: petroflow_e2e
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -ppetroflow"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=15
+    env:
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_PORT: '3306'
+      E2E_MYSQL_DATABASE: petroflow_e2e
+      MYSQL_USER: root
+      MYSQL_PASSWORD: petroflow
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22.13.0'
           cache: npm
+
       - run: npm ci
+
+      - name: Package Java 21 API jar
+        run: node scripts/gradle.mjs jar --no-daemon
+
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
-      - name: Browser workflows
+
+      - name: Browser workflows (React/Vite + Java 21 API + MySQL 8)
         run: npm run test:e2e
+
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

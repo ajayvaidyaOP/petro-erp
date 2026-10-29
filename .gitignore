@@ -5,10 +5,13 @@ node_modules/
 # build output
 dist/
 build/
+*.class
 *.tsbuildinfo
+.gradle/
+backend/.gradle/
 frontend/dist/
 backend/dist/
-backend/gateway/dist/
+backend/build/
 
 # environment / secrets — never commit real values
 .env

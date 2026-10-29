@@ -25,6 +25,27 @@ tasks.named<JavaExec>("run") {
     standardInput = System.`in`
 }
 
+tasks.register<JavaExec>("simulateGateway") {
+    group = "application"
+    description = "Run the Java 21 forecourt gateway simulator CLI"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("in.petrolflow.GatewaySimulator")
+    workingDir = rootProject.projectDir.parentFile
+}
+
+val verifyJava = tasks.register<JavaExec>("verifyJava") {
+    group = "verification"
+    description = "Run PetroFlow Java 21 unit and MySQL HTTP integration tests"
+    dependsOn("testClasses")
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("in.petrolflow.BackendTests")
+    workingDir = rootProject.projectDir.parentFile
+}
+
+tasks.named("check") {
+    dependsOn(verifyJava)
+}
+
 tasks.jar {
     manifest {
         attributes("Main-Class" to "in.petrolflow.Main")
