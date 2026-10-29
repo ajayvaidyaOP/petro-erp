@@ -230,13 +230,18 @@ export default function Dashboard() {
   const paymentEntries = Object.entries(data.sales.byMode).filter(([, amount]) => Number(amount) > 0);
   const paymentTotal = paymentEntries.reduce((sum, [, amount]) => sum + Number(amount), 0);
 
+  // Shortcuts only promise actions the current login can actually open.
+  const canViewShifts = can('shifts.read');
+  const shiftLink = openShift || !can('shifts.open') ? '/shifts' : '/shifts?new=shift';
+  const shiftLabel = openShift ? 'Manage shift' : can('shifts.open') ? 'Open a shift' : 'View shifts';
   const actions = [
     {
-      to: openShift ? '/shifts' : '/shifts?new=shift',
-      label: openShift ? 'Manage shift' : 'Open a shift',
+      to: shiftLink,
+      label: shiftLabel,
       detail: 'Readings & settlement',
       icon: <ListChecks className="h-[18px] w-[18px]" />,
       iconStyle: 'bg-accent/10 text-accent',
+      visible: canViewShifts,
     },
     {
       to: '/deliveries?new=delivery',
@@ -244,6 +249,7 @@ export default function Dashboard() {
       detail: 'Receive fuel stock',
       icon: <Truck className="h-[18px] w-[18px]" />,
       iconStyle: 'bg-accent-green/10 text-accent-green',
+      visible: can('deliveries.read') && can('deliveries.write'),
     },
     {
       to: '/finance?new=expense',
@@ -251,6 +257,7 @@ export default function Dashboard() {
       detail: 'Keep cash in check',
       icon: <Wallet className="h-[18px] w-[18px]" />,
       iconStyle: 'bg-warn/10 text-warn',
+      visible: can('payments.read') && can('expenses.write'),
     },
     {
       to: '/customers',
@@ -258,35 +265,38 @@ export default function Dashboard() {
       detail: 'Fleet credit & receipts',
       icon: <Users className="h-[18px] w-[18px]" />,
       iconStyle: 'bg-graphite/10 text-graphite',
+      visible: can('customers.read'),
     },
-  ];
+  ].filter((action) => action.visible);
 
   const activeStroke = chartMetric === 'value' ? chart.accent : chart.green;
 
   return (
     <>
-      {/* A clear, station-specific starting point for the working day. */}
+      {/* A station-specific starting point; the forecourt image is decorative. */}
       <div className="dashboard-hero relative isolate mb-5 overflow-hidden rounded-2.5xl p-5 text-white sm:p-6 lg:p-7">
-        <div aria-hidden className="pointer-events-none absolute right-12 top-5 hidden text-white/[0.07] lg:block">
-          <Fuel className="h-32 w-32" strokeWidth={1} />
-        </div>
-        <div className="relative z-10 flex flex-wrap items-end justify-between gap-5">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-white/70">
-              <span className="h-2 w-2 rounded-full bg-fuel" aria-hidden />
-              Your station overview
-              <span className="rounded-md border border-white/20 bg-white/10 px-2 py-0.5 font-mono tracking-normal text-white">
+        <div className="relative z-10 flex flex-wrap items-end justify-between gap-6">
+          <div className="min-w-0 max-w-[620px]">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span className="inline-flex items-center gap-2 rounded-full border border-panel-energy/25 bg-panel-energy/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-panel-energy">
+                <span className="h-1.5 w-1.5 rounded-full bg-panel-energy" aria-hidden />
+                Station overview
+              </span>
+              <span className="font-mono text-[10px] font-semibold tracking-wider text-white/55">
                 {station?.code ?? data.station.code}
               </span>
             </div>
-            <h1 className="mt-3 font-display text-[27px] font-extrabold leading-tight tracking-[-0.035em] text-white sm:text-[32px]">
-              {greeting}, {firstName}<span className="text-fuel">.</span>
+            <h1 className="mt-4 font-display text-[27px] font-extrabold leading-tight tracking-[-0.035em] text-white sm:text-[32px]">
+              {greeting}, {firstName}<span className="text-panel-energy">.</span>
             </h1>
-            <p className="mt-1.5 text-sm text-white/70">
+            <p className="mt-1.5 text-sm leading-relaxed text-white/70">
               Here’s what’s happening at <span className="font-semibold text-white">{station?.name ?? data.station.name}</span>.
             </p>
             <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs">
-              <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 font-semibold text-white">
+              <span className={cn(
+                'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 font-semibold',
+                openShift ? 'border-live/25 bg-live/10 text-live' : 'border-white/15 bg-white/5 text-white/75',
+              )}>
                 <span className={cn('h-2 w-2 rounded-full', openShift ? 'bg-live' : 'bg-white/50')} aria-hidden />
                 {openShift ? (
                   <>
@@ -295,7 +305,7 @@ export default function Dashboard() {
                   </>
                 ) : 'No shift open'}
               </span>
-              {data.flaggedShifts > 0 && (
+              {data.flaggedShifts > 0 && canViewShifts && (
                 <Link to="/shifts" className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 font-semibold text-white hover:bg-white/20">
                   {data.flaggedShifts} flagged {data.flaggedShifts === 1 ? 'shift' : 'shifts'}
                 </Link>
@@ -310,10 +320,12 @@ export default function Dashboard() {
                 size="sm"
                 variant="ghost"
                 onClick={() => setCompare(true)}
+                aria-label="Compare both pumps"
                 icon={<Store className="h-3.5 w-3.5" />}
-                className="h-10 border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                className="h-10 border-white/20 bg-black/30 text-white hover:bg-white/15 hover:text-white"
               >
-                Compare both pumps
+                <span className="sm:hidden">Compare</span>
+                <span className="hidden sm:inline">Compare both pumps</span>
               </Button>
             )}
             <Input
@@ -324,15 +336,17 @@ export default function Dashboard() {
               onChange={(event) => {
                 if (event.target.value) setDate(event.target.value);
               }}
-              className="h-10 w-auto border-white/20 bg-white/10 text-xs text-white [color-scheme:dark] hover:border-white/40"
+              className="h-10 w-auto border-white/20 bg-black/30 text-xs text-white [color-scheme:dark] hover:border-white/40"
             />
-            <Link
-              to={openShift ? '/shifts' : '/shifts?new=shift'}
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-fuel px-4 text-xs font-bold text-onfuel shadow-sm transition hover:brightness-110"
-            >
-              {openShift ? <ArrowUpRight className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-              {openShift ? 'Manage shift' : 'Open shift'}
-            </Link>
+            {canViewShifts && (
+              <Link
+                to={shiftLink}
+                className="brand-gradient inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-4 text-xs font-bold text-onbrand shadow-glow transition hover:brightness-110"
+              >
+                {openShift || !can('shifts.open') ? <ArrowUpRight className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                {openShift ? 'Manage shift' : can('shifts.open') ? 'Open shift' : 'View shifts'}
+              </Link>
+            )}
           </div>
         </div>
       </div>
@@ -342,7 +356,7 @@ export default function Dashboard() {
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-carbon-700/80 bg-carbon-850 px-4 py-3.5 shadow-card sm:px-5">
           <div className="flex min-w-0 flex-wrap items-center gap-3 sm:gap-5">
             <div className="flex items-center gap-2.5">
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-warn/10 text-warn">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-accent/20 bg-accent/10 text-accent">
                 <Tags className="h-4 w-4" aria-hidden />
               </span>
               <span>
@@ -355,7 +369,7 @@ export default function Dashboard() {
                 const matchingTank = data.stock.find((t) => t.productName === rate.productName);
                 const dotColor = matchingTank?.productColor ?? 'rgb(var(--accent))';
                 return (
-                  <div key={rate.id} className="rounded-xl bg-carbon-800/75 px-3 py-2 sm:inline-flex sm:items-center sm:gap-2">
+                  <div key={rate.id} className="rounded-xl border border-carbon-700/60 bg-carbon-800/60 px-3 py-2 sm:inline-flex sm:items-center sm:gap-2">
                     <span className="flex min-w-0 items-center gap-2">
                       <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: dotColor }} aria-hidden />
                       <span className="text-[11px] font-semibold text-ink-400">{rate.productName}</span>
@@ -402,7 +416,7 @@ export default function Dashboard() {
           hint={`Credit ledger · Payables ${formatINR(data.payables, true)}`}
           icon={<Users className="h-4 w-4" />}
           tone={Number(data.receivables) > 0 ? 'warning' : 'default'}
-          to="/customers"
+          to={can('customers.read') ? '/customers' : undefined}
         />
         <MetricCard
           label="Open shifts"
@@ -416,38 +430,40 @@ export default function Dashboard() {
           }
           icon={<Clock3 className="h-4 w-4" />}
           tone={data.flaggedShifts ? 'warning' : openShift ? 'success' : 'default'}
-          to="/shifts"
+          to={canViewShifts ? '/shifts' : undefined}
         />
       </div>
 
       {/* Quick Operational Workflows */}
-      <section className="mt-6" aria-labelledby="quick-actions-title">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 id="quick-actions-title" className="font-display text-base font-extrabold tracking-tight text-ink-100">
-            Quick actions
-          </h2>
-          <span className="text-[11px] font-medium text-ink-500">Everything you need, a tap away</span>
-        </div>
-        <div className="grid grid-cols-1 gap-3 min-[440px]:grid-cols-2 xl:grid-cols-4">
-          {actions.map((action) => (
-            <Link key={action.to} to={action.to} className="quick-action group">
-              <span className={cn('grid h-11 w-11 shrink-0 place-items-center rounded-xl transition-transform duration-200 group-hover:scale-105', action.iconStyle)}>
-                {action.icon}
-              </span>
-              <span className="min-w-0">
-                <span className="block font-display text-[13.5px] font-bold tracking-tight text-ink-100">
-                  {action.label}
+      {actions.length > 0 && (
+        <section className="mt-6" aria-labelledby="quick-actions-title">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 id="quick-actions-title" className="font-display text-base font-extrabold tracking-tight text-ink-100">
+              Quick actions
+            </h2>
+            <span className="hidden text-[11px] font-medium text-ink-500 sm:block">Everything you need, a tap away</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+            {actions.map((action) => (
+              <Link key={action.to} to={action.to} className="quick-action group">
+                <span className={cn('grid h-9 w-9 shrink-0 place-items-center rounded-xl transition-transform duration-200 group-hover:scale-105 sm:h-11 sm:w-11', action.iconStyle)}>
+                  {action.icon}
                 </span>
-                <span className="mt-0.5 block text-xs text-ink-500">{action.detail}</span>
-              </span>
-              <ChevronRight
-                className="ml-auto h-4 w-4 shrink-0 text-ink-500 transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-accent"
-                aria-hidden
-              />
-            </Link>
-          ))}
-        </div>
-      </section>
+                <span className="min-w-0">
+                  <span className="block font-display text-xs font-bold leading-snug tracking-tight text-ink-100 sm:text-[13.5px]">
+                    {action.label}
+                  </span>
+                  <span className="sr-only text-xs text-ink-500 min-[440px]:not-sr-only min-[440px]:mt-0.5 min-[440px]:block">{action.detail}</span>
+                </span>
+                <ChevronRight
+                  className="ml-auto hidden h-4 w-4 shrink-0 text-ink-500 transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-accent sm:block"
+                  aria-hidden
+                />
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Primary Analytics & Underground Tank Silo Telemetry */}
       <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(330px,1fr)]">
@@ -618,11 +634,11 @@ export default function Dashboard() {
           <CardHeader
             title="Fuel stock levels"
             subtitle="Book stock, capacity & available ullage"
-            action={
+            action={can('stock.read') ? (
               <Link to="/tanks" className="link text-xs">
                 Tank ledger →
               </Link>
-            }
+            ) : undefined}
           />
           <CardBody className="flex flex-1 flex-col gap-3">
             {data.stock.length === 0 ? (
@@ -718,11 +734,11 @@ export default function Dashboard() {
           <CardHeader
             title="Forecourt shift status"
             subtitle="Active crew & totalizer capture"
-            action={
+            action={canViewShifts ? (
               <Link to="/shifts" className="link text-xs">
                 All shifts →
               </Link>
-            }
+            ) : undefined}
           />
           <CardBody className="flex flex-1 flex-col justify-between">
             {openShift ? (
@@ -748,26 +764,32 @@ export default function Dashboard() {
                     Opened <span className="num font-medium text-ink-200">{formatDateTime(String(openShift.openedAt))}</span>
                   </p>
                   <div className="mt-3 grid grid-cols-2 gap-2">
-                    <Link
-                      to="/readings"
-                      className="flex items-center gap-2 rounded-xl border border-carbon-700/80 bg-carbon-800/40 px-3 py-2 text-xs font-semibold text-ink-300 transition hover:border-accent/45 hover:bg-carbon-800 hover:text-ink-100"
-                    >
-                      <Gauge className="h-3.5 w-3.5 text-accent" aria-hidden /> Meter readings
-                    </Link>
-                    <Link
-                      to="/density"
-                      className="flex items-center gap-2 rounded-xl border border-carbon-700/80 bg-carbon-800/40 px-3 py-2 text-xs font-semibold text-ink-300 transition hover:border-accent/45 hover:bg-carbon-800 hover:text-ink-100"
-                    >
-                      <Thermometer className="h-3.5 w-3.5 text-accent" aria-hidden /> Density check
-                    </Link>
+                    {can('readings.read') && (
+                      <Link
+                        to="/readings"
+                        className="flex items-center gap-2 rounded-xl border border-carbon-700/80 bg-carbon-800/40 px-3 py-2 text-xs font-semibold text-ink-300 transition hover:border-accent/45 hover:bg-carbon-800 hover:text-ink-100"
+                      >
+                        <Gauge className="h-3.5 w-3.5 text-accent" aria-hidden /> Meter readings
+                      </Link>
+                    )}
+                    {can('density.read') && (
+                      <Link
+                        to="/density"
+                        className="flex items-center gap-2 rounded-xl border border-carbon-700/80 bg-carbon-800/40 px-3 py-2 text-xs font-semibold text-ink-300 transition hover:border-accent/45 hover:bg-carbon-800 hover:text-ink-100"
+                      >
+                        <Thermometer className="h-3.5 w-3.5 text-accent" aria-hidden /> Density check
+                      </Link>
+                    )}
                   </div>
                 </div>
-                <Link
-                  to="/shifts"
-                  className="mt-4 flex min-h-10 items-center justify-center gap-2 rounded-xl border border-accent/30 bg-accent/10 text-xs font-bold text-accent transition hover:bg-accent/16"
-                >
-                  Continue shift &amp; settle <ArrowRight className="h-3.5 w-3.5" aria-hidden />
-                </Link>
+                {canViewShifts && (
+                  <Link
+                    to="/shifts"
+                    className="mt-4 flex min-h-10 items-center justify-center gap-2 rounded-xl border border-accent/30 bg-accent/10 text-xs font-bold text-accent transition hover:bg-accent/16"
+                  >
+                    Continue shift &amp; settle <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+                  </Link>
+                )}
               </>
             ) : (
               <div className="flex flex-1 flex-col items-center justify-center py-6 text-center">
@@ -778,11 +800,13 @@ export default function Dashboard() {
                 <p className="mt-1 max-w-xs text-xs leading-relaxed text-ink-400">
                   Open a shift to capture nozzle opening totalizers for the incoming crew.
                 </p>
-                <Link to="/shifts?new=shift" className="mt-4">
-                  <Button size="sm" variant="primary" icon={<Plus className="h-3.5 w-3.5" />}>
-                    Open shift
-                  </Button>
-                </Link>
+                {canViewShifts && can('shifts.open') && (
+                  <Link to="/shifts?new=shift" className="mt-4">
+                    <Button size="sm" variant="primary" icon={<Plus className="h-3.5 w-3.5" />}>
+                      Open shift
+                    </Button>
+                  </Link>
+                )}
               </div>
             )}
           </CardBody>
@@ -853,11 +877,11 @@ export default function Dashboard() {
           <CardHeader
             title="Recorded payment mix"
             subtitle="Transaction-level collections by mode"
-            action={
+            action={can('payments.read') ? (
               <Link to="/finance" className="link text-xs">
                 Finance →
               </Link>
-            }
+            ) : undefined}
           />
           <CardBody className="flex flex-1 flex-col justify-between">
             {paymentTotal > 0 ? (

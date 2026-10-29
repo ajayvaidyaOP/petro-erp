@@ -111,9 +111,10 @@ const GROUP_ORDER: NavigationGroup[] = [
 function Brand({ collapsed = false }: { collapsed?: boolean }) {
   return (
     <div className={cn('flex items-center gap-3', collapsed && 'justify-center')}>
-      <span className="brand-gradient relative grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-2xl text-onbrand shadow-glow ring-1 ring-accent/30">
+      <span className="brand-gradient relative grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-xl text-onbrand shadow-glow ring-1 ring-accent/30">
         <span aria-hidden className="absolute inset-0 bg-[linear-gradient(145deg,rgb(255_255_255/0.32),transparent_55%)]" />
         <Fuel className="relative h-[19px] w-[19px]" strokeWidth={2.3} aria-hidden />
+        <span aria-hidden className="absolute bottom-1 right-1 h-1.5 w-1.5 rounded-full bg-[#247c48] ring-1 ring-[#241308]/40" />
       </span>
       {!collapsed && (
         <div className="min-w-0">
@@ -121,7 +122,7 @@ function Brand({ collapsed = false }: { collapsed?: boolean }) {
             Petro<span className="text-fuel">Flow</span>
           </p>
           <p className="mt-1 text-[9.5px] font-bold uppercase tracking-[0.17em] text-ink-500">
-            FUEL STATION ERP
+            STATION ERP
           </p>
         </div>
       )}
@@ -141,11 +142,11 @@ function PrimaryNav({
 
   if (me?.isSuperAdmin) {
     return (
-      <nav aria-label="Primary" className="flex-1 space-y-6 overflow-y-auto px-3 py-5 scroll-thin">
+      <nav aria-label="Primary" className="flex-1 space-y-6 overflow-y-auto px-3 py-6 scroll-thin">
         {adminGroups.map((group) => (
           <div key={group.group}>
             {!collapsed && (
-              <p className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-[0.15em] text-ink-500">
+              <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-500">
                 {group.group}
               </p>
             )}
@@ -181,14 +182,14 @@ function PrimaryNav({
   const permitted = navigation.filter((item) => canOpen(can, item));
 
   return (
-    <nav aria-label="Primary" className="flex-1 space-y-6 overflow-y-auto px-3 py-5 scroll-thin">
+    <nav aria-label="Primary" className="flex-1 space-y-6 overflow-y-auto px-3 py-6 scroll-thin">
       {GROUP_ORDER.map((groupName) => {
         const items = permitted.filter((item) => item.group === groupName);
         if (items.length === 0) return null;
         return (
           <div key={groupName}>
             {!collapsed && (
-              <p className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-[0.15em] text-ink-500">
+              <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-500">
                 {groupName}
               </p>
             )}
@@ -518,7 +519,7 @@ export function Layout() {
       <aside
         className={cn(
           'sidebar-surface sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-carbon-700/60 transition-[width] duration-200 ease-smooth md:flex',
-          collapsed ? 'w-[74px]' : 'w-[254px] xl:w-[264px]',
+          collapsed ? 'w-[74px]' : 'w-[250px] xl:w-[260px]',
         )}
       >
         <div
@@ -544,11 +545,11 @@ export function Layout() {
         <PrimaryNav collapsed={collapsed} />
 
         {!collapsed && !me?.isSuperAdmin && station && (
-          <div className="mx-3 mb-3 rounded-2xl border border-white/10 bg-white/5 p-3.5">
+          <div className="mx-3 mb-3 rounded-2xl border border-white/10 bg-white/[0.035] p-3.5">
             <div className="flex items-center justify-between gap-2">
               <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.13em] text-ink-500">
-                <span className="h-1.5 w-1.5 rounded-full bg-ok" aria-hidden />
-                Your active pump
+                <Store className="h-3 w-3 text-accent" aria-hidden />
+                Selected station
               </span>
               <span className="rounded-md border border-accent/25 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] font-bold text-accent">
                 {station.code}
@@ -556,7 +557,7 @@ export function Layout() {
             </div>
             <p className="mt-1.5 truncate font-display text-xs font-bold text-ink-100">{station.name}</p>
             <p className="mt-1 flex items-center gap-1.5 text-[10.5px] text-ink-500">
-              <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-accent" aria-hidden />
+              <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-ok" aria-hidden />
               <span>{me?.user.roleName} workspace · IST</span>
             </p>
           </div>
@@ -580,7 +581,7 @@ export function Layout() {
             </button>
           ) : (
             <>
-              <span className="font-semibold text-ink-400">Made for fuel retailers</span>
+              <span className="font-semibold text-ink-400">Built for your forecourt</span>
               <Fuel className="h-4 w-4 text-fuel" aria-hidden />
             </>
           )}
@@ -634,7 +635,7 @@ export function Layout() {
 
       {/* Main Content Shell */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-[62px] items-center gap-2 border-b border-carbon-700/75 bg-carbon-900/85 px-3 backdrop-blur-xl sm:gap-2.5 sm:px-6 md:h-[68px] lg:px-8">
+        <header className="sticky top-0 z-30 flex h-[62px] items-center gap-2 border-b border-carbon-700/65 bg-carbon-900/90 px-3 backdrop-blur-xl sm:gap-2.5 sm:px-6 md:h-[68px] lg:px-8">
           {/* Organization & Section Context */}
           <div className="min-w-0 flex-1">
             <div className="hidden items-center gap-2 text-xs md:flex">

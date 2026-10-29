@@ -832,11 +832,11 @@ export function StatCard({
   footer?: ReactNode;
 }) {
   const iconTones = {
-    default: 'bg-info/10 text-info',
-    accent: 'bg-accent/12 text-accent',
-    success: 'bg-ok/12 text-ok',
-    warning: 'bg-warn/12 text-warn',
-    danger: 'bg-danger/12 text-danger',
+    default: 'border border-carbon-700 bg-carbon-800 text-ink-300',
+    accent: 'border border-accent/20 bg-accent/12 text-accent',
+    success: 'border border-ok/20 bg-ok/12 text-ok',
+    warning: 'border border-warn/20 bg-warn/12 text-warn',
+    danger: 'border border-danger/20 bg-danger/12 text-danger',
   };
   const surfaces = {
     default: '',
@@ -846,19 +846,19 @@ export function StatCard({
     danger: 'border-danger/20 bg-gradient-to-br from-danger/[0.08] via-carbon-850 to-carbon-850',
   };
   return (
-    <div className={cn('card relative h-full overflow-hidden p-4 sm:p-5', surfaces[tone])}>
+    <div data-tone={tone} className={cn('card stat-card relative h-full overflow-hidden p-4 sm:p-5', surfaces[tone])}>
       <div className="relative flex items-start justify-between gap-3">
-        <p className="pt-0.5 text-[12px] font-semibold leading-snug text-ink-400">{label}</p>
+        <p className="pt-1 text-[11px] font-bold uppercase leading-snug tracking-[0.07em] text-ink-400">{label}</p>
         {icon && (
-          <div className={cn('grid h-10 w-10 shrink-0 place-items-center rounded-xl', iconTones[tone])}>
+          <div className={cn('grid h-9 w-9 shrink-0 place-items-center rounded-xl', iconTones[tone])}>
             {icon}
           </div>
         )}
       </div>
-      <p className="num relative mt-2 break-words font-display text-[21px] font-extrabold leading-tight tracking-[-0.035em] text-ink-100 sm:text-[27px]">
+      <p className="num relative mt-3 break-words font-display text-[21px] font-extrabold leading-tight tracking-[-0.035em] text-ink-100 sm:text-[27px]">
         {value}
       </p>
-      {hint && <p className="mt-1.5 text-[11.5px] leading-snug text-ink-500">{hint}</p>}
+      {hint && <p className="mt-2 text-[11.5px] leading-relaxed text-ink-500">{hint}</p>}
       {footer && <div className="mt-3 border-t border-carbon-700/60 pt-2.5 text-xs text-ink-500">{footer}</div>}
     </div>
   );
