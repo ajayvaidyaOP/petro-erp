@@ -100,15 +100,14 @@ Password kam se kam 10 characters, ek letter aur ek number.
 
 ## Colour
 
-UI **Ink & Petrol** hai. Pehle wala ember orange hata diya — woh action colour ki tarah cheekh raha tha.
+UI **Ember & Evergreen** hai — dark charcoal workspace, warm orange actions aur green status cues.
 
-- Teal: button, active menu, focus. Matlab aapka kaam.
-- Green: settled, healthy stock, paid. Sirf theek hone pe.
-- Brass: fuel price cue. Button pe nahi.
-- Ink: text aur sidebar.
-- Stone: page background.
+- Orange: primary button, active menu, focus aur important actions.
+- Green: live shift, healthy stock aur settled/paid status.
+- Charcoal: page, navigation aur card surfaces; readable light text ke saath.
+- Light theme bhi available hai: header ka sun/moon button use karo.
 
-Light default hai. Header ka sun/moon dark karta hai. Choice `localStorage` key `petroflow.theme` mein rehti hai.
+Dark default hai. Aapki selected theme `localStorage` key `petroflow.theme` mein rehti hai; pehle se save ki hui light choice bhi preserve hoti hai.
 
 ## Deployment
 
