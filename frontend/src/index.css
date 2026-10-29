@@ -3,130 +3,127 @@
 @tailwind utilities;
 
 /* ============================================================================
-   PetroFlow — "Forecourt Lux" design system
+   PetroFlow — "Precision Forecourt Command" Design System
    ----------------------------------------------------------------------------
-   Palette direction: deep petrol jade as the brand, a warm sage-tinted paper
-   canvas in light mode and a graphite-jade ink in dark mode, with amber-gold
-   reserved as the "energy / fuel / money-in" highlight. Every colour resolves
-   through these custom properties, so `data-theme` on <html> re-tints the
-   whole app and no component ever hardcodes a Tailwind shade.
-
-   Values are space-separated RGB channels so Tailwind's /opacity modifiers
-   (bg-accent/12) keep working.
+   Architectural cool-slate & porcelain neutrals in light mode, deep obsidian
+   cockpit surfaces in dark mode, paired with jewel emerald-petrol, cyan-teal,
+   and liquid amber-gold semantic accents.
    ========================================================================== */
 @layer base {
   :root,
   [data-theme='light'] {
     color-scheme: light;
-    /* Surfaces: 950 = page canvas (warm sage paper) … 600 = strongest border */
-    --navy-950: 242 246 243;
+    /* Surfaces: 950 = porcelain canvas, 900/850 = pure crisp white elevations */
+    --navy-950: 246 248 252;
     --navy-900: 255 255 255;
-    --navy-850: 252 253 252;
-    --navy-800: 237 242 238;
-    --navy-750: 226 233 228;
-    --navy-700: 205 216 208;
-    --navy-600: 170 184 175;
-    /* Text: 100 = strongest … 600 = faintest (all ≥ AA for body sizes) */
-    --ink-100: 11 25 21;
-    --ink-200: 24 41 35;
-    --ink-300: 47 65 58;
-    --ink-400: 74 92 85;
-    --ink-500: 100 117 109;
-    --ink-600: 128 143 136;
-    /* Brand */
-    --accent: 4 106 84;
-    --accent-soft: 3 86 68;
-    --accent-teal: 11 137 122;
-    --accent-energy: 173 84 11;
+    --navy-850: 255 255 255;
+    --navy-800: 241 245 249;
+    --navy-750: 226 232 240;
+    --navy-700: 214 222 234;
+    --navy-600: 182 194 212;
+    /* Typography ramp: razor-sharp obsidian to muted architectural slate */
+    --ink-100: 9 14 26;
+    --ink-200: 26 36 54;
+    --ink-300: 51 65 85;
+    --ink-400: 81 96 120;
+    --ink-500: 105 120 143;
+    --ink-600: 142 156 178;
+    /* Signature Brand Accents */
+    --accent: 4 120 87;
+    --accent-soft: 6 95 70;
+    --accent-teal: 8 145 178;
+    --accent-energy: 180 83 9;
     --on-accent: 255 255 255;
-    /* Foreground for text sitting on a solid status fill */
+    /* Foreground on status fills */
     --on-ok: 255 255 255;
     --on-warn: 255 255 255;
     --on-danger: 255 255 255;
     --on-energy: 255 255 255;
-    --scrim: 9 19 16;
-    --inset: 234 239 235;
-    /* Brand panel (login/marketing surfaces) — deliberately dark in BOTH themes,
-       like the scrim, so the ink panel always reads as the brand, not as a bug. */
-    --panel-ink: 6 18 16;
-    --panel-deep: 4 12 11;
-    --panel-raised: 13 30 26;
-    --panel-line: 34 62 53;
-    --panel-text: 231 240 236;
-    --panel-muted: 156 178 170;
-    --panel-dim: 118 140 132;
-    --panel-accent: 62 220 175;
-    --panel-energy: 250 196 88;
-    /* Status */
-    --ok: 13 143 88;
-    --warn: 168 90 10;
-    --danger: 193 32 58;
-    --info: 11 101 156;
-    /* Depth */
-    --shadow-card: 0 1px 1px rgb(11 25 21 / 0.03), 0 2px 6px -2px rgb(11 25 21 / 0.06),
-      0 14px 30px -22px rgb(11 25 21 / 0.22);
-    --shadow-card-hover: 0 2px 4px rgb(11 25 21 / 0.05), 0 16px 34px -18px rgb(4 106 84 / 0.24);
-    --shadow-focus: 0 0 0 3px rgb(4 106 84 / 0.18);
-    --shadow-pop: 0 26px 64px -22px rgb(11 25 21 / 0.28), 0 4px 14px -6px rgb(11 25 21 / 0.14);
-    --shadow-glow: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 2px 5px rgb(4 106 84 / 0.2),
-      0 10px 24px -12px rgb(4 106 84 / 0.4);
-    --card-sheen: inset 0 1px 0 rgb(255 255 255 / 0.72);
-    /* Ambient canvas glows — kept faint so type stays readable */
-    --canvas-glow-1: rgb(4 106 84 / 0.07);
-    --canvas-glow-2: rgb(173 84 11 / 0.05);
-    --canvas-glow-3: rgb(11 137 122 / 0.05);
-    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%234a5c55' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    --scrim: 9 14 26;
+    --inset: 241 245 249;
+    /* Always-dark architectural showcase panel */
+    --panel-ink: 7 11 20;
+    --panel-deep: 4 7 13;
+    --panel-raised: 14 21 35;
+    --panel-line: 32 46 72;
+    --panel-text: 241 245 252;
+    --panel-muted: 154 170 196;
+    --panel-dim: 106 124 152;
+    --panel-accent: 32 224 172;
+    --panel-energy: 251 191 36;
+    /* Semantic Statuses */
+    --ok: 5 138 82;
+    --warn: 180 83 9;
+    --danger: 205 29 58;
+    --info: 29 98 216;
+    /* Multi-layered Elevation & Specular Highlights */
+    --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 4px 14px -4px rgb(15 23 42 / 0.055),
+      0 18px 36px -26px rgb(15 23 42 / 0.14);
+    --shadow-card-hover: 0 2px 6px rgb(15 23 42 / 0.05), 0 14px 32px -12px rgb(4 120 87 / 0.16),
+      0 8px 20px -10px rgb(15 23 42 / 0.08);
+    --shadow-focus: 0 0 0 3px rgb(4 120 87 / 0.16);
+    --shadow-pop: 0 24px 60px -16px rgb(15 23 42 / 0.22), 0 6px 18px -6px rgb(15 23 42 / 0.1),
+      0 0 0 1px rgb(15 23 42 / 0.04);
+    --shadow-glow: inset 0 1px 0 rgb(255 255 255 / 0.28), 0 2px 6px rgb(4 120 87 / 0.22),
+      0 10px 24px -10px rgb(4 120 87 / 0.42);
+    --card-sheen: inset 0 1px 0 rgb(255 255 255 / 0.9);
+    /* Subtle atmospheric aurora washes */
+    --canvas-glow-1: rgb(4 120 87 / 0.055);
+    --canvas-glow-2: rgb(8 145 178 / 0.045);
+    --canvas-glow-3: rgb(180 83 9 / 0.03);
+    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23516078' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   }
 
   [data-theme='dark'] {
     color-scheme: dark;
-    --navy-950: 7 13 12;
-    --navy-900: 11 19 17;
-    --navy-850: 15 24 22;
-    --navy-800: 20 32 29;
-    --navy-750: 27 42 38;
-    --navy-700: 38 56 50;
-    --navy-600: 56 78 69;
-    --ink-100: 236 244 240;
-    --ink-200: 213 225 219;
-    --ink-300: 178 194 187;
-    --ink-400: 140 158 150;
-    --ink-500: 112 130 122;
-    --ink-600: 88 104 97;
-    --accent: 34 197 152;
-    --accent-soft: 94 226 190;
-    --accent-teal: 45 212 190;
-    --accent-energy: 250 186 62;
-    --on-accent: 3 26 20;
-    --on-ok: 4 32 22;
-    --on-warn: 40 25 2;
+    --navy-950: 8 11 18;
+    --navy-900: 13 18 28;
+    --navy-850: 17 24 38;
+    --navy-800: 24 34 52;
+    --navy-750: 32 45 68;
+    --navy-700: 42 56 82;
+    --navy-600: 62 80 112;
+    --ink-100: 244 247 253;
+    --ink-200: 218 226 240;
+    --ink-300: 176 190 212;
+    --ink-400: 138 154 180;
+    --ink-500: 104 120 146;
+    --ink-600: 76 90 116;
+    --accent: 16 212 162;
+    --accent-soft: 52 228 184;
+    --accent-teal: 34 211 238;
+    --accent-energy: 251 191 36;
+    --on-accent: 4 24 19;
+    --on-ok: 4 28 18;
+    --on-warn: 38 22 2;
     --on-danger: 42 6 14;
-    --on-energy: 38 23 2;
-    --scrim: 2 6 5;
-    --inset: 9 16 14;
-    --panel-ink: 5 14 12;
-    --panel-deep: 2 8 7;
-    --panel-raised: 11 25 22;
-    --panel-line: 30 54 47;
-    --panel-text: 231 240 236;
-    --panel-muted: 156 178 170;
-    --panel-dim: 112 134 126;
-    --panel-accent: 62 220 175;
-    --panel-energy: 250 196 88;
-    --ok: 52 208 152;
-    --warn: 250 190 60;
-    --danger: 246 110 116;
-    --info: 66 182 240;
-    --shadow-card: 0 1px 1px rgb(0 0 0 / 0.4), 0 12px 26px -16px rgb(0 0 0 / 0.6);
-    --shadow-card-hover: 0 2px 6px rgb(0 0 0 / 0.42), 0 18px 38px -18px rgb(0 0 0 / 0.7);
-    --shadow-focus: 0 0 0 3px rgb(34 197 152 / 0.28);
-    --shadow-pop: 0 28px 70px -20px rgb(0 0 0 / 0.78), 0 4px 14px rgb(0 0 0 / 0.45);
-    --shadow-glow: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 8px 22px -10px rgb(34 197 152 / 0.42);
-    --card-sheen: inset 0 1px 0 rgb(255 255 255 / 0.05);
-    --canvas-glow-1: rgb(34 197 152 / 0.09);
-    --canvas-glow-2: rgb(250 186 62 / 0.05);
-    --canvas-glow-3: rgb(45 212 190 / 0.07);
-    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238c9e96' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    --on-energy: 38 22 2;
+    --scrim: 3 5 10;
+    --inset: 10 15 24;
+    --panel-ink: 7 11 20;
+    --panel-deep: 4 7 13;
+    --panel-raised: 14 21 35;
+    --panel-line: 32 46 72;
+    --panel-text: 241 245 252;
+    --panel-muted: 154 170 196;
+    --panel-dim: 106 124 152;
+    --panel-accent: 32 224 172;
+    --panel-energy: 251 191 36;
+    --ok: 34 209 138;
+    --warn: 251 191 36;
+    --danger: 251 105 122;
+    --info: 76 168 255;
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.45), 0 12px 30px -14px rgb(0 0 0 / 0.65);
+    --shadow-card-hover: 0 4px 12px rgb(0 0 0 / 0.5), 0 20px 42px -16px rgb(0 0 0 / 0.78),
+      0 0 24px -10px rgb(16 212 162 / 0.18);
+    --shadow-focus: 0 0 0 3px rgb(16 212 162 / 0.25);
+    --shadow-pop: 0 28px 72px -18px rgb(0 0 0 / 0.85), 0 6px 20px rgb(0 0 0 / 0.5);
+    --shadow-glow: inset 0 1px 0 rgb(255 255 255 / 0.16), 0 6px 20px -6px rgb(16 212 162 / 0.4);
+    --card-sheen: inset 0 1px 0 rgb(255 255 255 / 0.065);
+    --canvas-glow-1: rgb(16 212 162 / 0.075);
+    --canvas-glow-2: rgb(34 211 238 / 0.055);
+    --canvas-glow-3: rgb(76 168 255 / 0.045);
+    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238a9ab4' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   }
 
   html,
@@ -139,10 +136,9 @@
     @apply bg-navy-950 font-sans text-ink-200 antialiased;
     overflow-x: clip;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'ss01';
-    /* Three soft radial washes give the flat canvas depth without touching contrast. */
-    background-image: radial-gradient(880px 520px at 8% -10%, var(--canvas-glow-1), transparent 62%),
-      radial-gradient(760px 480px at 100% 0%, var(--canvas-glow-2), transparent 58%),
-      radial-gradient(900px 700px at 50% 120%, var(--canvas-glow-3), transparent 65%);
+    background-image: radial-gradient(960px 540px at 6% -8%, var(--canvas-glow-1), transparent 60%),
+      radial-gradient(840px 480px at 96% -4%, var(--canvas-glow-2), transparent 56%),
+      radial-gradient(960px 680px at 50% 118%, var(--canvas-glow-3), transparent 64%);
     background-attachment: fixed;
     background-repeat: no-repeat;
   }
@@ -159,7 +155,7 @@
   }
 
   ::selection {
-    background: rgb(var(--accent) / 0.22);
+    background: rgb(var(--accent) / 0.2);
   }
 
   :focus-visible {
@@ -173,16 +169,16 @@
   }
 
   ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 7px;
+    height: 7px;
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply rounded-full border-2 border-transparent bg-navy-600/60 bg-clip-padding;
+    @apply rounded-full border-2 border-transparent bg-navy-600/55 bg-clip-padding;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-accent/55;
+    @apply bg-accent/60;
   }
 
   ::-webkit-scrollbar-track,
@@ -194,9 +190,9 @@
 @layer components {
   /* --------------------------------------------------------------- cards */
   .card {
-    @apply min-w-0 rounded-2xl border border-navy-700/70 bg-navy-850 shadow-card;
+    @apply min-w-0 rounded-2xl border border-navy-700/75 bg-navy-850 shadow-card;
     box-shadow: var(--shadow-card), var(--card-sheen);
-    transition: border-color 160ms ease, box-shadow 200ms ease;
+    transition: border-color 180ms ease, box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1), transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .card-hover {
@@ -204,26 +200,31 @@
     box-shadow: var(--shadow-card-hover), var(--card-sheen);
   }
 
-  /* Brand gradient — jade → teal, used on the mark and primary actions. */
+  /* Signature Brand Gradient — Emerald Petrol → Electric Cyan */
   .brand-gradient {
-    background-image: linear-gradient(135deg, rgb(var(--accent)) 0%, rgb(var(--accent-teal)) 58%, rgb(var(--accent)) 100%);
+    background-image: linear-gradient(135deg, rgb(var(--accent)) 0%, rgb(var(--accent-teal)) 100%);
   }
 
   .brand-gradient-soft {
-    background-image: linear-gradient(150deg, rgb(var(--accent) / 0.14) 0%, rgb(var(--accent-teal) / 0.05) 46%, transparent 78%);
+    background-image: linear-gradient(145deg, rgb(var(--accent) / 0.13) 0%, rgb(var(--accent-teal) / 0.05) 48%, transparent 80%);
   }
 
   .energy-gradient-soft {
-    background-image: linear-gradient(150deg, rgb(var(--accent-energy) / 0.16) 0%, transparent 72%);
+    background-image: linear-gradient(145deg, rgb(var(--accent-energy) / 0.15) 0%, transparent 74%);
+  }
+
+  .hero-mesh {
+    background-image: radial-gradient(420px 180px at 0% 0%, rgb(var(--accent) / 0.09), transparent 70%),
+      radial-gradient(360px 160px at 100% 0%, rgb(var(--accent-teal) / 0.07), transparent 70%);
   }
 
   /* --------------------------------------------------------------- forms */
   .label {
-    @apply mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.045em] text-ink-400;
+    @apply mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-ink-400;
   }
 
   .input {
-    @apply min-h-10 w-full rounded-xl border border-navy-600/75 bg-navy-900 px-3 py-2 text-sm text-ink-100 shadow-[inset_0_1px_2px_rgb(11_25_21/0.04)] transition placeholder:text-ink-500/85 focus:border-accent focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60;
+    @apply min-h-10 w-full rounded-xl border border-navy-600/75 bg-navy-900 px-3.5 py-2 text-sm text-ink-100 shadow-[inset_0_1px_2px_rgb(15_23_42/0.035)] transition-all duration-150 placeholder:text-ink-500/80 hover:border-navy-600 focus:border-accent focus:outline-none disabled:cursor-not-allowed disabled:opacity-60;
   }
 
   .input:focus {
@@ -240,29 +241,29 @@
 
   /* ------------------------------------------------------------ sidebar */
   .nav-item {
-    @apply relative flex min-h-10 items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-medium text-ink-400 transition-all duration-150 hover:bg-navy-800/80 hover:text-ink-100;
+    @apply relative flex min-h-10 items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-medium text-ink-400 transition-all duration-150 hover:bg-navy-800/85 hover:text-ink-100;
   }
 
   .nav-item-active {
     @apply font-semibold text-accent;
-    background-image: linear-gradient(90deg, rgb(var(--accent) / 0.16), rgb(var(--accent) / 0.05) 62%, transparent);
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
+    background-image: linear-gradient(90deg, rgb(var(--accent) / 0.14), rgb(var(--accent-teal) / 0.05) 68%, transparent);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), inset 0 0 0 1px rgb(var(--accent) / 0.18);
   }
 
   .nav-item-active:hover {
-    background-image: linear-gradient(90deg, rgb(var(--accent) / 0.22), rgb(var(--accent) / 0.08) 62%, transparent);
+    background-image: linear-gradient(90deg, rgb(var(--accent) / 0.19), rgb(var(--accent-teal) / 0.08) 68%, transparent);
     color: rgb(var(--accent));
   }
 
   .nav-item-active::before {
     content: '';
-    @apply absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full;
+    @apply absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full;
     background-image: linear-gradient(180deg, rgb(var(--accent-teal)), rgb(var(--accent)));
-    box-shadow: 0 0 10px rgb(var(--accent) / 0.5);
+    box-shadow: 0 0 12px rgb(var(--accent) / 0.55);
   }
 
   .nav-icon {
-    @apply shrink-0 text-ink-500 transition-colors;
+    @apply shrink-0 text-ink-500 transition-colors duration-150;
   }
 
   .nav-item:hover .nav-icon {
@@ -275,7 +276,7 @@
   }
 
   .menu-item {
-    @apply flex min-h-9 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-medium text-ink-300 transition hover:bg-navy-800 hover:text-ink-100;
+    @apply flex min-h-9 w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-medium text-ink-300 transition hover:bg-navy-800 hover:text-ink-100;
   }
 
   /* -------------------------------------------------------------- tables */
@@ -290,20 +291,20 @@
   }
 
   .data-table thead th {
-    @apply sticky top-0 z-[1] whitespace-nowrap border-b border-navy-700/85 px-4 py-2.5 text-left text-[10.5px] font-bold uppercase tracking-[0.07em] text-ink-400 backdrop-blur-sm;
-    background-color: rgb(var(--navy-800) / 0.82);
+    @apply sticky top-0 z-[1] whitespace-nowrap border-b border-navy-700/80 px-4 py-3 text-left text-[10.5px] font-bold uppercase tracking-[0.075em] text-ink-400 backdrop-blur-md;
+    background-color: rgb(var(--navy-800) / 0.85);
   }
 
   .data-table tbody td {
-    @apply border-b border-navy-700/55 px-4 py-3 align-middle text-ink-200;
+    @apply border-b border-navy-700/50 px-4 py-3.5 align-middle text-ink-200;
   }
 
   .data-table tbody tr {
-    @apply transition-colors;
+    @apply transition-colors duration-150;
   }
 
   .data-table tbody tr:hover {
-    background-color: rgb(var(--accent) / 0.05);
+    background-color: rgb(var(--accent) / 0.045);
   }
 
   .data-table tbody tr:last-child td {
@@ -313,7 +314,7 @@
   /* ------------------------------------------------------------- numerals */
   .num {
     @apply font-sans tabular-nums;
-    letter-spacing: -0.012em;
+    letter-spacing: -0.015em;
     font-variant-numeric: tabular-nums;
   }
 
@@ -322,7 +323,7 @@
   }
 
   .link {
-    @apply font-medium text-accent underline-offset-4 transition hover:text-accent-soft hover:underline;
+    @apply inline-flex items-center gap-1 font-semibold text-accent underline-offset-4 transition hover:text-accent-soft hover:underline;
   }
 
   .scroll-thin {
@@ -331,55 +332,60 @@
 
   /* --------------------------------------------------------------- states */
   .skeleton {
-    @apply relative overflow-hidden rounded-lg bg-navy-800/80;
+    @apply relative overflow-hidden rounded-xl bg-navy-800/85;
   }
 
   .skeleton::after {
     @apply absolute inset-0 -translate-x-full animate-shimmer;
     content: '';
-    background-image: linear-gradient(90deg, transparent, rgb(var(--ink-100) / 0.07), transparent);
+    background-image: linear-gradient(90deg, transparent, rgb(var(--ink-100) / 0.065), transparent);
   }
 
   .eyebrow {
-    @apply text-[10px] font-bold uppercase tracking-[0.16em] text-ink-500;
+    @apply text-[10.5px] font-bold uppercase tracking-[0.16em] text-ink-500;
   }
 
   .chip {
-    @apply inline-flex min-h-7 items-center gap-1.5 rounded-full border border-navy-700/80 bg-navy-900/70 px-2.5 py-1 text-[11px] font-semibold text-ink-300 shadow-[var(--card-sheen)];
+    @apply inline-flex min-h-7 items-center gap-1.5 rounded-full border border-navy-700/80 bg-navy-900/80 px-2.5 py-1 text-[11px] font-semibold text-ink-300 shadow-[var(--card-sheen)];
   }
 
   .kbd {
-    @apply rounded-md border border-navy-600/70 bg-navy-900 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-ink-400;
+    @apply rounded-md border border-navy-600/75 bg-navy-900 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-ink-400 shadow-[inset_0_-1px_0_rgb(0_0_0/0.08)];
   }
 
   .quick-action {
-    @apply flex min-h-[72px] items-center gap-3 rounded-2xl border border-navy-700/80 bg-navy-850 p-3.5 text-left shadow-card transition duration-150 hover:-translate-y-px hover:border-accent/50 hover:bg-navy-800/45;
+    @apply relative flex min-h-[76px] items-center gap-3.5 overflow-hidden rounded-2xl border border-navy-700/80 bg-navy-850 p-4 text-left shadow-card transition-all duration-200 ease-smooth hover:-translate-y-0.5 hover:border-accent/50;
+    box-shadow: var(--shadow-card), var(--card-sheen);
+  }
+
+  .quick-action:hover {
+    box-shadow: var(--shadow-card-hover), var(--card-sheen);
   }
 
   .callout-ok {
-    @apply rounded-xl border border-ok/25 px-3.5 py-2.5 text-xs text-ok;
+    @apply rounded-xl border border-ok/25 px-3.5 py-2.5 text-xs font-medium text-ok;
     background-color: rgb(var(--ok) / 0.08);
   }
 
   .callout-warn {
-    @apply rounded-xl border border-warn/25 px-3.5 py-2.5 text-xs text-warn;
+    @apply rounded-xl border border-warn/25 px-3.5 py-2.5 text-xs font-medium text-warn;
     background-color: rgb(var(--warn) / 0.08);
   }
 
   .callout-danger {
-    @apply rounded-xl border border-danger/25 px-3.5 py-2.5 text-xs text-danger;
+    @apply rounded-xl border border-danger/25 px-3.5 py-2.5 text-xs font-medium text-danger;
     background-color: rgb(var(--danger) / 0.08);
   }
 
   .callout-info {
-    @apply rounded-xl border border-info/25 px-3.5 py-2.5 text-xs text-info;
+    @apply rounded-xl border border-info/25 px-3.5 py-2.5 text-xs font-medium text-info;
     background-color: rgb(var(--info) / 0.08);
   }
 }
 
 @media (max-width: 639px) {
   .data-table thead th {
-    @apply px-3 py-2;
+    @apply px-3 py-2.5;
   }
 
   .data-table tbody td {
@@ -441,7 +447,7 @@
 
   body {
     background: white !important;
-    color: #0b1915 !important;
+    color: #090e1a !important;
   }
 
   .card {

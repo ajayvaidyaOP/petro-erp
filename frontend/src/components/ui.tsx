@@ -33,21 +33,19 @@ import { cn } from '../lib/utils';
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'outline';
 type ButtonSize = 'sm' | 'md' | 'lg';
 
-// Solid fills use the status tokens (not hardcoded hexes) so dark mode keeps a dark
-// foreground on the brightened colours.
 const buttonVariants: Record<ButtonVariant, string> = {
   primary:
-    'brand-gradient text-onaccent font-semibold shadow-glow border border-accent/70 hover:brightness-110 active:scale-[.985]',
+    'brand-gradient text-onaccent font-semibold shadow-glow border border-accent/60 hover:brightness-[1.07] active:scale-[.985]',
   secondary:
-    'bg-navy-800/90 text-ink-100 font-medium border border-navy-600/75 shadow-sheen hover:bg-navy-750 hover:border-accent/40 active:scale-[.985]',
+    'bg-navy-800/90 text-ink-100 font-semibold border border-navy-600/75 shadow-sheen hover:bg-navy-750/80 hover:border-accent/45 active:scale-[.985]',
   ghost:
-    'text-ink-300 font-medium hover:bg-navy-800/80 hover:text-ink-100 border border-transparent',
+    'text-ink-300 font-medium hover:bg-navy-800/85 hover:text-ink-100 border border-transparent',
   danger:
-    'bg-danger text-ondanger font-semibold border border-danger hover:brightness-110 active:scale-[.985]',
+    'bg-danger text-ondanger font-semibold border border-danger shadow-[inset_0_1px_0_rgb(255_255_255/0.2)] hover:brightness-110 active:scale-[.985]',
   success:
-    'bg-ok text-onok font-semibold border border-ok hover:brightness-110 active:scale-[.985]',
+    'bg-ok text-onok font-semibold border border-ok shadow-[inset_0_1px_0_rgb(255_255_255/0.2)] hover:brightness-110 active:scale-[.985]',
   outline:
-    'bg-navy-900/60 border border-navy-600/80 text-ink-200 font-medium shadow-sheen hover:bg-navy-800/70 hover:border-accent/55 hover:text-ink-100 active:scale-[.985]',
+    'bg-navy-900/80 border border-navy-600/80 text-ink-200 font-semibold shadow-sheen hover:bg-navy-800/70 hover:border-accent/55 hover:text-ink-100 active:scale-[.985]',
 };
 
 const buttonSizes: Record<ButtonSize, string> = {
@@ -78,7 +76,7 @@ export function Button({
       {...props}
       disabled={disabled || loading}
       className={cn(
-        'inline-flex select-none items-center justify-center whitespace-nowrap rounded-xl shadow-sheen ring-offset-0 transition-all duration-150 ease-smooth',
+        'inline-flex select-none items-center justify-center whitespace-nowrap rounded-xl ring-offset-0 transition-all duration-150 ease-smooth',
         'btn-touch disabled:cursor-not-allowed disabled:opacity-50',
         buttonVariants[variant],
         buttonSizes[size],
@@ -114,13 +112,13 @@ export function CardHeader({
   return (
     <div
       className={cn(
-        'flex flex-wrap items-center justify-between gap-3 border-b border-navy-700/60 px-4 py-3.5 sm:px-5',
+        'flex flex-wrap items-center justify-between gap-3 border-b border-navy-700/60 px-4 py-3.5 sm:px-5 sm:py-4',
         className,
       )}
     >
       <div className="min-w-0">
-        <h2 className="font-display text-[15px] font-bold tracking-tight text-ink-100">{title}</h2>
-        {subtitle && <p className="mt-0.5 text-xs leading-relaxed text-ink-500">{subtitle}</p>}
+        <h2 className="font-display text-[15px] font-bold tracking-[-0.015em] text-ink-100">{title}</h2>
+        {subtitle && <p className="mt-0.5 text-xs leading-relaxed text-ink-400">{subtitle}</p>}
       </div>
       {action && <div className="flex min-w-0 flex-wrap items-center gap-2 max-sm:w-full">{action}</div>}
     </div>
@@ -135,13 +133,13 @@ export function CardBody({ className, children }: { className?: string; children
 export type BadgeTone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger' | 'info' | 'muted';
 
 const toneClasses: Record<BadgeTone, string> = {
-  neutral: 'bg-navy-800 text-ink-200 border-navy-600/70',
-  accent: 'bg-accent/12 text-accent border-accent/28',
-  success: 'bg-ok/12 text-ok border-ok/28',
-  warning: 'bg-warn/12 text-warn border-warn/28',
-  danger: 'bg-danger/12 text-danger border-danger/28',
-  info: 'bg-info/12 text-info border-info/30',
-  muted: 'bg-navy-800/70 text-ink-500 border-navy-700/80',
+  neutral: 'bg-navy-800/90 text-ink-200 border-navy-600/70',
+  accent: 'bg-accent/12 text-accent border-accent/25',
+  success: 'bg-ok/12 text-ok border-ok/25',
+  warning: 'bg-warn/12 text-warn border-warn/25',
+  danger: 'bg-danger/12 text-danger border-danger/25',
+  info: 'bg-info/12 text-info border-info/25',
+  muted: 'bg-navy-800/65 text-ink-500 border-navy-700/80',
 };
 
 export function Badge({
@@ -158,7 +156,7 @@ export function Badge({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold tracking-tight',
+        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold tracking-tight',
         toneClasses[tone],
         className,
       )}
@@ -252,8 +250,8 @@ export function Field({
         </span>
       )}
       {children}
-      {hint && !error && <span className="mt-1 block text-[11px] leading-snug text-ink-500">{hint}</span>}
-      {error && <span className="mt-1 block text-xs font-medium text-danger">{error}</span>}
+      {hint && !error && <span className="mt-1.5 block text-[11px] leading-snug text-ink-500">{hint}</span>}
+      {error && <span className="mt-1.5 block text-xs font-medium text-danger">{error}</span>}
     </label>
   );
 }
@@ -271,7 +269,7 @@ export function Select({ className, children, ...props }: SelectHTMLAttributes<H
 }
 
 export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea className={cn('input min-h-[78px] resize-y', className)} {...props} />;
+  return <textarea className={cn('input min-h-[82px] resize-y', className)} {...props} />;
 }
 
 export function Checkbox({
@@ -356,10 +354,17 @@ export function MeterBar({
       aria-valuenow={label ? Math.round(clamped) : undefined}
       aria-valuemin={label ? 0 : undefined}
       aria-valuemax={label ? 100 : undefined}
-      className={cn('w-full overflow-hidden rounded-full bg-navy-800 ring-1 ring-inset ring-navy-700/60', heights[height], className)}
+      className={cn(
+        'w-full overflow-hidden rounded-full bg-navy-800 ring-1 ring-inset ring-navy-700/65',
+        heights[height],
+        className,
+      )}
     >
       <div
-        className={cn('h-full rounded-full transition-all duration-300', !color && fillClasses[tone])}
+        className={cn(
+          'relative h-full rounded-full shadow-[inset_0_1px_0_rgb(255_255_255/0.25)] transition-all duration-500 ease-smooth',
+          !color && fillClasses[tone],
+        )}
         style={{ width: `${clamped}%`, ...(color ? { backgroundColor: color } : {}) }}
       />
     </div>
@@ -375,13 +380,14 @@ export function Spinner({ className }: { className?: string }) {
 export function PageLoader({ label = 'Loading…' }: { label?: string }) {
   return (
     <div role="status" aria-live="polite" className="grid min-h-dvh place-items-center bg-navy-950 px-6">
-      <div className="flex flex-col items-center gap-3.5">
-        <div className="brand-gradient grid h-11 w-11 place-items-center rounded-xl text-onaccent shadow-glow">
-          <Fuel className="h-5 w-5" strokeWidth={2.3} />
+      <div className="flex flex-col items-center gap-4">
+        <div className="brand-gradient relative grid h-12 w-12 place-items-center overflow-hidden rounded-2xl text-onaccent shadow-glow ring-1 ring-accent/30">
+          <span aria-hidden className="absolute inset-0 bg-[linear-gradient(145deg,rgb(255_255_255/0.26),transparent_55%)]" />
+          <Fuel className="relative h-5 w-5" strokeWidth={2.3} />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 rounded-full border border-navy-700/75 bg-navy-900/80 px-3.5 py-1.5 shadow-card">
           <Spinner className="h-3.5 w-3.5" />
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-500">{label}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-400">{label}</p>
         </div>
       </div>
     </div>
@@ -393,7 +399,7 @@ export function LoadingBlock({ label = 'Loading…', rows = 3 }: { label?: strin
     <div role="status" aria-live="polite" className="space-y-2.5 p-4 sm:p-5">
       <span className="sr-only">{label}</span>
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="skeleton h-10" style={{ animationDelay: `${i * 90}ms` }} />
+        <div key={i} className="skeleton h-11" style={{ animationDelay: `${i * 80}ms` }} />
       ))}
     </div>
   );
@@ -403,14 +409,14 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
   const message =
     error instanceof Error ? error.message : typeof error === 'string' ? error : 'Something went wrong';
   return (
-    <div className="flex flex-col items-start gap-3 rounded-xl border border-danger/30 bg-danger/8 p-4">
+    <div className="flex flex-col items-start gap-3.5 rounded-2xl border border-danger/30 bg-danger/8 p-4 sm:p-5">
       <div className="flex items-start gap-3">
-        <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-danger/25 bg-danger/12 text-danger">
+        <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-danger/25 bg-danger/12 text-danger">
           <AlertTriangle className="h-4 w-4" />
         </span>
         <div className="min-w-0">
           <p className="text-sm font-semibold text-danger">{message}</p>
-          <p className="mt-0.5 text-xs text-ink-400">
+          <p className="mt-0.5 text-xs leading-relaxed text-ink-400">
             Nothing was changed. Retry, or check your connection if this keeps happening.
           </p>
         </div>
@@ -436,13 +442,13 @@ export function EmptyState({
   icon?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 px-6 py-11 text-center">
-      <div className="mb-1.5 grid h-11 w-11 place-items-center rounded-xl border border-navy-700 bg-navy-800/70 text-accent">
+    <div className="flex flex-col items-center justify-center gap-2 px-6 py-12 text-center">
+      <div className="relative mb-2 grid h-12 w-12 place-items-center rounded-2xl border border-accent/20 bg-accent/10 text-accent shadow-sheen">
         {icon ?? <Info className="h-5 w-5" />}
       </div>
-      <p className="font-display text-sm font-bold text-ink-100">{title}</p>
-      {description && <p className="max-w-md text-xs leading-relaxed text-ink-500">{description}</p>}
-      {action && <div className="mt-2.5">{action}</div>}
+      <p className="font-display text-[15px] font-bold tracking-tight text-ink-100">{title}</p>
+      {description && <p className="max-w-md text-xs leading-relaxed text-ink-400">{description}</p>}
+      {action && <div className="mt-3">{action}</div>}
     </div>
   );
 }
@@ -537,7 +543,7 @@ export function Modal({
   const widths = { sm: 'max-w-md', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl' };
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto overscroll-contain bg-scrim/65 p-0 backdrop-blur-[2px] sm:items-center sm:p-6">
+    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto overscroll-contain bg-scrim/60 p-0 backdrop-blur-[3px] sm:items-center sm:p-6">
       <div
         ref={ref}
         role="dialog"
@@ -546,13 +552,13 @@ export function Modal({
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
         className={cn(
-          'animate-scale-in my-auto flex max-h-[92dvh] w-full flex-col rounded-t-2.5xl border border-navy-700/80 bg-navy-850 shadow-pop ring-1 ring-navy-900/20 outline-none sm:max-h-[88dvh] sm:rounded-2.5xl',
+          'animate-scale-in my-auto flex max-h-[92dvh] w-full flex-col rounded-t-3xl border border-navy-700/85 bg-navy-850 shadow-pop ring-1 ring-white/5 outline-none sm:max-h-[88dvh] sm:rounded-2.5xl',
           widths[size],
         )}
       >
-        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-navy-700/60 bg-navy-900/50 px-4 py-4 sm:rounded-t-2.5xl sm:px-5">
+        <div className="hero-mesh flex shrink-0 items-start justify-between gap-4 border-b border-navy-700/65 bg-navy-900/60 px-4 py-4 sm:rounded-t-2.5xl sm:px-6">
           <div className="min-w-0">
-            <h2 id={titleId} className="font-display text-base font-bold tracking-tight text-ink-100">
+            <h2 id={titleId} className="font-display text-[17px] font-extrabold tracking-[-0.02em] text-ink-100">
               {title}
             </h2>
             {description && (
@@ -565,15 +571,15 @@ export function Modal({
             type="button"
             data-close
             onClick={onClose}
-            className="btn-touch -mr-1 grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ink-400 transition hover:bg-navy-800 hover:text-ink-100"
+            className="btn-touch -mr-1 grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-transparent text-ink-400 transition hover:border-navy-700 hover:bg-navy-800 hover:text-ink-100"
             aria-label="Close dialog"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 scroll-thin sm:px-5">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 scroll-thin sm:px-6 sm:py-5">{children}</div>
         {footer && (
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-navy-700/60 bg-navy-900/40 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:rounded-b-2.5xl sm:px-5 sm:pb-3">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-navy-700/65 bg-navy-800/35 px-4 py-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] sm:rounded-b-2.5xl sm:px-6 sm:pb-3.5">
             {footer}
           </div>
         )}
@@ -659,10 +665,26 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(() => ({ toast }), [toast]);
   const icons = {
-    success: <Check className="h-4 w-4 text-ok" />,
-    danger: <XCircle className="h-4 w-4 text-danger" />,
-    warning: <AlertTriangle className="h-4 w-4 text-warn" />,
-    info: <Info className="h-4 w-4 text-info" />,
+    success: (
+      <span className="grid h-7 w-7 place-items-center rounded-lg border border-ok/25 bg-ok/12 text-ok">
+        <Check className="h-3.5 w-3.5" />
+      </span>
+    ),
+    danger: (
+      <span className="grid h-7 w-7 place-items-center rounded-lg border border-danger/25 bg-danger/12 text-danger">
+        <XCircle className="h-3.5 w-3.5" />
+      </span>
+    ),
+    warning: (
+      <span className="grid h-7 w-7 place-items-center rounded-lg border border-warn/25 bg-warn/12 text-warn">
+        <AlertTriangle className="h-3.5 w-3.5" />
+      </span>
+    ),
+    info: (
+      <span className="grid h-7 w-7 place-items-center rounded-lg border border-info/25 bg-info/12 text-info">
+        <Info className="h-3.5 w-3.5" />
+      </span>
+    ),
   };
 
   return (
@@ -670,12 +692,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <div
         aria-live="polite"
-        className="pointer-events-none fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-[60] flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-2 md:bottom-5"
+        className="pointer-events-none fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-[60] flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-2.5 md:bottom-5"
       >
         {toasts.map((t) => (
           <div
             key={t.id}
-            className="animate-slide-in pointer-events-auto relative flex items-start gap-3 overflow-hidden rounded-2xl border border-navy-600/70 bg-navy-850 p-3.5 pl-4 shadow-pop"
+            className="animate-slide-in pointer-events-auto relative flex items-start gap-3 overflow-hidden rounded-2xl border border-navy-600/75 bg-navy-850/95 p-3.5 pl-4 shadow-pop backdrop-blur-xl"
           >
             <span
               aria-hidden
@@ -687,14 +709,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 t.tone === 'info' && 'bg-info',
               )}
             />
-            <div className="mt-0.5 shrink-0">{icons[t.tone]}</div>
-            <div className="min-w-0 flex-1">
+            <div className="shrink-0">{icons[t.tone]}</div>
+            <div className="min-w-0 flex-1 pt-0.5">
               <p className="text-sm font-semibold text-ink-100">{t.title}</p>
               {t.description && <p className="mt-0.5 text-xs leading-snug text-ink-400">{t.description}</p>}
             </div>
             <button
               onClick={() => dismiss(t.id)}
-              className="rounded-md p-1 text-ink-500 transition hover:bg-navy-800 hover:text-ink-200"
+              className="rounded-lg p-1 text-ink-500 transition hover:bg-navy-800 hover:text-ink-200"
               aria-label="Dismiss"
             >
               <X className="h-3.5 w-3.5" />
@@ -729,31 +751,33 @@ export function Pagination({
   const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const to = Math.min(total, page * pageSize);
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-navy-700/75 bg-navy-800/30 px-4 py-2.5 sm:px-5">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-navy-700/70 bg-navy-800/35 px-4 py-3 sm:px-5">
       <p className="num text-xs text-ink-500">
         Showing <span className="font-semibold text-ink-200">{from}</span>–
         <span className="font-semibold text-ink-200">{to}</span> of{' '}
         <span className="font-semibold text-ink-200">{total}</span>
       </p>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1.5">
         <Button
           size="sm"
-          variant="ghost"
+          variant="outline"
           onClick={() => onPage(page - 1)}
           disabled={page <= 1}
           aria-label="Previous page"
+          className="px-2"
         >
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <span className="num px-2 text-xs font-medium text-ink-400">
+        <span className="num rounded-lg border border-navy-700/80 bg-navy-900 px-2.5 py-1 text-xs font-semibold text-ink-300">
           Page {page} / {totalPages}
         </span>
         <Button
           size="sm"
-          variant="ghost"
+          variant="outline"
           onClick={() => onPage(page + 1)}
           disabled={page >= totalPages}
           aria-label="Next page"
+          className="px-2"
         >
           <ChevronRight className="h-4 w-4" />
         </Button>
@@ -775,15 +799,17 @@ export function PageHeader({
   breadcrumb?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-4 border-b border-navy-700/60 pb-4">
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-4 border-b border-navy-700/65 pb-4">
       <div className="min-w-0">
         {breadcrumb && (
-          <div className="mb-1 text-[11px] font-bold uppercase tracking-[0.12em] text-accent">{breadcrumb}</div>
+          <div className="mb-1.5 inline-flex items-center gap-1.5 rounded-full border border-accent/20 bg-accent/10 px-2.5 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-accent">
+            {breadcrumb}
+          </div>
         )}
-        <h1 className="font-display text-[26px] font-extrabold leading-8 tracking-[-0.028em] text-ink-100 sm:text-3xl sm:leading-10">
+        <h1 className="font-display text-[25px] font-extrabold leading-8 tracking-[-0.03em] text-ink-100 sm:text-[28px] sm:leading-9">
           {title}
         </h1>
-        {description && <p className="mt-1 max-w-3xl text-xs leading-relaxed text-ink-400 sm:text-sm">{description}</p>}
+        {description && <p className="mt-1 max-w-3xl text-xs leading-relaxed text-ink-400 sm:text-[13.5px]">{description}</p>}
       </div>
       {actions && <div className="flex w-full flex-wrap items-end gap-2 sm:w-auto">{actions}</div>}
     </div>
@@ -813,51 +839,49 @@ export function StatCard({
     danger: 'text-danger',
   };
   const iconTones = {
-    default: 'bg-navy-800 text-ink-400 border-navy-700/80',
+    default: 'bg-navy-800/90 text-ink-400 border-navy-700/85',
     accent: 'bg-accent/10 text-accent border-accent/25',
     success: 'bg-ok/10 text-ok border-ok/25',
     warning: 'bg-warn/10 text-warn border-warn/25',
     danger: 'bg-danger/10 text-danger border-danger/25',
   };
-  // A 2px tinted hairline across the top edge + a soft corner wash: reads as a
-  // "series colour" without a heavy coloured bar.
   const accentStrip = {
-    default: 'before:bg-navy-600/50',
-    accent: 'before:bg-accent',
-    success: 'before:bg-ok',
-    warning: 'before:bg-warn',
-    danger: 'before:bg-danger',
+    default: 'before:bg-gradient-to-r before:from-navy-600/55 before:to-transparent',
+    accent: 'before:bg-gradient-to-r before:from-accent before:via-accent-teal before:to-transparent',
+    success: 'before:bg-gradient-to-r before:from-ok before:to-transparent',
+    warning: 'before:bg-gradient-to-r before:from-warn before:to-transparent',
+    danger: 'before:bg-gradient-to-r before:from-danger before:to-transparent',
   };
   const washes = {
     default: '',
-    accent: 'after:bg-accent/[0.07]',
-    success: 'after:bg-ok/[0.07]',
-    warning: 'after:bg-warn/[0.07]',
-    danger: 'after:bg-danger/[0.07]',
+    accent: 'after:bg-accent/[0.08]',
+    success: 'after:bg-ok/[0.08]',
+    warning: 'after:bg-warn/[0.08]',
+    danger: 'after:bg-danger/[0.08]',
   };
   return (
     <div
       className={cn(
         'card relative overflow-hidden p-4 sm:p-5',
-        'before:absolute before:inset-x-0 before:top-0 before:h-[2px] before:opacity-80',
+        'before:absolute before:inset-x-0 before:top-0 before:h-[2px] before:opacity-90',
         'after:pointer-events-none after:absolute after:-right-8 after:-top-10 after:h-28 after:w-28 after:rounded-full after:blur-2xl',
         accentStrip[tone],
         washes[tone],
       )}
     >
-      <div className="relative flex items-start justify-between gap-2">
+      <div className="relative flex items-start justify-between gap-2.5">
         <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-ink-400">{label}</p>
-        {icon && <div className={cn('rounded-xl border p-1.5 shadow-sheen', iconTones[tone])}>{icon}</div>}
+        {icon && <div className={cn('rounded-xl border p-2 shadow-sheen', iconTones[tone])}>{icon}</div>}
       </div>
       <p
         className={cn(
-          'num relative mt-2 break-words font-display text-stat-lg font-extrabold leading-tight',
+          'num relative mt-2.5 break-words font-display text-stat-lg font-extrabold leading-tight',
           tones[tone],
         )}
       >
         {value}
       </p>
-      {hint && <p className="mt-1.5 text-[11px] leading-snug text-ink-500">{hint}</p>}
+      {hint && <p className="mt-1.5 text-[11.5px] leading-snug text-ink-500">{hint}</p>}
       {footer && <div className="mt-3 border-t border-navy-700/60 pt-2.5 text-xs text-ink-500">{footer}</div>}
     </div>
   );
@@ -875,7 +899,7 @@ export function Tabs({
   return (
     <div
       role="tablist"
-      className="inline-flex max-w-full gap-1 overflow-x-auto rounded-2xl border border-navy-700/70 bg-navy-800/70 p-1 shadow-sheen scroll-thin"
+      className="inline-flex max-w-full gap-1 overflow-x-auto rounded-2xl border border-navy-700/80 bg-navy-800/75 p-1 shadow-sheen scroll-thin"
     >
       {tabs.map((tab) => {
         const isSelected = active === tab.key;
@@ -887,9 +911,9 @@ export function Tabs({
             aria-selected={isSelected}
             onClick={() => onChange(tab.key)}
             className={cn(
-              'whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all sm:text-[13px]',
+              'whitespace-nowrap rounded-xl px-3.5 py-1.5 text-xs font-semibold transition-all duration-150 sm:text-[13px]',
               isSelected
-                ? 'border border-accent/30 bg-navy-900 text-accent shadow-[var(--shadow-card),var(--card-sheen)]'
+                ? 'border border-accent/25 bg-navy-900 text-accent shadow-[var(--shadow-card),var(--card-sheen)]'
                 : 'border border-transparent text-ink-400 hover:bg-navy-750/60 hover:text-ink-100',
             )}
           >
@@ -915,7 +939,7 @@ export function TableScrollHint({ className }: { className?: string }) {
   return (
     <p
       className={cn(
-        'flex items-center justify-between gap-2 border-b border-navy-700/70 bg-navy-800/40 px-4 py-1.5 text-[10px] font-medium uppercase tracking-wider text-ink-500 sm:hidden',
+        'flex items-center justify-between gap-2 border-b border-navy-700/70 bg-navy-800/45 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-500 sm:hidden',
         className,
       )}
     >

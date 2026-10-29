@@ -177,7 +177,7 @@ export default function Dispensers() {
         description="Physical dispensing units and the nozzles that report totalizers. Nozzle totals are aggregate estimates — they never substitute for a tank dip."
         actions={
           can('dispensers.write') ? (
-            <Button onClick={() => setDispenserOpen(true)}>
+            <Button variant="primary" size="sm" onClick={() => setDispenserOpen(true)}>
               <Plus className="h-4 w-4" /> Add dispenser
             </Button>
           ) : null

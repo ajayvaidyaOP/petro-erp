@@ -50,7 +50,77 @@ export default function Employees() {
       <div className="grid gap-5 lg:grid-cols-2">{team.map((employee) => {
         const info = roleInfo[employee.roleKey as keyof typeof roleInfo];
         const Icon = info.icon;
-        return <Card key={employee.id} className="overflow-hidden"><div className="border-b border-navy-700/50 bg-accent/[0.025] p-6"><div className="flex items-start justify-between"><span className="grid h-14 w-14 place-items-center rounded-2xl bg-accent/10 font-display text-lg font-bold text-accent">{initials(employee.name)}</span><Badge tone={employee.roleKey === 'OWNER' ? 'accent' : 'neutral'}>{info.title}</Badge></div><h2 className="mt-4 font-display text-xl font-bold text-ink-100">{employee.name}{employee.id === me?.user.id && <span className="ml-2 text-xs font-normal text-ink-500">You</span>}</h2><p className="mt-1 text-sm text-ink-400">{employee.email}</p><p className="mt-4 text-xs text-ink-500">{info.subtitle}</p></div><CardBodyTeam><p className="eyebrow mb-3">What this role can do</p><ul className="space-y-3">{info.abilities.map((ability) => <li key={ability} className="flex items-start gap-2 text-xs leading-relaxed text-ink-300"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />{ability}</li>)}</ul><div className="mt-5 border-t border-navy-700/50 pt-4"><p className="text-[11px] text-ink-500">Pump access</p><p className="mt-1 text-xs font-medium text-ink-200">{employee.roleKey === 'OWNER' ? 'All pumps' : stations.filter((station) => employee.stationIds.includes(station.id)).map((station) => station.name).join(' · ') || 'No pumps assigned'}</p>{employee.status !== 'ACTIVE' && <Badge tone="warning">Access disabled</Badge>}</div><div className="mt-5 flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={() => openEdit(employee)} icon={employee.roleKey === 'MANAGER' && employee.status !== 'ACTIVE' ? <Plus className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}>{employee.status !== 'ACTIVE' ? 'Re-enable manager' : employee.roleKey === 'MANAGER' ? 'Edit access' : 'Edit profile'}</Button><Button size="sm" variant="ghost" onClick={() => setResetFor(employee)} icon={<KeyRound className="h-3.5 w-3.5" />}>Reset password</Button></div></CardBodyTeam></Card>;
+        return (
+          <Card key={employee.id} className="relative overflow-hidden">
+            <span
+              aria-hidden
+              className={
+                employee.roleKey === 'OWNER'
+                  ? 'brand-gradient absolute inset-x-0 top-0 h-[2.5px] opacity-90'
+                  : 'absolute inset-x-0 top-0 h-[2.5px] bg-navy-600/70'
+              }
+            />
+            <div className="hero-mesh border-b border-navy-700/60 p-6">
+              <div className="flex items-start justify-between">
+                <span className="brand-gradient grid h-14 w-14 place-items-center rounded-2xl font-display text-lg font-extrabold text-onaccent shadow-glow">
+                  {initials(employee.name)}
+                </span>
+                <Badge tone={employee.roleKey === 'OWNER' ? 'accent' : 'neutral'} dot>
+                  <Icon className="h-3 w-3" aria-hidden />
+                  {info.title}
+                </Badge>
+              </div>
+              <h2 className="mt-4 font-display text-xl font-extrabold tracking-tight text-ink-100">
+                {employee.name}
+                {employee.id === me?.user.id && (
+                  <span className="ml-2 rounded-full border border-accent/25 bg-accent/10 px-2 py-0.5 align-middle font-sans text-[10px] font-bold uppercase tracking-wider text-accent">
+                    You
+                  </span>
+                )}
+              </h2>
+              <p className="mt-1 font-mono text-xs text-ink-400">{employee.email}</p>
+              <p className="mt-3 text-xs leading-relaxed text-ink-500">{info.subtitle}</p>
+            </div>
+            <CardBodyTeam>
+              <p className="eyebrow mb-3">What this role can do</p>
+              <ul className="space-y-2.5">
+                {info.abilities.map((ability) => (
+                  <li key={ability} className="flex items-start gap-2.5 text-xs leading-relaxed text-ink-300">
+                    <span className="mt-0.5 grid h-4.5 w-4.5 shrink-0 place-items-center rounded-md bg-accent/12 p-0.5 text-accent">
+                      <Check className="h-3 w-3" />
+                    </span>
+                    {ability}
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-5 rounded-xl border border-navy-700/65 bg-navy-800/45 p-3">
+                <p className="text-[10.5px] font-bold uppercase tracking-wider text-ink-500">Pump access</p>
+                <p className="mt-1 text-xs font-semibold text-ink-100">
+                  {employee.roleKey === 'OWNER'
+                    ? 'All pumps'
+                    : stations
+                        .filter((station) => employee.stationIds.includes(station.id))
+                        .map((station) => station.name)
+                        .join(' · ') || 'No pumps assigned'}
+                </p>
+                {employee.status !== 'ACTIVE' && <Badge tone="warning" className="mt-2">Access disabled</Badge>}
+              </div>
+              <div className="mt-5 flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => openEdit(employee)}
+                  icon={employee.roleKey === 'MANAGER' && employee.status !== 'ACTIVE' ? <Plus className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
+                >
+                  {employee.status !== 'ACTIVE' ? 'Re-enable manager' : employee.roleKey === 'MANAGER' ? 'Edit access' : 'Edit profile'}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setResetFor(employee)} icon={<KeyRound className="h-3.5 w-3.5" />}>
+                  Reset password
+                </Button>
+              </div>
+            </CardBodyTeam>
+          </Card>
+        );
       })}</div>
       <div className="mt-5 flex items-start gap-3 rounded-xl border border-accent/15 bg-accent/[0.04] p-4"><ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-accent" /><div><p className="text-xs font-semibold text-ink-200">Less complexity. The same accountability.</p><p className="mt-1 text-xs leading-relaxed text-ink-500">Roles are fixed and permissions are checked by the server. The owner controls setup and prices; the manager handles the day-to-day. Every change stays in the audit log.</p></div></div>
       <details className="card mt-6 group"><summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-semibold text-ink-200">Attendance & monthly summary <ChevronDown className="h-4 w-4 transition group-open:rotate-180" /></summary><div className="border-t border-navy-700/60 p-4"><AttendancePanel canWrite /></div></details>

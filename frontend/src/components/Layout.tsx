@@ -23,6 +23,7 @@ import {
   Receipt,
   Scale,
   ScrollText,
+  Search,
   Settings as SettingsIcon,
   ShieldAlert,
   ShieldCheck,
@@ -43,6 +44,7 @@ import { cn } from '../lib/utils';
 import { formatDate, initials, todayIst } from '../lib/format';
 import { Button, Field, Input, Modal, useToast } from './ui';
 import { NotificationCenter } from './NotificationCenter';
+import { CommandPalette } from './CommandPalette';
 import { apiPost } from '../lib/api';
 
 const SIDEBAR_STORAGE_KEY = 'petroflow.sidebar-collapsed';
@@ -108,18 +110,18 @@ const GROUP_ORDER: NavigationGroup[] = [
 
 function Brand({ collapsed = false }: { collapsed?: boolean }) {
   return (
-    <div className={cn('flex items-center gap-2.5', collapsed && 'justify-center')}>
-      <span className="brand-gradient relative grid h-9.5 w-9.5 shrink-0 place-items-center overflow-hidden rounded-xl text-onaccent shadow-glow ring-1 ring-accent/25">
-        <span aria-hidden className="absolute inset-0 bg-[linear-gradient(150deg,rgb(255_255_255/0.28),transparent_55%)]" />
-        <Fuel className="relative h-[19px] w-[19px]" strokeWidth={2.25} aria-hidden />
+    <div className={cn('flex items-center gap-3', collapsed && 'justify-center')}>
+      <span className="brand-gradient relative grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-2xl text-onaccent shadow-glow ring-1 ring-accent/30">
+        <span aria-hidden className="absolute inset-0 bg-[linear-gradient(145deg,rgb(255_255_255/0.32),transparent_55%)]" />
+        <Fuel className="relative h-[19px] w-[19px]" strokeWidth={2.3} aria-hidden />
       </span>
       {!collapsed && (
         <div className="min-w-0">
-          <p className="font-display text-lg font-extrabold leading-none tracking-tight text-ink-100">
+          <p className="font-display text-[19px] font-extrabold leading-none tracking-[-0.03em] text-ink-100">
             Petro<span className="text-accent">Flow</span>
           </p>
-          <p className="mt-1 text-[9px] font-bold uppercase tracking-[0.16em] text-ink-500">
-            Forecourt ERP
+          <p className="mt-1 text-[9.5px] font-bold uppercase tracking-[0.17em] text-ink-500">
+            Forecourt Command
           </p>
         </div>
       )}
@@ -143,7 +145,7 @@ function PrimaryNav({
         {adminGroups.map((group) => (
           <div key={group.group}>
             {!collapsed && (
-              <p className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-500">
+              <p className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-[0.15em] text-ink-500">
                 {group.group}
               </p>
             )}
@@ -186,7 +188,7 @@ function PrimaryNav({
         return (
           <div key={groupName}>
             {!collapsed && (
-              <p className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-500">
+              <p className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-[0.15em] text-ink-500">
                 {groupName}
               </p>
             )}
@@ -235,7 +237,7 @@ function SectionNav() {
   return (
     <nav
       aria-label={`${section.label} sections`}
-      className="mb-6 flex items-center gap-1 overflow-x-auto rounded-xl border border-navy-700/80 bg-navy-900 p-1 shadow-card scroll-thin"
+      className="mb-6 flex max-w-full items-center gap-1 overflow-x-auto rounded-2xl border border-navy-700/80 bg-navy-900/90 p-1.5 shadow-card backdrop-blur-md scroll-thin"
     >
       {children.map((item) => (
         <NavLink
@@ -243,15 +245,15 @@ function SectionNav() {
           to={item.to}
           className={({ isActive }) =>
             cn(
-              'inline-flex items-center gap-2 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold transition-all',
+              'inline-flex items-center gap-2 whitespace-nowrap rounded-xl px-3.5 py-1.5 text-xs font-semibold transition-all duration-150',
               isActive
-                ? 'border border-navy-600/75 bg-accent/12 text-accent shadow-sm'
-                : 'border border-transparent text-ink-400 hover:bg-navy-800/80 hover:text-ink-100',
+                ? 'border border-accent/30 bg-accent/12 text-accent shadow-sm'
+                : 'border border-transparent text-ink-400 hover:bg-navy-800/85 hover:text-ink-100',
             )
           }
         >
           {childIcons[item.to] && (
-            <span className="shrink-0 opacity-85 [&>svg]:h-3.5 [&>svg]:w-3.5" aria-hidden>
+            <span className="shrink-0 opacity-90 [&>svg]:h-3.5 [&>svg]:w-3.5" aria-hidden>
               {childIcons[item.to]}
             </span>
           )}
@@ -269,7 +271,7 @@ function MobileNav({ onMenu }: { onMenu: () => void }) {
   return (
     <nav
       aria-label="Quick navigation"
-      className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-navy-700/80 bg-navy-900/95 px-1 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-navy-700/80 bg-navy-900/95 px-1 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_-12px_rgb(0_0_0/0.2)] backdrop-blur-xl md:hidden"
     >
       {items.map((item) => {
         const active = activeSection(pathname)?.to === item.to;
@@ -283,9 +285,9 @@ function MobileNav({ onMenu }: { onMenu: () => void }) {
             )}
           >
             {active && (
-              <span className="absolute inset-x-4 top-0 h-0.5 rounded-b-full bg-accent" aria-hidden />
+              <span className="brand-gradient absolute inset-x-4 top-0 h-[2.5px] rounded-b-full" aria-hidden />
             )}
-            <span className={cn('rounded-lg px-2.5 py-1 [&>svg]:h-[19px] [&>svg]:w-[19px]', active && 'bg-accent/12')}>
+            <span className={cn('rounded-xl px-2.5 py-1 transition-colors [&>svg]:h-[19px] [&>svg]:w-[19px]', active && 'bg-accent/12')}>
               {primaryIcons[item.to]}
             </span>
             {item.to === '/' ? 'Home' : item.to === '/shifts' ? 'Shifts' : item.to === '/tanks' ? 'Stock' : 'Sales'}
@@ -297,7 +299,7 @@ function MobileNav({ onMenu }: { onMenu: () => void }) {
         onClick={onMenu}
         className="flex flex-col items-center justify-center gap-1 text-[10px] font-semibold text-ink-500 transition hover:text-ink-200"
       >
-        <span className="rounded-lg px-2.5 py-1">
+        <span className="rounded-xl px-2.5 py-1">
           <Menu className="h-[19px] w-[19px]" />
         </span>
         More
@@ -315,7 +317,7 @@ function ThemeToggle() {
       onClick={toggleTheme}
       title={label}
       aria-label={label}
-      className="grid h-9.5 w-9.5 shrink-0 place-items-center rounded-lg border border-navy-700/80 bg-navy-900 text-ink-400 transition hover:border-navy-600 hover:bg-navy-800 hover:text-ink-100"
+      className="grid h-9.5 w-9.5 shrink-0 place-items-center rounded-xl border border-navy-700/85 bg-navy-900 text-ink-400 shadow-sheen transition-all duration-150 hover:border-navy-600 hover:bg-navy-800 hover:text-ink-100"
     >
       {theme === 'dark' ? <Sun className="h-[17px] w-[17px]" /> : <Moon className="h-[17px] w-[17px]" />}
     </button>
@@ -335,22 +337,22 @@ function HeaderShiftContext() {
   return (
     <Link
       to="/shifts"
-      className="hidden items-center gap-2 rounded-lg border border-navy-700/80 bg-navy-800/55 px-3 py-1.5 text-xs transition hover:border-accent/45 hover:bg-navy-800 xl:inline-flex"
+      className="hidden items-center gap-2 rounded-xl border border-navy-700/85 bg-navy-900 px-3 py-1.5 text-xs shadow-sheen transition hover:border-accent/45 hover:bg-navy-800/80 xl:inline-flex"
       title="Business date (IST) and active forecourt shift"
     >
       <Calendar className="h-3.5 w-3.5 shrink-0 text-ink-500" aria-hidden />
       <span className="num font-medium text-ink-300">{formatDate(businessDate)}</span>
-      <span className="h-3 w-px bg-navy-700" aria-hidden />
+      <span className="h-3.5 w-px bg-navy-700" aria-hidden />
       <span className="flex items-center gap-1.5 font-semibold">
         <span
           className={cn(
             'h-2 w-2 rounded-full',
-            openShift ? 'bg-ok shadow-[0_0_0_3px_rgb(var(--ok)/0.18)]' : 'bg-ink-600',
+            openShift ? 'animate-pulse-soft bg-ok shadow-[0_0_0_3px_rgb(var(--ok)/0.18)]' : 'bg-ink-600',
           )}
           aria-hidden
         />
         <span className={openShift ? 'text-ink-100' : 'text-ink-400'}>
-          {openShift ? `Shift #${String(openShift.shiftNumber)} Open` : 'No Open Shift'}
+          {openShift ? `Shift #${String(openShift.shiftNumber)} Live` : 'No Open Shift'}
         </span>
       </span>
     </Link>
@@ -369,6 +371,7 @@ export function Layout() {
   });
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenu, setUserMenu] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -403,6 +406,11 @@ export function Layout() {
       if (!menuRef.current?.contains(event.target as Node)) setUserMenu(false);
     };
     const key = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setCommandOpen((prev) => !prev);
+        return;
+      }
       if (event.key === 'Escape') {
         setUserMenu(false);
         setMobileOpen(false);
@@ -475,7 +483,7 @@ export function Layout() {
       <div
         className={cn(
           'relative flex min-w-0 items-center',
-          mobile ? 'w-full' : 'w-[210px] lg:w-[235px]',
+          mobile ? 'w-full' : 'w-[205px] lg:w-[230px]',
         )}
       >
         <Store
@@ -486,7 +494,7 @@ export function Layout() {
           value={station?.id ?? ''}
           onChange={(event) => selectStation(event.target.value)}
           aria-label="Active station"
-          className="select-input min-h-9.5 min-w-0 w-full cursor-pointer appearance-none truncate rounded-lg border border-navy-700/85 bg-navy-900 py-1.5 pl-8 pr-7 text-xs font-semibold text-ink-100 transition hover:border-navy-600 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/15"
+          className="select-input min-h-9.5 min-w-0 w-full cursor-pointer appearance-none truncate rounded-xl border border-navy-700/85 bg-navy-900 py-1.5 pl-8 pr-7 text-xs font-semibold text-ink-100 shadow-sheen transition hover:border-navy-600 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/15"
         >
           {stations.map((item) => (
             <option key={item.id} value={item.id}>
@@ -501,7 +509,7 @@ export function Layout() {
     <div className="flex min-h-dvh bg-navy-950">
       <a
         href="#main"
-        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[70] focus:rounded-lg focus:bg-accent focus:px-4 focus:py-2 focus:text-onaccent"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[70] focus:rounded-xl focus:bg-accent focus:px-4 focus:py-2 focus:text-onaccent"
       >
         Skip to content
       </a>
@@ -509,8 +517,8 @@ export function Layout() {
       {/* Desktop Sidebar */}
       <aside
         className={cn(
-          'sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-navy-700/70 bg-navy-900 transition-[width] duration-200 [background-image:linear-gradient(180deg,rgb(var(--accent)/0.055),transparent_24%)] md:flex',
-          collapsed ? 'w-[72px]' : 'w-[248px] xl:w-[256px]',
+          'sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-navy-700/75 bg-navy-900/95 backdrop-blur-xl transition-[width] duration-200 ease-smooth [background-image:radial-gradient(280px_180px_at_0%_0%,rgb(var(--accent)/0.075),transparent_75%)] md:flex',
+          collapsed ? 'w-[74px]' : 'w-[254px] xl:w-[264px]',
         )}
       >
         <div
@@ -526,7 +534,7 @@ export function Layout() {
               onClick={toggleCollapsed}
               title="Collapse sidebar"
               aria-label="Collapse sidebar"
-              className="grid h-8 w-8 place-items-center rounded-lg text-ink-500 transition hover:bg-navy-800 hover:text-ink-200"
+              className="grid h-8 w-8 place-items-center rounded-xl text-ink-500 transition hover:bg-navy-800 hover:text-ink-100"
             >
               <PanelLeftClose className="h-4 w-4" />
             </button>
@@ -536,18 +544,19 @@ export function Layout() {
         <PrimaryNav collapsed={collapsed} />
 
         {!collapsed && !me?.isSuperAdmin && station && (
-          <div className="mx-3 mb-3 rounded-xl border border-navy-700/80 bg-navy-800/45 p-3">
+          <div className="hero-mesh mx-3 mb-3 rounded-2xl border border-navy-700/80 bg-navy-800/50 p-3.5 shadow-sheen">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-ink-500">
+              <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.13em] text-ink-500">
+                <span className="h-1.5 w-1.5 rounded-full bg-ok" aria-hidden />
                 Active outlet
               </span>
-              <span className="rounded border border-accent/25 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-accent">
+              <span className="rounded-md border border-accent/25 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] font-bold text-accent">
                 {station.code}
               </span>
             </div>
-            <p className="mt-1 truncate text-xs font-semibold text-ink-100">{station.name}</p>
-            <p className="mt-1 flex items-center gap-1.5 text-[10px] text-ink-500">
-              <ShieldCheck className="h-3 w-3 shrink-0 text-accent" aria-hidden />
+            <p className="mt-1.5 truncate font-display text-xs font-bold text-ink-100">{station.name}</p>
+            <p className="mt-1 flex items-center gap-1.5 text-[10.5px] text-ink-500">
+              <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-accent" aria-hidden />
               <span>{me?.user.roleName} workspace · IST</span>
             </p>
           </div>
@@ -555,7 +564,7 @@ export function Layout() {
 
         <div
           className={cn(
-            'flex items-center border-t border-navy-700/65 py-2.5 text-[10px] text-ink-500',
+            'flex items-center border-t border-navy-700/65 py-2.5 text-[10.5px] text-ink-500',
             collapsed ? 'justify-center px-2' : 'justify-between px-4',
           )}
         >
@@ -565,14 +574,16 @@ export function Layout() {
               onClick={toggleCollapsed}
               title="Expand sidebar"
               aria-label="Expand sidebar"
-              className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 transition hover:bg-navy-800 hover:text-ink-100"
+              className="grid h-8 w-8 place-items-center rounded-xl text-ink-400 transition hover:bg-navy-800 hover:text-ink-100"
             >
               <PanelLeftOpen className="h-4 w-4" />
             </button>
           ) : (
             <>
-              <span className="font-medium">PetroFlow ERP</span>
-              <span className="font-mono text-ink-500">v2.0</span>
+              <span className="font-semibold text-ink-400">PetroFlow ERP</span>
+              <span className="rounded border border-navy-700 bg-navy-800/70 px-1.5 py-0.5 font-mono text-[9.5px] font-semibold text-ink-500">
+                v2.4
+              </span>
             </>
           )}
         </div>
@@ -582,7 +593,7 @@ export function Layout() {
       {mobileOpen && (
         <div className="fixed inset-0 z-50 md:hidden">
           <div
-            className="absolute inset-0 bg-scrim/60 backdrop-blur-[2px]"
+            className="absolute inset-0 bg-scrim/60 backdrop-blur-[3px]"
             onClick={() => setMobileOpen(false)}
           />
           <aside
@@ -590,14 +601,14 @@ export function Layout() {
             role="dialog"
             aria-modal="true"
             aria-label="Navigation menu"
-            className="relative flex h-dvh w-[288px] max-w-[88vw] flex-col border-r border-navy-700 bg-navy-900 shadow-pop"
+            className="relative flex h-dvh w-[292px] max-w-[88vw] flex-col border-r border-navy-700 bg-navy-900 shadow-pop"
           >
             <div className="flex items-center justify-between border-b border-navy-700/70 px-4 py-4">
               <Brand />
               <button
                 onClick={() => setMobileOpen(false)}
                 aria-label="Close menu"
-                className="grid h-9 w-9 place-items-center rounded-lg text-ink-400 hover:bg-navy-800 hover:text-ink-100"
+                className="grid h-9 w-9 place-items-center rounded-xl text-ink-400 hover:bg-navy-800 hover:text-ink-100"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -605,7 +616,7 @@ export function Layout() {
             <div className="border-b border-navy-700/60 px-4 py-3">{stationPicker(true)}</div>
             <PrimaryNav onNavigate={() => setMobileOpen(false)} />
             <div className="border-t border-navy-700/70 bg-navy-850 p-4">
-              <p className="text-sm font-semibold text-ink-100">{me?.user.name}</p>
+              <p className="font-display text-sm font-bold text-ink-100">{me?.user.name}</p>
               <p className="mt-0.5 text-xs text-ink-500">
                 {me?.user.roleName} · {me?.tenant?.name}
               </p>
@@ -625,35 +636,35 @@ export function Layout() {
 
       {/* Main Content Shell */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-[62px] items-center gap-2.5 border-b border-navy-700/80 bg-navy-900/95 px-3.5 backdrop-blur-xl sm:px-6 md:h-[68px] lg:px-8">
+        <header className="sticky top-0 z-30 flex h-[62px] items-center gap-2 border-b border-navy-700/75 bg-navy-900/85 px-3 backdrop-blur-xl sm:gap-2.5 sm:px-6 md:h-[68px] lg:px-8">
           {/* Organization & Section Context */}
           <div className="min-w-0 flex-1">
             <div className="hidden items-center gap-2 text-xs md:flex">
-              <span className="inline-flex min-w-0 items-center gap-1.5 font-medium text-ink-400">
-                <Building2 className="h-3.5 w-3.5 shrink-0 text-ink-500" aria-hidden />
-                <span className="truncate max-w-[180px] lg:max-w-[240px]">
+              <span className="inline-flex min-w-0 items-center gap-1.5 rounded-lg bg-navy-800/70 px-2 py-1 font-medium text-ink-400">
+                <Building2 className="h-3.5 w-3.5 shrink-0 text-accent" aria-hidden />
+                <span className="max-w-[165px] truncate lg:max-w-[225px]">
                   {me?.tenant?.name ?? 'Platform Administration'}
                 </span>
               </span>
               <ChevronRight className="h-3.5 w-3.5 shrink-0 text-ink-600" aria-hidden />
-              <span className="truncate font-semibold text-ink-100">
+              <span className="truncate font-display font-bold text-ink-100">
                 {section?.label ?? 'Administration'}
               </span>
               {activeChild && activeChild.to !== section?.to && (
                 <>
                   <ChevronRight className="h-3 w-3 shrink-0 text-ink-600" aria-hidden />
-                  <span className="hidden truncate text-ink-400 lg:inline">{activeChild.label}</span>
+                  <span className="hidden truncate font-medium text-ink-400 lg:inline">{activeChild.label}</span>
                 </>
               )}
               {isDemoTenant && (
-                <span className="ml-1 hidden rounded border border-warn/30 bg-warn/10 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-warn lg:inline">
-                  DEMO
+                <span className="ml-1 hidden rounded-full border border-warn/30 bg-warn/10 px-2 py-0.5 text-[9.5px] font-bold tracking-wider text-warn lg:inline">
+                  SANDBOX
                 </span>
               )}
             </div>
 
             {/* Mobile Outlet Context */}
-            <div className="md:hidden">
+            <div className="min-w-0 md:hidden">
               {!mobileOpen && stationPicker(true) ? (
                 stationPicker(true)
               ) : (
@@ -664,14 +675,35 @@ export function Layout() {
             </div>
           </div>
 
+          {/* Command Palette Trigger */}
+          <button
+            type="button"
+            onClick={() => setCommandOpen(true)}
+            aria-label="Open command palette"
+            title="Quick jump & actions (⌘K)"
+            className="hidden h-9.5 items-center gap-2.5 rounded-xl border border-navy-700/85 bg-navy-900 px-3 text-xs text-ink-400 shadow-sheen transition hover:border-accent/45 hover:bg-navy-800/80 hover:text-ink-100 lg:inline-flex"
+          >
+            <Search className="h-3.5 w-3.5 text-ink-500" aria-hidden />
+            <span className="font-medium">Quick jump…</span>
+            <kbd className="kbd ml-1">⌘K</kbd>
+          </button>
+
           {/* Desktop/Tablet Outlet Switcher + Business Date & Shift Status */}
-          <div className="hidden items-center gap-2.5 md:flex">
+          <div className="hidden items-center gap-2 md:flex">
             {stationPicker()}
             <HeaderShiftContext />
           </div>
 
-          {/* Action Controls: Notifications, Theme, Account */}
-          <div className="flex items-center gap-2">
+          {/* Action Controls: Mobile Search, Notifications, Theme, Account */}
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+            <button
+              type="button"
+              onClick={() => setCommandOpen(true)}
+              aria-label="Open command palette"
+              className="grid h-9.5 w-9.5 shrink-0 place-items-center rounded-xl border border-navy-700/85 bg-navy-900 text-ink-400 shadow-sheen transition hover:border-navy-600 hover:bg-navy-800 hover:text-ink-100 lg:hidden"
+            >
+              <Search className="h-[16px] w-[16px]" aria-hidden />
+            </button>
             <NotificationCenter />
             <ThemeToggle />
 
@@ -680,20 +712,20 @@ export function Layout() {
                 type="button"
                 onClick={() => setUserMenu((value) => !value)}
                 className={cn(
-                  'flex h-9.5 items-center gap-2 rounded-lg border px-1.5 transition',
+                  'flex h-9.5 items-center gap-2 rounded-xl border px-1.5 shadow-sheen transition-all duration-150',
                   userMenu
-                    ? 'border-accent/45 bg-accent/8'
-                    : 'border-navy-700/80 bg-navy-900 hover:border-navy-600 hover:bg-navy-800',
+                    ? 'border-accent/45 bg-accent/10'
+                    : 'border-navy-700/85 bg-navy-900 hover:border-navy-600 hover:bg-navy-800',
                 )}
                 aria-haspopup="menu"
                 aria-expanded={userMenu}
                 aria-label="Account menu"
               >
-                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-accent/14 font-display text-[11px] font-extrabold text-accent">
+                <span className="brand-gradient grid h-7 w-7 shrink-0 place-items-center rounded-lg font-display text-[11px] font-extrabold text-onaccent shadow-sm">
                   {initials(me?.user.name ?? '')}
                 </span>
-                <span className="hidden text-left lg:block">
-                  <span className="block max-w-[130px] truncate text-xs font-semibold leading-tight text-ink-100">
+                <span className="hidden text-left xl:block">
+                  <span className="block max-w-[125px] truncate text-xs font-semibold leading-tight text-ink-100">
                     {me?.user.name}
                   </span>
                   <span className="block text-[10px] font-medium leading-tight text-ink-500">
@@ -706,18 +738,18 @@ export function Layout() {
               {userMenu && (
                 <div
                   role="menu"
-                  className="animate-scale-in absolute right-0 top-12 z-50 w-64 overflow-hidden rounded-xl border border-navy-700 bg-navy-850 shadow-pop"
+                  className="animate-scale-in absolute right-0 top-12 z-50 w-64 overflow-hidden rounded-2xl border border-navy-700/90 bg-navy-850 shadow-pop"
                 >
-                  <div className="border-b border-navy-700/75 bg-navy-900/50 px-4 py-3">
+                  <div className="hero-mesh border-b border-navy-700/75 bg-navy-900/60 px-4 py-3.5">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="truncate text-sm font-semibold text-ink-100">{me?.user.name}</p>
-                      <span className="rounded border border-accent/25 bg-accent/10 px-1.5 py-0.5 text-[10px] font-bold text-accent">
+                      <p className="truncate font-display text-sm font-bold text-ink-100">{me?.user.name}</p>
+                      <span className="rounded-full border border-accent/25 bg-accent/10 px-2 py-0.5 text-[10px] font-bold text-accent">
                         {me?.user.roleName}
                       </span>
                     </div>
                     <p className="mt-0.5 truncate text-xs text-ink-500">{me?.user.email}</p>
                     {me?.tenant?.name && (
-                      <p className="mt-1 truncate text-[11px] text-ink-400">{me.tenant.name}</p>
+                      <p className="mt-1 truncate text-[11px] font-medium text-ink-400">{me.tenant.name}</p>
                     )}
                   </div>
                   <div className="p-1.5">
@@ -745,7 +777,7 @@ export function Layout() {
 
         <main
           id="main"
-          className="mx-auto w-full max-w-[1520px] flex-1 px-4 pb-24 pt-5 sm:px-6 md:pb-8 lg:px-8 lg:pt-6"
+          className="mx-auto w-full max-w-[1520px] flex-1 px-3.5 pb-24 pt-5 sm:px-6 md:pb-8 lg:px-8 lg:pt-6"
         >
           {!me?.isSuperAdmin && <SectionNav />}
           <div key={location.pathname} className="animate-fade-in">
@@ -753,19 +785,27 @@ export function Layout() {
           </div>
         </main>
 
-        <footer className="hidden items-center justify-between gap-3 border-t border-navy-700/65 bg-navy-900/50 px-8 py-3 text-[11px] text-ink-500 md:flex">
+        <footer className="hidden items-center justify-between gap-3 border-t border-navy-700/65 bg-navy-900/60 px-8 py-3 text-[11px] text-ink-500 backdrop-blur-md md:flex">
           <span>
             PetroFlow Forecourt ERP
             {isDemoTenant ? ' · Demo Sandbox (Simulated Hardware & Seeded Ledgers)' : ' · Multi-Outlet Fuel Retail Platform'}
           </span>
-          <span className="flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-ok" aria-hidden />
-            <span>INR Ledger · Asia/Kolkata (IST)</span>
+          <span className="flex items-center gap-2.5">
+            <span className="hidden items-center gap-1 text-ink-400 lg:inline-flex">
+              <kbd className="kbd">⌘K</kbd> Quick jump
+            </span>
+            <span className="hidden h-3 w-px bg-navy-700 lg:inline-block" aria-hidden />
+            <span className="flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-ok" aria-hidden />
+              <span>INR Ledger · Asia/Kolkata (IST)</span>
+            </span>
           </span>
         </footer>
       </div>
 
       {!me?.isSuperAdmin && <MobileNav onMenu={() => setMobileOpen(true)} />}
+
+      <CommandPalette open={commandOpen} onClose={() => setCommandOpen(false)} />
 
       <Modal
         open={passwordOpen}

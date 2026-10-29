@@ -90,7 +90,7 @@ export default function AdminStations() {
         title="Stations"
         description="Platform-wide station registry. Platform staff can create and deactivate stations; operational configuration stays with the tenant."
         actions={
-          <Button onClick={() => { setCreateOpen(true); setForm((c) => ({ ...c, tenantId: tenantFilter })); }}>
+          <Button variant="primary" size="sm" onClick={() => { setCreateOpen(true); setForm((c) => ({ ...c, tenantId: tenantFilter })); }}>
             <Plus className="h-4 w-4" /> New station
           </Button>
         }

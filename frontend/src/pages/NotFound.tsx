@@ -4,12 +4,13 @@ import { Button } from '../components/ui';
 
 export default function NotFound({ embedded = false }: { embedded?: boolean }) {
   const body = (
-    <div className="mx-auto max-w-md rounded-xl border border-navy-700/80 bg-navy-900 p-8 text-center shadow-card">
-      <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl border border-accent/25 bg-accent/10 text-accent">
+    <div className="card hero-mesh relative mx-auto max-w-md overflow-hidden p-8 text-center">
+      <span aria-hidden className="brand-gradient absolute inset-x-0 top-0 h-[2.5px] opacity-90" />
+      <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-accent/25 bg-accent/10 text-accent shadow-sheen">
         {embedded ? <Compass className="h-6 w-6" /> : <Fuel className="h-6 w-6" />}
       </div>
-      <p className="mt-4 font-mono text-xs font-bold uppercase tracking-[0.2em] text-ink-500">Error 404</p>
-      <h1 className="mt-1.5 font-display text-xl font-extrabold text-ink-100">Page not found</h1>
+      <p className="mt-4 font-mono text-xs font-bold uppercase tracking-[0.22em] text-accent">Error 404</p>
+      <h1 className="mt-1.5 font-display text-2xl font-extrabold tracking-tight text-ink-100">Page not found</h1>
       <p className="mt-2 text-xs leading-relaxed text-ink-400">
         The route you requested does not exist in PetroFlow ERP or has moved to another operational module.
       </p>

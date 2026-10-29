@@ -13,7 +13,6 @@ export default {
     extend: {
       colors: {
         // Surface ramp: 950 = page canvas … 600 = strongest border.
-        // (Names stay `navy-*` for continuity; the hue is now green-graphite, not blue.)
         navy: {
           950: channel('--navy-950'),
           900: channel('--navy-900'),
@@ -36,28 +35,22 @@ export default {
           DEFAULT: channel('--accent'),
           soft: channel('--accent-soft'),
           teal: channel('--accent-teal'),
-          // Amber-gold "fuel / energy / money-in" highlight. Use sparingly: rates,
-          // litres, positive revenue moments — never for whole surfaces.
           energy: channel('--accent-energy'),
           muted: channel('--accent'),
         },
         energy: channel('--accent-energy'),
-        // Foreground for text sitting on a brand- or status-coloured surface.
         onaccent: channel('--on-accent'),
         onok: channel('--on-ok'),
         onwarn: channel('--on-warn'),
         ondanger: channel('--on-danger'),
         onenergy: channel('--on-energy'),
-        // Modal / drawer backdrop — always dark in both themes.
         scrim: channel('--scrim'),
-        // Recessed surface for telemetry readouts, code blocks and inset wells.
         inset: channel('--inset'),
-        // Semantic status colours that invert legibly across light and dark themes.
         ok: channel('--ok'),
         warn: channel('--warn'),
         danger: channel('--danger'),
         info: channel('--info'),
-        // Brand ink panel — always dark in both themes (login split, marketing blocks).
+        // Brand ink panel — always dark in both themes (login split, showcase surfaces).
         panel: {
           DEFAULT: channel('--panel-ink'),
           deep: channel('--panel-deep'),
@@ -69,7 +62,6 @@ export default {
           accent: channel('--panel-accent'),
           energy: channel('--panel-energy'),
         },
-        // Chart series (also mirrored in lib/theme.tsx for Recharts SVG attributes).
         chart: {
           1: channel('--accent'),
           2: channel('--accent-teal'),
@@ -89,6 +81,7 @@ export default {
         22: '0.22',
       },
       spacing: {
+        8.5: '2.125rem',
         9.5: '2.375rem',
       },
       fontFamily: {
@@ -108,10 +101,9 @@ export default {
         mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
       },
       fontSize: {
-        // Display sizes for KPI values: tighter tracking the bigger it gets.
-        'stat-sm': ['1.0625rem', { lineHeight: '1.45rem', letterSpacing: '-0.02em' }],
-        stat: ['1.375rem', { lineHeight: '1.75rem', letterSpacing: '-0.025em' }],
-        'stat-lg': ['1.75rem', { lineHeight: '2.1rem', letterSpacing: '-0.03em' }],
+        'stat-sm': ['1.125rem', { lineHeight: '1.5rem', letterSpacing: '-0.025em' }],
+        stat: ['1.45rem', { lineHeight: '1.8rem', letterSpacing: '-0.03em' }],
+        'stat-lg': ['1.825rem', { lineHeight: '2.15rem', letterSpacing: '-0.035em' }],
       },
       boxShadow: {
         card: 'var(--shadow-card)',
@@ -123,40 +115,41 @@ export default {
       },
       borderRadius: {
         '2.5xl': '1.25rem',
+        '3xl': '1.5rem',
         '4xl': '1.75rem',
       },
       keyframes: {
         'fade-in': {
-          from: { opacity: '0', transform: 'translateY(3px)' },
+          from: { opacity: '0', transform: 'translateY(4px)' },
           to: { opacity: '1', transform: 'translateY(0)' },
         },
         'slide-in': {
-          from: { opacity: '0', transform: 'translateX(10px)' },
+          from: { opacity: '0', transform: 'translateX(12px)' },
           to: { opacity: '1', transform: 'translateX(0)' },
         },
         'scale-in': {
-          from: { opacity: '0', transform: 'scale(.98)' },
-          to: { opacity: '1', transform: 'scale(1)' },
+          from: { opacity: '0', transform: 'scale(.975) translateY(3px)' },
+          to: { opacity: '1', transform: 'scale(1) translateY(0)' },
         },
         'slide-up': {
-          from: { opacity: '0', transform: 'translateY(8px)' },
+          from: { opacity: '0', transform: 'translateY(10px)' },
           to: { opacity: '1', transform: 'translateY(0)' },
         },
         shimmer: {
           '100%': { transform: 'translateX(100%)' },
         },
         'pulse-soft': {
-          '0%, 100%': { opacity: '1' },
-          '50%': { opacity: '0.55' },
+          '0%, 100%': { opacity: '1', transform: 'scale(1)' },
+          '50%': { opacity: '0.5', transform: 'scale(0.92)' },
         },
       },
       animation: {
-        'fade-in': 'fade-in 140ms ease-out',
-        'slide-in': 'slide-in 160ms ease-out',
-        'scale-in': 'scale-in 130ms ease-out',
-        'slide-up': 'slide-up 180ms ease-out',
+        'fade-in': 'fade-in 180ms cubic-bezier(0.22, 1, 0.36, 1)',
+        'slide-in': 'slide-in 200ms cubic-bezier(0.22, 1, 0.36, 1)',
+        'scale-in': 'scale-in 160ms cubic-bezier(0.22, 1, 0.36, 1)',
+        'slide-up': 'slide-up 220ms cubic-bezier(0.22, 1, 0.36, 1)',
         shimmer: 'shimmer 1.6s infinite',
-        'pulse-soft': 'pulse-soft 2.4s ease-in-out infinite',
+        'pulse-soft': 'pulse-soft 2.2s ease-in-out infinite',
       },
       transitionTimingFunction: {
         smooth: 'cubic-bezier(0.22, 1, 0.36, 1)',

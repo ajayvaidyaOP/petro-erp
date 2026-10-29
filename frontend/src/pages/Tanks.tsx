@@ -232,15 +232,27 @@ export default function Tanks() {
               tanks.map((tank) => {
                 const fill = Math.max(0, Math.min(100, Number(tank.fillPct)));
                 const ullage = Math.max(0, Number(tank.capacityLitres) - Number(tank.bookStockLitres));
+                const isLow = fill < 15;
+                const isWatch = !isLow && fill < 25;
+                const liquidColor = isLow
+                  ? 'rgb(var(--danger))'
+                  : isWatch
+                    ? 'rgb(var(--warn))'
+                    : tank.productColor || 'rgb(var(--accent))';
                 return (
-                <Card key={tank.id} className="p-5">
+                <Card key={tank.id} className="relative overflow-hidden p-5">
+                  <span
+                    aria-hidden
+                    className="absolute inset-x-0 top-0 h-[2.5px] opacity-85"
+                    style={{ background: liquidColor }}
+                  />
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="rounded border border-navy-700 bg-navy-800 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-ink-200">
+                        <span className="rounded-md border border-navy-700 bg-navy-800 px-2 py-0.5 font-mono text-[11px] font-bold text-ink-200">
                           {tank.code}
                         </span>
-                        <p className="text-sm font-bold text-ink-100">{tank.name}</p>
+                        <p className="font-display text-sm font-bold text-ink-100">{tank.name}</p>
                       </div>
                       <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-ink-400">
                         <span className="h-2.5 w-2.5 rounded-full" style={{ background: tank.productColor }} /> {tank.productName}
@@ -249,44 +261,68 @@ export default function Tanks() {
                     <StatusBadge status={tank.status} />
                   </div>
 
-                  <div className="mt-4 rounded-lg border border-navy-700/75 bg-navy-900/55 p-3.5">
-                    <div className="mb-2 flex items-end justify-between">
-                      <div>
-                        <p className="num font-display text-2xl font-extrabold text-ink-100">{formatNumber(tank.bookStockLitres, 0)} <span className="font-sans text-xs font-medium text-ink-500">L</span></p>
-                        <p className="text-[11px] text-ink-500">of {formatNumber(tank.capacityLitres, 0)} L · Ullage {formatNumber(ullage, 0)} L</p>
+                  <div className="mt-4 flex items-center gap-3.5 rounded-2xl border border-navy-700/75 bg-navy-800/45 p-3.5">
+                    <div
+                      aria-hidden
+                      className="relative h-16 w-10 shrink-0 overflow-hidden rounded-xl border border-navy-600/80 bg-inset shadow-inner"
+                    >
+                      <div
+                        className="absolute inset-x-0 bottom-0 transition-all duration-500"
+                        style={{ height: `${Math.max(6, fill)}%`, backgroundColor: liquidColor, opacity: 0.85 }}
+                      >
+                        <div className="h-[2px] w-full bg-white/45" />
                       </div>
-                      <Badge tone={fill < 15 ? 'danger' : fill < 25 ? 'warning' : 'success'} dot>{formatNumber(fill, 0)}%</Badge>
+                      <span className="relative z-[1] grid h-full place-items-center font-mono text-[10px] font-extrabold text-ink-100 drop-shadow-[0_1px_2px_rgb(0_0_0/0.35)]">
+                        {formatNumber(fill, 0)}%
+                      </span>
                     </div>
-                    <MeterBar
-                      value={fill}
-                      tone={fill < 15 ? 'danger' : fill < 25 ? 'warn' : 'accent'}
-                      color={fill >= 25 ? tank.productColor : undefined}
-                      label={`${tank.code} fill level`}
-                    />
+
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-2 flex items-end justify-between gap-2">
+                        <div>
+                          <p className="num font-display text-2xl font-extrabold leading-none text-ink-100">
+                            {formatNumber(tank.bookStockLitres, 0)}{' '}
+                            <span className="font-sans text-xs font-medium text-ink-500">L</span>
+                          </p>
+                          <p className="mt-1 text-[11px] text-ink-500">
+                            of {formatNumber(tank.capacityLitres, 0)} L · Ullage {formatNumber(ullage, 0)} L
+                          </p>
+                        </div>
+                        <Badge tone={isLow ? 'danger' : isWatch ? 'warning' : 'success'} dot>
+                          {isLow ? 'Low' : isWatch ? 'Reorder' : `${formatNumber(fill, 0)}%`}
+                        </Badge>
+                      </div>
+                      <MeterBar
+                        value={fill}
+                        tone={isLow ? 'danger' : isWatch ? 'warn' : 'accent'}
+                        color={!isLow && !isWatch ? tank.productColor : undefined}
+                        label={`${tank.code} fill level`}
+                      />
+                    </div>
                   </div>
 
-                  <dl className="mt-3.5 grid grid-cols-2 gap-2.5 text-[11px]">
+                  <dl className="mt-3.5 grid grid-cols-2 gap-2.5 rounded-xl border border-navy-700/55 bg-navy-900/45 p-3 text-[11px]">
                     <div>
                       <dt className="text-ink-500">Last physical dip</dt>
-                      <dd className="num font-medium text-ink-200">{tank.lastMeasuredLitres ? formatLitres(tank.lastMeasuredLitres) : 'No dip recorded'}</dd>
+                      <dd className="num mt-0.5 font-semibold text-ink-200">{tank.lastMeasuredLitres ? formatLitres(tank.lastMeasuredLitres) : 'No dip recorded'}</dd>
                     </div>
                     <div>
                       <dt className="text-ink-500">Dip vs book variance</dt>
-                      <dd className={`num font-medium ${tank.lastVarianceLitres && Math.abs(Number(tank.lastVarianceLitres)) > 50 ? 'text-warn' : 'text-ink-200'}`}>
+                      <dd className={`num mt-0.5 font-semibold ${tank.lastVarianceLitres && Math.abs(Number(tank.lastVarianceLitres)) > 50 ? 'text-warn' : 'text-ink-200'}`}>
                         {tank.lastVarianceLitres ? `${formatNumber(tank.lastVarianceLitres, 3)} L` : '—'}
                       </dd>
                     </div>
                     <div>
                       <dt className="text-ink-500">Dead stock</dt>
-                      <dd className="num text-ink-300">{formatLitres(tank.deadStockLitres)}</dd>
+                      <dd className="num mt-0.5 text-ink-300">{formatLitres(tank.deadStockLitres)}</dd>
                     </div>
                     <div>
                       <dt className="text-ink-500">Measured at</dt>
-                      <dd className="text-ink-300">{tank.lastMeasuredAt ? formatDateTime(tank.lastMeasuredAt) : '—'}</dd>
+                      <dd className="mt-0.5 text-ink-300">{tank.lastMeasuredAt ? formatDateTime(tank.lastMeasuredAt) : '—'}</dd>
                     </div>
-                    <div className="col-span-2">
+                    <div className="col-span-2 border-t border-navy-700/50 pt-2">
                       <dt className="text-ink-500">Water bottom cut (paste)</dt>
-                      <dd className={tank.lastWaterDipCm && Number(tank.lastWaterDipCm) > 2 ? 'font-semibold text-danger' : 'text-ink-300'}>
+                      <dd className={tank.lastWaterDipCm && Number(tank.lastWaterDipCm) > 2 ? 'mt-0.5 font-semibold text-danger' : 'mt-0.5 text-ink-300'}>
                         {tank.lastWaterDipCm ? `${formatNumber(tank.lastWaterDipCm, 1)} cm${Number(tank.lastWaterDipCm) > 2 ? ' — High water level (>2 cm)' : ''}` : '—'}
                       </dd>
                     </div>

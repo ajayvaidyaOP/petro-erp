@@ -133,28 +133,33 @@ export default function Reports() {
       ) : dsr.isError ? (
         <ErrorState error={dsr.error} onRetry={() => void dsr.refetch()} />
       ) : dsr.data ? (
-        <div className="space-y-3">
-          <Card className="print:border-0">
-            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-navy-700/60 p-4">
+        <div className="space-y-5">
+          <Card className="relative overflow-hidden print:border-0">
+            <span aria-hidden className="brand-gradient absolute inset-x-0 top-0 h-[2.5px] opacity-90 print:hidden" />
+            <div className="hero-mesh flex flex-wrap items-start justify-between gap-3 border-b border-navy-700/60 p-5">
               <div>
-                <p className="text-lg font-semibold text-ink-100">{dsr.data.station.name}</p>
-                <p className="text-xs text-ink-500">
-                  {dsr.data.station.code}
-                  {dsr.data.station.address ? ` · ${dsr.data.station.address}` : ''}
+                <div className="flex items-center gap-2">
+                  <span className="rounded-md border border-accent/25 bg-accent/10 px-2 py-0.5 font-mono text-[10.5px] font-bold text-accent">
+                    {dsr.data.station.code}
+                  </span>
+                  <p className="font-display text-lg font-extrabold tracking-tight text-ink-100">{dsr.data.station.name}</p>
+                </div>
+                <p className="mt-1 text-xs text-ink-500">
+                  {dsr.data.station.address ? `${dsr.data.station.address}` : 'Operational DSR Statement'}
                   {dsr.data.station.city ? `, ${dsr.data.station.city}` : ''}
                 </p>
-                <p className="mt-1 text-xs text-ink-400">Business date: {formatDate(dsr.data.date)} (Asia/Kolkata)</p>
+                <p className="mt-1 text-xs font-medium text-ink-400">Business date: {formatDate(dsr.data.date)} (Asia/Kolkata)</p>
               </div>
               <div className="text-right text-[11px] text-ink-500">
                 <p>Generated {formatDateTime(dsr.data.generatedAt)}</p>
-                <p>PetroFlow ERP · INR</p>
-                <div className="mt-1 flex justify-end gap-1">
-                  <Badge tone="muted">{dsr.data.shifts.length} shifts</Badge>
-                  <Badge tone="muted">{dsr.data.transactions.length} transactions</Badge>
+                <p className="font-medium text-ink-400">PetroFlow ERP · INR</p>
+                <div className="mt-1.5 flex justify-end gap-1.5">
+                  <Badge tone="accent">{dsr.data.shifts.length} shifts</Badge>
+                  <Badge tone="neutral">{dsr.data.transactions.length} transactions</Badge>
                 </div>
               </div>
             </div>
-            <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-4">
               <StatCard label="Aggregate litres" value={formatNumber(dsr.data.totals.aggregateLitres, 3)} hint="Closed shift totalizers" />
               <StatCard label="Estimated sales value" value={formatINR(dsr.data.totals.aggregateEstimatedValue, true)} hint="Aggregate estimate" tone="accent" />
               <StatCard label="Recorded transactions" value={formatINR(dsr.data.totals.transactionValue, true)} hint={`${formatNumber(dsr.data.totals.transactionLitres, 3)} L`} />
@@ -162,7 +167,7 @@ export default function Reports() {
             </div>
           </Card>
 
-          <div className="grid gap-3 lg:grid-cols-2">
+          <div className="grid gap-5 lg:grid-cols-2">
             <Card>
               <CardHeader title="Payment mix (recorded)" subtitle="Only transaction-level sales carry a payment mode" />
               <div className="divide-y divide-navy-800/80">

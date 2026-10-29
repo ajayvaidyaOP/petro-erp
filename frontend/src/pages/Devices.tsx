@@ -182,12 +182,12 @@ export default function Devices() {
         actions={
           <div className="flex flex-wrap gap-2">
             {me?.demoMode && can('devices.write') && simulated > 0 ? (
-              <Button variant="outline" loading={simulate.isPending} onClick={() => simulate.mutate()}>
+              <Button size="sm" variant="outline" loading={simulate.isPending} onClick={() => simulate.mutate()}>
                 <Zap className="h-4 w-4" /> Inject simulated reading
               </Button>
             ) : null}
             {can('devices.write') ? (
-              <Button onClick={() => setCreateOpen(true)}>
+              <Button size="sm" variant="primary" onClick={() => setCreateOpen(true)}>
                 <Plus className="h-4 w-4" /> Register gateway
               </Button>
             ) : null}

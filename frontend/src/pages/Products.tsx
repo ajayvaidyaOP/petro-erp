@@ -141,7 +141,7 @@ export default function Products() {
         description="Fuel grades, units and effective-dated prices. Every sale is valued with the price in force at the time of the transaction — never a later price."
         actions={
           can('products.write') ? (
-            <Button onClick={() => setCreateOpen(true)}>
+            <Button variant="primary" size="sm" onClick={() => setCreateOpen(true)}>
               <Plus className="h-4 w-4" /> New product
             </Button>
           ) : null
