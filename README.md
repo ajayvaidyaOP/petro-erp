@@ -77,6 +77,8 @@ the whole product, and each one has exactly one job — orange means *your move*
 | Charcoal | `#1a1613` | `#faf6f1` | Text, sidebar shell, dashboard hero |
 | Paper | `#f6f2ec` → `#ffffff` | `#0c0b0a` → `#191613` | Page canvas and raised work surfaces |
 
+![PetroFlow Ember & Forecourt Green palette](docs/palette-ember-green.png)
+
 Amber (`warn`) and crimson (`danger`) stay reserved for genuine exceptions — a variance, a low
 tank, a failed device — so a red badge is never just decoration. Manrope display type and Inter
 body text are locally bundled. Both the light workspace and a high-contrast dark theme share CSS
