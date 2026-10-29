@@ -35,23 +35,23 @@ type ButtonSize = 'sm' | 'md' | 'lg';
 
 const buttonVariants: Record<ButtonVariant, string> = {
   primary:
-    // `text-onaccent` (not `text-navy-950`): navy is the surface ramp and inverts
-    // with the theme, which would render light-on-light text in light mode.
-    'bg-accent text-onaccent font-semibold shadow-glow border border-accent hover:bg-accent-soft active:scale-[.98]',
+    'bg-accent text-onaccent font-semibold shadow-glow border border-accent hover:bg-accent-soft hover:border-accent-soft active:scale-[.985]',
   secondary:
-    'bg-navy-750/80 text-ink-100 border border-navy-600/70 hover:bg-navy-700 hover:border-navy-600 active:scale-[.98]',
-  ghost: 'text-ink-300 hover:bg-accent/[0.08] hover:text-ink-100 border border-transparent',
-  danger: 'bg-rose-500/90 text-white hover:bg-rose-500 border border-rose-400/40 active:scale-[.98]',
-  // `text-white` rather than `text-onaccent`: emerald-500 stays mid-tone in both
-  // themes, so white is the legible foreground here regardless of theme.
-  success: 'bg-emerald-500 text-white font-semibold hover:bg-emerald-400 border border-emerald-400/50 active:scale-[.98]',
-  outline: 'border border-navy-600/80 text-ink-200 hover:bg-accent/[0.06] hover:border-accent/50 active:scale-[.98]',
+    'bg-navy-800/90 text-ink-100 font-medium border border-navy-600/80 hover:bg-navy-750 hover:border-navy-600 active:scale-[.985]',
+  ghost:
+    'text-ink-300 font-medium hover:bg-navy-800/80 hover:text-ink-100 border border-transparent',
+  danger:
+    'bg-[#d62436] text-white font-semibold hover:bg-[#be1e2e] border border-[#d62436] active:scale-[.985]',
+  success:
+    'bg-[#058760] text-white font-semibold hover:bg-[#047050] border border-[#058760] active:scale-[.985]',
+  outline:
+    'bg-navy-900/60 border border-navy-600/85 text-ink-200 font-medium hover:bg-navy-800/70 hover:border-accent/55 hover:text-ink-100 active:scale-[.985]',
 };
 
 const buttonSizes: Record<ButtonSize, string> = {
-  sm: 'h-9 px-3 text-xs gap-1.5',
+  sm: 'h-8.5 min-h-[34px] px-3 text-xs gap-1.5',
   md: 'h-10 px-4 text-sm gap-2',
-  lg: 'h-12 px-5 text-sm gap-2',
+  lg: 'h-11 px-5 text-sm gap-2',
 };
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -76,14 +76,14 @@ export function Button({
       {...props}
       disabled={disabled || loading}
       className={cn(
-        'inline-flex select-none items-center justify-center whitespace-nowrap rounded-xl transition-all duration-150',
+        'inline-flex select-none items-center justify-center whitespace-nowrap rounded-lg transition-all duration-150',
         'btn-touch disabled:cursor-not-allowed disabled:opacity-50',
         buttonVariants[variant],
         buttonSizes[size],
         className,
       )}
     >
-      {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : icon}
+      {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : icon}
       {children}
     </button>
   );
@@ -110,10 +110,15 @@ export function CardHeader({
   className?: string;
 }) {
   return (
-    <div className={cn('flex flex-wrap items-start justify-between gap-3 border-b border-navy-700/50 px-4 py-3.5', className)}>
+    <div
+      className={cn(
+        'flex flex-wrap items-center justify-between gap-3 border-b border-navy-700/75 px-4 py-3.5 sm:px-5',
+        className,
+      )}
+    >
       <div className="min-w-0">
         <h2 className="font-display text-[15px] font-bold tracking-tight text-ink-100">{title}</h2>
-        {subtitle && <p className="mt-0.5 text-xs text-ink-500">{subtitle}</p>}
+        {subtitle && <p className="mt-0.5 text-xs leading-relaxed text-ink-500">{subtitle}</p>}
       </div>
       {action && <div className="flex min-w-0 flex-wrap items-center gap-2 max-sm:w-full">{action}</div>}
     </div>
@@ -121,20 +126,20 @@ export function CardHeader({
 }
 
 export function CardBody({ className, children }: { className?: string; children: ReactNode }) {
-  return <div className={cn('p-4', className)}>{children}</div>;
+  return <div className={cn('p-4 sm:p-5', className)}>{children}</div>;
 }
 
 /* ------------------------------------------------------------------ badges */
-type Tone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger' | 'info' | 'muted';
+export type BadgeTone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger' | 'info' | 'muted';
 
-const toneClasses: Record<Tone, string> = {
-  neutral: 'bg-navy-700/60 text-ink-200 border-navy-600/60',
+const toneClasses: Record<BadgeTone, string> = {
+  neutral: 'bg-navy-800 text-ink-200 border-navy-600/75',
   accent: 'bg-accent/12 text-accent border-accent/30',
-  success: 'bg-emerald-500/12 text-ok border-emerald-500/30',
-  warning: 'bg-amber-500/12 text-warn border-amber-500/30',
-  danger: 'bg-rose-500/12 text-danger border-rose-500/30',
-  info: 'bg-sky-500/12 text-info border-sky-500/30',
-  muted: 'bg-navy-800 text-ink-500 border-navy-700',
+  success: 'bg-ok/12 text-ok border-ok/30',
+  warning: 'bg-warn/12 text-warn border-warn/30',
+  danger: 'bg-danger/12 text-danger border-danger/30',
+  info: 'bg-info/12 text-info border-info/30',
+  muted: 'bg-navy-800/70 text-ink-500 border-navy-700/80',
 };
 
 export function Badge({
@@ -143,7 +148,7 @@ export function Badge({
   className,
   dot,
 }: {
-  tone?: Tone;
+  tone?: BadgeTone;
   children: ReactNode;
   className?: string;
   dot?: boolean;
@@ -151,21 +156,23 @@ export function Badge({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium',
+        'inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-semibold tracking-tight',
         toneClasses[tone],
         className,
       )}
     >
-      {dot && <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />}
+      {dot && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" aria-hidden />}
       {children}
     </span>
   );
 }
 
-const statusTone: Record<string, Tone> = {
+const statusTone: Record<string, BadgeTone> = {
   ACTIVE: 'success',
   ONLINE: 'success',
   VALID: 'success',
+  OK: 'success',
+  WITHIN_NORM: 'success',
   CLOSED: 'success',
   BALANCED: 'success',
   PAID: 'success',
@@ -176,19 +183,28 @@ const statusTone: Record<string, Tone> = {
   RECEIVED: 'success',
   POSTED: 'info',
   OPEN: 'info',
+  REOPENED: 'info',
   TRIALING: 'info',
+  ISSUED: 'info',
   PENDING: 'warning',
   FLAGGED: 'warning',
   VARIANCE: 'warning',
   PAST_DUE: 'warning',
   OVERDUE: 'warning',
+  EXPIRING: 'warning',
+  GAIN_CHECK: 'warning',
   SUSPICIOUS: 'warning',
   STALE: 'warning',
   GAP: 'warning',
+  MAINTENANCE: 'warning',
+  SIMULATED: 'warning',
   DRAFT: 'muted',
   CLOSED_EMPTY: 'muted',
   INACTIVE: 'muted',
+  NO_DIP: 'muted',
   OFFLINE: 'danger',
+  EXPIRED: 'danger',
+  BEYOND_NORM: 'danger',
   SUSPENDED: 'danger',
   DISABLED: 'danger',
   REJECTED: 'danger',
@@ -198,9 +214,7 @@ const statusTone: Record<string, Tone> = {
   DISPUTED: 'danger',
   REVERSED: 'danger',
   CANCELLED: 'danger',
-  MAINTENANCE: 'warning',
   BLOCKED: 'danger',
-  ISSUED: 'info',
 };
 
 export function StatusBadge({ status, label }: { status: string | null | undefined; label?: string }) {
@@ -230,11 +244,13 @@ export function Field({
 }) {
   return (
     <label className={cn('block', className)}>
-      <span className="label">
-        {label} {required && <span className="text-danger">*</span>}
-      </span>
+      {label && (
+        <span className="label">
+          {label} {required && <span className="text-danger">*</span>}
+        </span>
+      )}
       {children}
-      {hint && !error && <span className="mt-1 block text-xs text-ink-500">{hint}</span>}
+      {hint && !error && <span className="mt-1 block text-[11px] leading-snug text-ink-500">{hint}</span>}
       {error && <span className="mt-1 block text-xs font-medium text-danger">{error}</span>}
     </label>
   );
@@ -246,14 +262,14 @@ export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElem
 
 export function Select({ className, children, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
-    <select className={cn('input appearance-none bg-navy-900/90', className)} {...props}>
+    <select className={cn('input select-input appearance-none bg-navy-900', className)} {...props}>
       {children}
     </select>
   );
 }
 
 export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea className={cn('input min-h-[76px] resize-y', className)} {...props} />;
+  return <textarea className={cn('input min-h-[78px] resize-y', className)} {...props} />;
 }
 
 export function Checkbox({
@@ -268,15 +284,15 @@ export function Checkbox({
   disabled?: boolean;
 }) {
   return (
-    <label className={cn('flex cursor-pointer items-center gap-2 text-sm text-ink-200', disabled && 'opacity-60')}>
+    <label className={cn('flex cursor-pointer items-center gap-2.5 text-sm text-ink-200', disabled && 'opacity-60')}>
       <input
         type="checkbox"
         checked={checked}
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
-        className="h-4 w-4 rounded border-navy-600 bg-navy-900 text-accent focus:ring-accent/40"
+        className="h-4 w-4 rounded border-navy-600 bg-navy-900 accent-accent focus:ring-accent/40"
       />
-      {label}
+      <span>{label}</span>
     </label>
   );
 }
@@ -294,13 +310,55 @@ export function SearchInput({
 }) {
   return (
     <div className={cn('relative', className)}>
-      <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500" />
+      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500" aria-hidden />
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="input pl-8"
+        className="input pl-9"
         aria-label={placeholder}
+      />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------- meter */
+export function MeterBar({
+  value,
+  tone = 'accent',
+  color,
+  height = 'md',
+  label,
+  className,
+}: {
+  value: number;
+  tone?: 'accent' | 'ok' | 'warn' | 'danger' | 'info';
+  color?: string;
+  height?: 'sm' | 'md' | 'lg';
+  label?: string;
+  className?: string;
+}) {
+  const clamped = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
+  const fillClasses = {
+    accent: 'bg-accent',
+    ok: 'bg-ok',
+    warn: 'bg-warn',
+    danger: 'bg-danger',
+    info: 'bg-info',
+  };
+  const heights = { sm: 'h-1.5', md: 'h-2', lg: 'h-2.5' };
+  return (
+    <div
+      role={label ? 'meter' : undefined}
+      aria-label={label}
+      aria-valuenow={label ? Math.round(clamped) : undefined}
+      aria-valuemin={label ? 0 : undefined}
+      aria-valuemax={label ? 100 : undefined}
+      className={cn('w-full overflow-hidden rounded-full bg-navy-800 ring-1 ring-inset ring-navy-700/60', heights[height], className)}
+    >
+      <div
+        className={cn('h-full rounded-full transition-all duration-300', !color && fillClasses[tone])}
+        style={{ width: `${clamped}%`, ...(color ? { backgroundColor: color } : {}) }}
       />
     </div>
   );
@@ -308,24 +366,20 @@ export function SearchInput({
 
 /* ------------------------------------------------------------------ states */
 export function Spinner({ className }: { className?: string }) {
-  return <Loader2 className={cn('h-5 w-5 animate-spin text-accent', className)} />;
+  return <Loader2 className={cn('h-5 w-5 animate-spin text-accent', className)} aria-hidden />;
 }
 
 /** Full-page splash used while a lazily-loaded screen or the session resolves. */
 export function PageLoader({ label = 'Loading…' }: { label?: string }) {
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="grid min-h-dvh place-items-center px-6"
-    >
-      <div className="flex flex-col items-center gap-4">
-        <div className="brand-gradient grid h-12 w-12 place-items-center rounded-2xl text-onaccent shadow-glow">
-          <Fuel className="h-6 w-6" strokeWidth={2.5} />
+    <div role="status" aria-live="polite" className="grid min-h-dvh place-items-center bg-navy-950 px-6">
+      <div className="flex flex-col items-center gap-3.5">
+        <div className="brand-gradient grid h-11 w-11 place-items-center rounded-xl text-onaccent shadow-glow">
+          <Fuel className="h-5 w-5" strokeWidth={2.3} />
         </div>
         <div className="flex items-center gap-2">
           <Spinner className="h-3.5 w-3.5" />
-          <p className="text-xs uppercase tracking-[0.2em] text-ink-500">{label}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-500">{label}</p>
         </div>
       </div>
     </div>
@@ -334,10 +388,10 @@ export function PageLoader({ label = 'Loading…' }: { label?: string }) {
 
 export function LoadingBlock({ label = 'Loading…', rows = 3 }: { label?: string; rows?: number }) {
   return (
-    <div role="status" aria-live="polite" className="space-y-2 p-4">
+    <div role="status" aria-live="polite" className="space-y-2.5 p-4 sm:p-5">
       <span className="sr-only">{label}</span>
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="skeleton h-10" style={{ animationDelay: `${i * 100}ms` }} />
+        <div key={i} className="skeleton h-10" style={{ animationDelay: `${i * 90}ms` }} />
       ))}
     </div>
   );
@@ -347,14 +401,14 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
   const message =
     error instanceof Error ? error.message : typeof error === 'string' ? error : 'Something went wrong';
   return (
-    <div className="flex flex-col items-start gap-3 rounded-xl border border-rose-500/25 bg-rose-500/5 p-4">
-      <div className="flex items-start gap-2.5">
-        <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-rose-500/15 text-danger">
+    <div className="flex flex-col items-start gap-3 rounded-xl border border-danger/30 bg-danger/8 p-4">
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-danger/25 bg-danger/12 text-danger">
           <AlertTriangle className="h-4 w-4" />
         </span>
         <div className="min-w-0">
-          <p className="text-sm font-medium text-danger">{message}</p>
-          <p className="mt-0.5 text-xs text-danger/70">
+          <p className="text-sm font-semibold text-danger">{message}</p>
+          <p className="mt-0.5 text-xs text-ink-400">
             Nothing was changed. Retry, or check your connection if this keeps happening.
           </p>
         </div>
@@ -380,13 +434,13 @@ export function EmptyState({
   icon?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 px-6 py-12 text-center">
-      <div className="mb-2 grid h-12 w-12 place-items-center rounded-2xl border border-accent/25 bg-accent/[0.08] text-accent">
+    <div className="flex flex-col items-center justify-center gap-2 px-6 py-11 text-center">
+      <div className="mb-1.5 grid h-11 w-11 place-items-center rounded-xl border border-navy-700 bg-navy-800/70 text-accent">
         {icon ?? <Info className="h-5 w-5" />}
       </div>
-      <p className="text-sm font-medium text-ink-100">{title}</p>
+      <p className="font-display text-sm font-bold text-ink-100">{title}</p>
       {description && <p className="max-w-md text-xs leading-relaxed text-ink-500">{description}</p>}
-      {action && <div className="mt-3">{action}</div>}
+      {action && <div className="mt-2.5">{action}</div>}
     </div>
   );
 }
@@ -429,9 +483,12 @@ export function Modal({
       document.body.style.overflow = 'hidden';
     }
     modalStack.push(id);
-    const focusable = () => Array.from(ref.current?.querySelectorAll<HTMLElement>(
-      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-    ) ?? []).filter((element) => element.getClientRects().length > 0);
+    const focusable = () =>
+      Array.from(
+        ref.current?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      ).filter((element) => element.getClientRects().length > 0);
     const timer = window.setTimeout(() => {
       const firstField = focusable().find((element) => !element.hasAttribute('data-close'));
       (firstField ?? ref.current)?.focus();
@@ -445,14 +502,22 @@ export function Modal({
       }
       if (event.key !== 'Tab') return;
       const items = focusable();
-      if (items.length === 0) { event.preventDefault(); ref.current?.focus(); return; }
-      const first = items[0], last = items[items.length - 1];
+      if (items.length === 0) {
+        event.preventDefault();
+        ref.current?.focus();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
       if (!ref.current?.contains(document.activeElement)) {
-        event.preventDefault(); (event.shiftKey ? last : first).focus();
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
       } else if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault(); last.focus();
+        event.preventDefault();
+        last.focus();
       } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault(); first.focus();
+        event.preventDefault();
+        first.focus();
       }
     };
     document.addEventListener('keydown', onKey);
@@ -470,7 +535,7 @@ export function Modal({
   const widths = { sm: 'max-w-md', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl' };
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto overscroll-contain bg-scrim/70 p-0 backdrop-blur-sm sm:items-center sm:p-6">
+    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto overscroll-contain bg-scrim/65 p-0 backdrop-blur-[2px] sm:items-center sm:p-6">
       <div
         ref={ref}
         role="dialog"
@@ -479,26 +544,34 @@ export function Modal({
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
         className={cn(
-          'animate-scale-in my-auto flex max-h-[92dvh] w-full flex-col rounded-t-3xl border border-navy-700/70 bg-navy-850 shadow-pop outline-none sm:max-h-[88dvh] sm:rounded-3xl',
+          'animate-scale-in my-auto flex max-h-[92dvh] w-full flex-col rounded-t-2xl border border-navy-700 bg-navy-850 shadow-pop outline-none sm:max-h-[88dvh] sm:rounded-2xl',
           widths[size],
         )}
       >
-        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-navy-700/60 px-4 py-4 sm:px-5">
-          <div>
-            <h2 id={titleId} className="font-display text-base font-bold tracking-tight text-ink-100">{title}</h2>
-            {description && <p id={descriptionId} className="mt-1 text-xs leading-relaxed text-ink-400">{description}</p>}
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-navy-700/75 bg-navy-900/50 px-4 py-4 sm:rounded-t-2xl sm:px-5">
+          <div className="min-w-0">
+            <h2 id={titleId} className="font-display text-base font-bold tracking-tight text-ink-100">
+              {title}
+            </h2>
+            {description && (
+              <p id={descriptionId} className="mt-0.5 text-xs leading-relaxed text-ink-400">
+                {description}
+              </p>
+            )}
           </div>
           <button
             type="button"
             data-close
             onClick={onClose}
-            className="btn-touch -mr-1 grid h-9 w-9 shrink-0 place-items-center rounded-lg text-ink-400 transition hover:bg-navy-800 hover:text-ink-100"
+            className="btn-touch -mr-1 grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ink-400 transition hover:bg-navy-800 hover:text-ink-100"
             aria-label="Close dialog"
-          ><X className="h-4 w-4" /></button>
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 scroll-thin sm:px-5">{children}</div>
         {footer && (
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-navy-700/60 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 sm:pb-3">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-navy-700/75 bg-navy-900/40 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:rounded-b-2xl sm:px-5 sm:pb-3">
             {footer}
           </div>
         )}
@@ -544,7 +617,7 @@ export function ConfirmDialog({
         </>
       }
     >
-      <p className="text-sm text-ink-300">{message}</p>
+      <p className="text-sm leading-relaxed text-ink-300">{message}</p>
     </Modal>
   );
 }
@@ -595,19 +668,23 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <div
         aria-live="polite"
-        className="pointer-events-none fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-5 right-4 z-[60] flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-2"
+        className="pointer-events-none fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-[60] flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-2 md:bottom-5"
       >
         {toasts.map((t) => (
           <div
             key={t.id}
-            className="animate-slide-in pointer-events-auto flex items-start gap-3 rounded-2xl border border-navy-600/70 bg-navy-800/95 p-3 shadow-pop backdrop-blur"
+            className="animate-slide-in pointer-events-auto flex items-start gap-3 rounded-xl border border-navy-600/80 bg-navy-850 p-3.5 shadow-pop"
           >
-            <div className="mt-0.5">{icons[t.tone]}</div>
+            <div className="mt-0.5 shrink-0">{icons[t.tone]}</div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-ink-100">{t.title}</p>
-              {t.description && <p className="mt-0.5 text-xs text-ink-400">{t.description}</p>}
+              <p className="text-sm font-semibold text-ink-100">{t.title}</p>
+              {t.description && <p className="mt-0.5 text-xs leading-snug text-ink-400">{t.description}</p>}
             </div>
-            <button onClick={() => dismiss(t.id)} className="rounded p-0.5 text-ink-500 hover:text-ink-200" aria-label="Dismiss">
+            <button
+              onClick={() => dismiss(t.id)}
+              className="rounded-md p-1 text-ink-500 transition hover:bg-navy-800 hover:text-ink-200"
+              aria-label="Dismiss"
+            >
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
@@ -640,10 +717,11 @@ export function Pagination({
   const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const to = Math.min(total, page * pageSize);
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-navy-700/60 px-4 py-3">
-      <p className="text-xs text-ink-500">
-        Showing <span className="text-ink-300">{from}</span>–<span className="text-ink-300">{to}</span> of{' '}
-        <span className="text-ink-300">{total}</span>
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-navy-700/75 bg-navy-800/30 px-4 py-2.5 sm:px-5">
+      <p className="num text-xs text-ink-500">
+        Showing <span className="font-semibold text-ink-200">{from}</span>–
+        <span className="font-semibold text-ink-200">{to}</span> of{' '}
+        <span className="font-semibold text-ink-200">{total}</span>
       </p>
       <div className="flex items-center gap-1">
         <Button
@@ -655,7 +733,7 @@ export function Pagination({
         >
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <span className="px-2 text-xs text-ink-400">
+        <span className="num px-2 text-xs font-medium text-ink-400">
           Page {page} / {totalPages}
         </span>
         <Button
@@ -685,16 +763,17 @@ export function PageHeader({
   breadcrumb?: ReactNode;
 }) {
   return (
-    <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-4 border-b border-navy-700/60 pb-4">
       <div className="min-w-0">
-        {breadcrumb && <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-accent">{breadcrumb}</div>}
-        <div className="flex items-center gap-3">
-
-          <h1 className="font-display text-2xl font-bold tracking-tight text-ink-100 sm:text-[28px] sm:leading-9">{title}</h1>
-        </div>
-        {description && <p className="mt-1.5 max-w-2xl text-sm text-ink-400">{description}</p>}
+        {breadcrumb && (
+          <div className="mb-1 text-[11px] font-bold uppercase tracking-[0.12em] text-accent">{breadcrumb}</div>
+        )}
+        <h1 className="font-display text-2xl font-extrabold tracking-tight text-ink-100 sm:text-[26px] sm:leading-8">
+          {title}
+        </h1>
+        {description && <p className="mt-1 max-w-3xl text-xs leading-relaxed text-ink-400 sm:text-sm">{description}</p>}
       </div>
-      {actions && <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">{actions}</div>}
+      {actions && <div className="flex w-full flex-wrap items-end gap-2 sm:w-auto">{actions}</div>}
     </div>
   );
 }
@@ -722,22 +801,35 @@ export function StatCard({
     danger: 'text-danger',
   };
   const iconTones = {
-    default: 'bg-navy-800 text-ink-400',
-    accent: 'bg-accent/10 text-accent',
-    success: 'bg-emerald-500/12 text-ok',
-    warning: 'bg-amber-500/12 text-warn',
-    danger: 'bg-rose-500/12 text-danger',
+    default: 'bg-navy-800 text-ink-400 border-navy-700/80',
+    accent: 'bg-accent/10 text-accent border-accent/25',
+    success: 'bg-ok/10 text-ok border-ok/25',
+    warning: 'bg-warn/10 text-warn border-warn/25',
+    danger: 'bg-danger/10 text-danger border-danger/25',
+  };
+  const accentStrip = {
+    default: '',
+    accent: 'border-t-2 border-t-accent',
+    success: 'border-t-2 border-t-ok',
+    warning: 'border-t-2 border-t-warn',
+    danger: 'border-t-2 border-t-danger',
   };
   return (
-    <div className="card relative overflow-hidden p-5">
-
+    <div className={cn('card relative overflow-hidden p-4 sm:p-5', accentStrip[tone])}>
       <div className="flex items-start justify-between gap-2">
-        <p className="text-xs font-medium text-ink-400">{label}</p>
-        {icon && <div className={cn('rounded-xl p-2', iconTones[tone])}>{icon}</div>}
+        <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-400">{label}</p>
+        {icon && <div className={cn('rounded-lg border p-1.5', iconTones[tone])}>{icon}</div>}
       </div>
-      <p className={cn('mt-1.5 break-words font-display text-[22px] font-bold leading-tight tracking-tight sm:text-2xl', tones[tone])}>{value}</p>
-      {hint && <p className="mt-1 text-xs text-ink-500">{hint}</p>}
-      {footer && <div className="mt-3 border-t border-navy-700/50 pt-2 text-xs text-ink-500">{footer}</div>}
+      <p
+        className={cn(
+          'num mt-2 break-words font-display text-[22px] font-extrabold leading-tight tracking-tight sm:text-2xl',
+          tones[tone],
+        )}
+      >
+        {value}
+      </p>
+      {hint && <p className="mt-1.5 text-[11px] leading-snug text-ink-500">{hint}</p>}
+      {footer && <div className="mt-3 border-t border-navy-700/60 pt-2.5 text-xs text-ink-500">{footer}</div>}
     </div>
   );
 }
@@ -752,26 +844,40 @@ export function Tabs({
   onChange: (key: string) => void;
 }) {
   return (
-    <div role="tablist" className="inline-flex max-w-full gap-1 overflow-x-auto rounded-2xl border border-navy-700/50 bg-navy-800/50 p-1 scroll-thin">
-      {tabs.map((tab) => (
-        <button
-          key={tab.key}
-          role="tab"
-          aria-selected={active === tab.key}
-          onClick={() => onChange(tab.key)}
-          className={cn(
-            'whitespace-nowrap rounded-xl px-3.5 py-2 text-sm font-medium transition-all',
-            active === tab.key
-              ? 'bg-accent text-onaccent shadow-glow'
-              : 'text-ink-400 hover:bg-navy-800 hover:text-ink-100',
-          )}
-        >
-          {tab.label}
-          {typeof tab.count === 'number' && (
-            <span className={cn('ml-1.5 rounded-full px-1.5 py-0.5 text-[10px]', active === tab.key ? 'bg-onaccent/15 text-onaccent' : 'bg-navy-700/70 text-ink-300')}>{tab.count}</span>
-          )}
-        </button>
-      ))}
+    <div
+      role="tablist"
+      className="inline-flex max-w-full gap-1 overflow-x-auto rounded-xl border border-navy-700/80 bg-navy-800/75 p-1 scroll-thin"
+    >
+      {tabs.map((tab) => {
+        const isSelected = active === tab.key;
+        return (
+          <button
+            key={tab.key}
+            role="tab"
+            type="button"
+            aria-selected={isSelected}
+            onClick={() => onChange(tab.key)}
+            className={cn(
+              'whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all sm:text-[13px]',
+              isSelected
+                ? 'border border-navy-600/70 bg-navy-900 text-accent shadow-sm'
+                : 'border border-transparent text-ink-400 hover:text-ink-100',
+            )}
+          >
+            {tab.label}
+            {typeof tab.count === 'number' && (
+              <span
+                className={cn(
+                  'num ml-1.5 rounded-md px-1.5 py-0.5 text-[10px] font-bold',
+                  isSelected ? 'bg-accent/14 text-accent' : 'bg-navy-750 text-ink-400',
+                )}
+              >
+                {tab.count}
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -780,11 +886,11 @@ export function TableScrollHint({ className }: { className?: string }) {
   return (
     <p
       className={cn(
-        'flex items-center justify-between gap-2 border-b border-navy-700/60 px-4 py-1.5 text-[10px] uppercase tracking-wider text-ink-500 sm:hidden',
+        'flex items-center justify-between gap-2 border-b border-navy-700/70 bg-navy-800/40 px-4 py-1.5 text-[10px] font-medium uppercase tracking-wider text-ink-500 sm:hidden',
         className,
       )}
     >
-      <span>Swipe the table sideways for more columns</span>
+      <span>Swipe sideways for all columns</span>
       <span aria-hidden>↔</span>
     </p>
   );
@@ -792,20 +898,23 @@ export function TableScrollHint({ className }: { className?: string }) {
 
 export function DemoNotice({ children }: { children?: ReactNode }) {
   return (
-    <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs text-warn/90">
-      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-      <span>{children ?? 'DEMO DATA — seeded demonstration records. Clearly separated from real operational data and never created in production.'}</span>
+    <div className="callout-warn mb-4 flex items-start gap-2.5">
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+      <span className="leading-relaxed">
+        {children ??
+          'DEMO DATA — seeded demonstration records. Clearly separated from real operational data and never created in production.'}
+      </span>
     </div>
   );
 }
 
 export function KeyValue({ items }: { items: { label: string; value: ReactNode }[] }) {
   return (
-    <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+    <dl className="grid grid-cols-1 gap-x-6 gap-y-3.5 sm:grid-cols-2">
       {items.map((item) => (
-        <div key={item.label}>
-          <dt className="text-[11px] font-medium uppercase tracking-wider text-ink-500">{item.label}</dt>
-          <dd className="mt-0.5 text-sm text-ink-200">{item.value}</dd>
+        <div key={item.label} className="border-b border-navy-700/45 pb-2.5 last:border-b-0 sm:border-b-0 sm:pb-0">
+          <dt className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">{item.label}</dt>
+          <dd className="mt-0.5 text-sm font-medium text-ink-100">{item.value}</dd>
         </div>
       ))}
     </dl>

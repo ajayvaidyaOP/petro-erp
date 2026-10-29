@@ -420,18 +420,18 @@ function DeliveryModal({
             <Input inputMode="decimal" value={form.receivedLitres} onChange={(e) => setForm({ ...form, receivedLitres: e.target.value })} />
           </Field>
         )}
-        <p className="sm:col-span-2 mt-1 border-t border-navy-700/60 pt-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-accent-muted">
-            TT jaanch — seal &amp; density (utarna shuru karne se pehle)
-          </p>
-          <Field label="Density — bill par (kg/m³, 15°C)"><Input inputMode="decimal" value={form.densityInvoice} onChange={(e) => setForm({ ...form, densityInvoice: e.target.value })} placeholder="745.0" /></Field>
-          <Field label="Density — yahan napi (kg/m³)"><Input inputMode="decimal" value={form.densityObserved} onChange={(e) => setForm({ ...form, densityObserved: e.target.value })} placeholder="738.4" /></Field>
-          <Field label="Taapmaan (°C)"><Input inputMode="decimal" value={form.tempObservedC} onChange={(e) => setForm({ ...form, tempObservedC: e.target.value })} /></Field>
-          <Field label="TT seal numbers" hint="Chamber-wise seals, comma se alag"><Input value={form.ttSealNumbers} onChange={(e) => setForm({ ...form, ttSealNumbers: e.target.value })} placeholder="A-1101, A-1102" /></Field>
-          <Field label="Sample band seal no." hint="2L sample bottle ki seal"><Input value={form.sampleSealNo} onChange={(e) => setForm({ ...form, sampleSealNo: e.target.value })} /></Field>
-          <Field label="Notes" className="sm:col-span-2"><Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
-        <div className="sm:col-span-2 rounded-lg border border-navy-700/60 bg-navy-900/40 px-3 py-2 text-xs text-ink-400">
+        <p className="sm:col-span-2 mt-1 border-t border-navy-700/70 pt-3 text-[11px] font-bold uppercase tracking-[0.12em] text-accent">
+          Pre-decantation check — seals &amp; 15°C density
+        </p>
+        <Field label="Invoice density (kg/m³ @15°C)"><Input inputMode="decimal" value={form.densityInvoice} onChange={(e) => setForm({ ...form, densityInvoice: e.target.value })} placeholder="745.0" /></Field>
+        <Field label="Observed density (kg/m³)"><Input inputMode="decimal" value={form.densityObserved} onChange={(e) => setForm({ ...form, densityObserved: e.target.value })} placeholder="738.4" /></Field>
+        <Field label="Observed temperature (°C)"><Input inputMode="decimal" value={form.tempObservedC} onChange={(e) => setForm({ ...form, tempObservedC: e.target.value })} /></Field>
+        <Field label="TT seal numbers" hint="Compartment seal serials, comma-separated"><Input value={form.ttSealNumbers} onChange={(e) => setForm({ ...form, ttSealNumbers: e.target.value })} placeholder="A-1101, A-1102" /></Field>
+        <Field label="Retained sample seal no." hint="2L reference sample seal serial"><Input value={form.sampleSealNo} onChange={(e) => setForm({ ...form, sampleSealNo: e.target.value })} /></Field>
+        <Field label="Notes" className="sm:col-span-2"><Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
+        <div className="sm:col-span-2 rounded-lg border border-navy-700/75 bg-navy-900/55 px-3 py-2 text-xs text-ink-400">
           Invoice value: <span className="num font-semibold text-ink-100">{formatINR(total)}</span>
-          <span className="ml-2 text-ink-600">(quantity × rate + tax)</span>
+          <span className="ml-2 text-ink-500">(quantity × rate + tax)</span>
         </div>
       </div>
     </Modal>
@@ -466,7 +466,7 @@ function ReceiveModal({
       open
       onClose={onClose}
       title={`Receive delivery · ${delivery.invoiceNumber} — decantation record`}
-      description={`${delivery.productName} into ${delivery.tankCode} · invoice ${formatNumber(delivery.quantityLitres, 3)} L. Dip pehle, seal jaanch, phir utaro — sab yahan pakka karo.`}
+      description={`${delivery.productName} into ${delivery.tankCode} · invoice ${formatNumber(delivery.quantityLitres, 3)} L. Verify before-dip and compartment seals prior to unloading.`}
       size="lg"
       footer={
         <>
@@ -494,37 +494,37 @@ function ReceiveModal({
     >
       <div className="space-y-3">
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Received quantity (litres)" required hint="Dip ke hisaab se asal utra hua">
+          <Field label="Received quantity (litres)" required hint="Actual volume received into tank">
             <Input inputMode="decimal" value={litres} onChange={(e) => setLitres(e.target.value)} />
           </Field>
-          <Field label="Tank dip — utarne se PEHLE (cm)">
+          <Field label="Tank dip BEFORE unloading (cm)">
             <Input inputMode="decimal" value={dec.dipBeforeCm} onChange={(e) => setDec({ ...dec, dipBeforeCm: e.target.value })} />
           </Field>
-          <Field label="Tank dip — utarne ke BAAD (cm)">
+          <Field label="Tank dip AFTER unloading (cm)">
             <Input inputMode="decimal" value={dec.dipAfterCm} onChange={(e) => setDec({ ...dec, dipAfterCm: e.target.value })} />
           </Field>
-          <Field label="Density napi (kg/m³)" hint="Hydrometer se TT ka sample">
+          <Field label="Observed density (kg/m³)" hint="Hydrometer reading of TT sample">
             <Input inputMode="decimal" value={dec.densityObserved} onChange={(e) => setDec({ ...dec, densityObserved: e.target.value })} placeholder="738.4" />
           </Field>
-          <Field label="Taapmaan (°C)">
+          <Field label="Observed temperature (°C)">
             <Input inputMode="decimal" value={dec.tempObservedC} onChange={(e) => setDec({ ...dec, tempObservedC: e.target.value })} />
           </Field>
-          <Field label="TT seal numbers" hint="Invoice se milao — tuti seal = utaro mat, pehpehle manager ko bulao">
+          <Field label="TT seal numbers" hint="Match against invoice — halt unloading if broken">
             <Input value={dec.ttSealNumbers} onChange={(e) => setDec({ ...dec, ttSealNumbers: e.target.value })} placeholder="A-1101, A-1102" />
           </Field>
-          <Field label="Sample band seal no.">
+          <Field label="Retained sample seal no.">
             <Input value={dec.sampleSealNo} onChange={(e) => setDec({ ...dec, sampleSealNo: e.target.value })} />
           </Field>
-          <Field label="Chamber-wise detail" hint="e.g. C1 4000L · C2 4000L">
+          <Field label="Compartment breakdown" hint="e.g. C1 4000L · C2 4000L">
             <Input value={dec.chamberDetails} onChange={(e) => setDec({ ...dec, chamberDetails: e.target.value })} />
           </Field>
         </div>
         {Math.abs(variance) > 0.001 && (
-          <div className="rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs text-warn">
-            Variance vs invoice: <span className="num font-semibold">{formatNumber(String(variance), 3)} L</span>. Kam utra to claim ke liye yahi record kaam aayega.
+          <div className="callout-warn">
+            Variance vs invoice: <span className="num font-semibold">{formatNumber(String(variance), 3)} L</span>. Retain this decantation record for transporter/OMC shortage claims.
           </div>
         )}
-        <Field label="Receipt notes"><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Driver signature, samay, koi khaas baat…" /></Field>
+        <Field label="Receipt notes"><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Driver acknowledgement, timestamp, unloading notes…" /></Field>
       </div>
     </Modal>
   );

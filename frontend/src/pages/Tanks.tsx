@@ -15,6 +15,7 @@ import {
   Field,
   Input,
   LoadingBlock,
+  MeterBar,
   Modal,
   PageHeader,
   Pagination,
@@ -193,15 +194,11 @@ export default function Tanks() {
       </div>
 
       {(data?.warnings.length ?? 0) > 0 && (
-        <div className="mt-3 space-y-1.5">
+        <div className="mt-4 space-y-2">
           {data!.warnings.map((warning, index) => (
             <div
               key={index}
-              className={`rounded-lg border px-3 py-2 text-xs ${
-                warning.level === 'error'
-                  ? 'border-rose-500/25 bg-rose-500/5 text-danger'
-                  : 'border-amber-400/20 bg-amber-400/5 text-warn/90'
-              }`}
+              className={warning.level === 'error' ? 'callout-danger' : 'callout-warn'}
             >
               {warning.message}
             </div>
@@ -209,7 +206,7 @@ export default function Tanks() {
         </div>
       )}
 
-      <div className="mt-3">
+      <div className="mt-4">
         <Tabs
           tabs={[
             { key: 'tanks', label: 'Tank levels', count: tanks.length },
@@ -222,7 +219,7 @@ export default function Tanks() {
 
       {tab === 'tanks' ? (
         <>
-          <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {overview.isLoading ? (
               Array.from({ length: 3 }).map((_, i) => <Card key={i}><LoadingBlock rows={3} /></Card>)
             ) : overview.isError ? (
@@ -232,62 +229,70 @@ export default function Tanks() {
                 <Card><EmptyState title="No tanks configured" description="Create tanks to track fuel inventory and dips." action={can('tanks.write') ? <Button size="sm" variant="primary" onClick={() => setCreateOpen(true)}>New tank</Button> : undefined} /></Card>
               </div>
             ) : (
-              tanks.map((tank) => (
-                <Card key={tank.id} className="p-4">
+              tanks.map((tank) => {
+                const fill = Math.max(0, Math.min(100, Number(tank.fillPct)));
+                const ullage = Math.max(0, Number(tank.capacityLitres) - Number(tank.bookStockLitres));
+                return (
+                <Card key={tank.id} className="p-5">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <p className="text-sm font-semibold text-ink-100">{tank.code} <span className="font-normal text-ink-500">· {tank.name}</span></p>
-                      <p className="mt-0.5 flex items-center gap-1.5 text-xs text-ink-400">
-                        <span className="h-2 w-2 rounded-full" style={{ background: tank.productColor }} /> {tank.productName}
+                      <div className="flex items-center gap-2">
+                        <span className="rounded border border-navy-700 bg-navy-800 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-ink-200">
+                          {tank.code}
+                        </span>
+                        <p className="text-sm font-bold text-ink-100">{tank.name}</p>
+                      </div>
+                      <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-ink-400">
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ background: tank.productColor }} /> {tank.productName}
                       </p>
                     </div>
                     <StatusBadge status={tank.status} />
                   </div>
 
-                  <div className="mt-4">
-                    <div className="flex items-end justify-between">
+                  <div className="mt-4 rounded-lg border border-navy-700/75 bg-navy-900/55 p-3.5">
+                    <div className="mb-2 flex items-end justify-between">
                       <div>
-                        <p className="num text-2xl font-semibold text-ink-100">{formatNumber(tank.bookStockLitres, 0)} <span className="text-sm font-normal text-ink-500">L</span></p>
-                        <p className="text-[11px] text-ink-500">of {formatNumber(tank.capacityLitres, 0)} L capacity</p>
+                        <p className="num font-display text-2xl font-extrabold text-ink-100">{formatNumber(tank.bookStockLitres, 0)} <span className="font-sans text-xs font-medium text-ink-500">L</span></p>
+                        <p className="text-[11px] text-ink-500">of {formatNumber(tank.capacityLitres, 0)} L · Ullage {formatNumber(ullage, 0)} L</p>
                       </div>
-                      <Badge tone={Number(tank.fillPct) < 15 ? 'warning' : 'neutral'}>{formatNumber(tank.fillPct, 0)}%</Badge>
+                      <Badge tone={fill < 15 ? 'danger' : fill < 25 ? 'warning' : 'success'} dot>{formatNumber(fill, 0)}%</Badge>
                     </div>
-                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-navy-700">
-                      <div
-                        className={`h-full rounded-full ${Number(tank.fillPct) < 15 ? 'bg-amber-400' : 'bg-gradient-to-r from-accent to-accent-teal'}`}
-                        style={{ width: `${Math.min(100, Math.max(0, Number(tank.fillPct)))}%` }}
-                      />
-                    </div>
+                    <MeterBar
+                      value={fill}
+                      tone={fill < 15 ? 'danger' : fill < 25 ? 'warn' : 'accent'}
+                      color={fill >= 25 ? tank.productColor : undefined}
+                      label={`${tank.code} fill level`}
+                    />
                   </div>
 
-                  <dl className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+                  <dl className="mt-3.5 grid grid-cols-2 gap-2.5 text-[11px]">
                     <div>
-                      <dt className="text-ink-500">Last measured</dt>
-                      <dd className="text-ink-300">{tank.lastMeasuredLitres ? formatLitres(tank.lastMeasuredLitres) : 'No dip recorded'}</dd>
+                      <dt className="text-ink-500">Last physical dip</dt>
+                      <dd className="num font-medium text-ink-200">{tank.lastMeasuredLitres ? formatLitres(tank.lastMeasuredLitres) : 'No dip recorded'}</dd>
                     </div>
                     <div>
-                      <dt className="text-ink-500">Dip variance</dt>
-                      <dd className={tank.lastVarianceLitres && Math.abs(Number(tank.lastVarianceLitres)) > 50 ? 'text-warn' : 'text-ink-300'}>
+                      <dt className="text-ink-500">Dip vs book variance</dt>
+                      <dd className={`num font-medium ${tank.lastVarianceLitres && Math.abs(Number(tank.lastVarianceLitres)) > 50 ? 'text-warn' : 'text-ink-200'}`}>
                         {tank.lastVarianceLitres ? `${formatNumber(tank.lastVarianceLitres, 3)} L` : '—'}
                       </dd>
                     </div>
                     <div>
                       <dt className="text-ink-500">Dead stock</dt>
-                      <dd className="text-ink-300">{formatLitres(tank.deadStockLitres)}</dd>
+                      <dd className="num text-ink-300">{formatLitres(tank.deadStockLitres)}</dd>
                     </div>
                     <div>
-                      <dt className="text-ink-500">Last dip</dt>
+                      <dt className="text-ink-500">Measured at</dt>
                       <dd className="text-ink-300">{tank.lastMeasuredAt ? formatDateTime(tank.lastMeasuredAt) : '—'}</dd>
                     </div>
-                    <div>
-                      <dt className="text-ink-500">Water dip (paste)</dt>
+                    <div className="col-span-2">
+                      <dt className="text-ink-500">Water bottom cut (paste)</dt>
                       <dd className={tank.lastWaterDipCm && Number(tank.lastWaterDipCm) > 2 ? 'font-semibold text-danger' : 'text-ink-300'}>
-                        {tank.lastWaterDipCm ? `${formatNumber(tank.lastWaterDipCm, 1)} cm${Number(tank.lastWaterDipCm) > 2 ? ' — water zyada!' : ''}` : '—'}
+                        {tank.lastWaterDipCm ? `${formatNumber(tank.lastWaterDipCm, 1)} cm${Number(tank.lastWaterDipCm) > 2 ? ' — High water level (>2 cm)' : ''}` : '—'}
                       </dd>
                     </div>
                   </dl>
 
-                  <div className="mt-3 flex flex-wrap gap-1.5 border-t border-navy-700/60 pt-3">
+                  <div className="mt-4 flex flex-wrap gap-1.5 border-t border-navy-700/70 pt-3.5">
                     {can('stock.write') && (
                       <>
                         <Button size="sm" variant="secondary" icon={<Ruler className="h-3.5 w-3.5" />} onClick={() => setDipTank(tank)}>Record dip</Button>
@@ -299,7 +304,8 @@ export default function Tanks() {
                     {can('tanks.write') && <Button size="sm" variant="ghost" onClick={() => setEditTank(tank)}>Edit</Button>}
                   </div>
                 </Card>
-              ))
+                );
+              })
             )}
           </div>
 
@@ -523,17 +529,17 @@ function IndentCard({ stationId }: { stationId: string }) {
   });
   const rows = indent.data?.rows ?? [];
   const priorityNote = (row: IndentRow) => {
-    if (row.priority === 'ORDER_NOW') return { tone: 'danger' as const, text: 'Abhi order karo' };
-    if (row.priority === 'ORDER_SOON') return { tone: 'warning' as const, text: '2-3 din me order karo' };
-    return { tone: 'success' as const, text: 'Stock theek hai' };
+    if (row.priority === 'ORDER_NOW') return { tone: 'danger' as const, text: 'Order immediately' };
+    if (row.priority === 'ORDER_SOON') return { tone: 'warning' as const, text: 'Order within 2–3 days' };
+    return { tone: 'success' as const, text: 'Adequate cover' };
   };
-  if (indent.isLoading) return <Card className="mt-3"><LoadingBlock rows={2} /></Card>;
+  if (indent.isLoading) return <Card className="mt-4"><LoadingBlock rows={2} /></Card>;
   if (indent.isError || rows.length === 0) return null;
   return (
-    <Card className="mt-3">
+    <Card className="mt-4">
       <CardHeader
-        title="Indent suggestion — order kab?"
-        subtitle={`Pichle ${indent.data?.basedOnDays ?? 14} din ki avg bikri se: kitne din chalega aur UL rate kitna mangwana hai (safe ulach samet).`}
+        title="Tanker indent & reorder forecast"
+        subtitle={`Based on ${indent.data?.basedOnDays ?? 14}-day average daily dispensed volume and safe tank ullage capacity.`}
       />
       <TableScrollHint />
       <div className="table-wrap">
@@ -542,11 +548,11 @@ function IndentCard({ stationId }: { stationId: string }) {
             <tr>
               <th>Tank</th>
               <th>Product</th>
-              <th className="text-right">Stock (L)</th>
-              <th className="text-right">Roz ki bikri (L)</th>
-              <th className="text-right">Kitne din chalega</th>
-              <th className="text-right">Mangwana (L)</th>
-              <th>Salah</th>
+              <th className="text-right">Book stock (L)</th>
+              <th className="text-right">Avg daily sale (L)</th>
+              <th className="text-right">Days of cover</th>
+              <th className="text-right">Suggested indent (L)</th>
+              <th>Recommendation</th>
             </tr>
           </thead>
           <tbody>
@@ -555,15 +561,15 @@ function IndentCard({ stationId }: { stationId: string }) {
               const tip = priorityNote(row);
               return (
                 <tr key={row.tankId}>
-                  <td className="font-medium text-ink-100">{row.tankCode}</td>
+                  <td className="font-semibold text-ink-100">{row.tankCode}</td>
                   <td className="text-xs">{row.productName}</td>
-                  <td className="num text-right">{formatNumber(row.bookStockLitres, 0)}<span className="block text-[9px] text-ink-600">{formatNumber(row.fillPct, 0)}% bhara · khaali jaga (ullage) {formatNumber(row.ullageLitres, 0)} L</span></td>
+                  <td className="num text-right">{formatNumber(row.bookStockLitres, 0)}<span className="block text-[10px] text-ink-500">{formatNumber(row.fillPct, 0)}% full · ullage {formatNumber(row.ullageLitres, 0)} L</span></td>
                   <td className="num text-right">{formatNumber(row.avgDailySalesLitres, 0)}</td>
                   <td className={`num text-right ${days !== null && days < 2 ? 'font-bold text-danger' : days !== null && days < 4 ? 'font-semibold text-warn' : 'text-ink-300'}`}>
-                    {days === null ? '—' : `${formatNumber(days, 1)} din`}
+                    {days === null ? '—' : `${formatNumber(days, 1)} days`}
                   </td>
-                  <td className="num text-right font-medium text-ink-100">{formatNumber(row.suggestedOrderLitres, 0)}</td>
-                  <td><Badge tone={tip.tone}>{tip.text}</Badge></td>
+                  <td className="num text-right font-semibold text-ink-100">{formatNumber(row.suggestedOrderLitres, 0)}</td>
+                  <td><Badge tone={tip.tone} dot>{tip.text}</Badge></td>
                 </tr>
               );
             })}
@@ -597,7 +603,7 @@ function DipModal({ tank, onClose, loading, onSubmit }: { tank: Tank; onClose: (
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Dip reading (cm)" hint="Converted using the tank calibration table"><Input inputMode="decimal" value={dipCm} onChange={(e) => setDipCm(e.target.value)} /></Field>
         <Field label="Or measured litres" hint="Directly measured volume"><Input inputMode="decimal" value={measuredLitres} onChange={(e) => setMeasuredLitres(e.target.value)} /></Field>
-        <Field label="Water dip (cm)" hint="Water-finding paste se niche ki paani-kat (cm). 2 cm se zyada = subah hi saaf karna hota hai.">
+        <Field label="Water dip (cm)" hint="Water-finding paste reading at tank bottom. Above 2 cm requires immediate dewatering.">
           <Input inputMode="decimal" value={waterDipCm} onChange={(e) => setWaterDipCm(e.target.value)} placeholder="0" />
         </Field>
         <Field label="Note" className="sm:col-span-2"><Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Dip taken by, time, conditions" /></Field>

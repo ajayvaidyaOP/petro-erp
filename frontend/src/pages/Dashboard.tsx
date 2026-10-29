@@ -1,34 +1,124 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import {
-  AlertTriangle, ArrowRight, ArrowUpRight, Banknote, CheckCircle2, ChevronRight,
-  Clock3, Droplets, Fuel, Gauge, IndianRupee, ListChecks, Plus, Store, Truck, Users, Wallet,
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import {
+  AlertCircle,
+  AlertTriangle,
+  ArrowRight,
+  ArrowUpRight,
+  Banknote,
+  CheckCircle2,
+  ChevronRight,
+  Clock3,
+  Droplets,
+  Fuel,
+  Gauge,
+  IndianRupee,
+  ListChecks,
+  Plus,
+  Store,
+  Tags,
+  Thermometer,
+  Truck,
+  Users,
+  Wallet,
 } from 'lucide-react';
 import { apiGet } from '../lib/api';
 import { useAuth, useStations } from '../lib/auth';
 import type { ShiftAlertsResponse } from '../lib/shifts';
-import { buildAttentionItems } from '../lib/alerts';
+import { buildAttentionItems, type OperationalAlert } from '../lib/alerts';
 import { useChartPalette } from '../lib/theme';
-import type { OperationalAlert } from '../lib/alerts';
-import { formatClockTime, formatDate, formatDateTime, formatINR, formatLitres, formatNumber, todayIst } from '../lib/format';
-import { Badge, Button, Card, CardBody, CardHeader, EmptyState, ErrorState, Input, LoadingBlock, StatusBadge } from '../components/ui';
+import {
+  formatClockTime,
+  formatDate,
+  formatDateTime,
+  formatINR,
+  formatLitres,
+  formatNumber,
+  todayIst,
+} from '../lib/format';
+import {
+  Badge,
+  Button,
+  Card,
+  CardBody,
+  CardHeader,
+  EmptyState,
+  ErrorState,
+  Input,
+  LoadingBlock,
+  MeterBar,
+  StatCard,
+  StatusBadge,
+} from '../components/ui';
+import { cn } from '../lib/utils';
 
 interface DashboardData {
   station: { id: string; name: string; code: string };
   date: string;
-  sales: { shiftLitres: string; shiftValue: string; transactionLitres: string; transactionValue: string; byMode: Record<string, string>; transactions: number; shiftCount: number };
+  sales: {
+    shiftLitres: string;
+    shiftValue: string;
+    transactionLitres: string;
+    transactionValue: string;
+    byMode: Record<string, string>;
+    transactions: number;
+    shiftCount: number;
+  };
   openShifts: Record<string, unknown>[];
   flaggedShifts: number;
-  stock: { id: string; code: string; productName: string; productColor: string; bookStockLitres: string; capacityLitres: string; fillPct: string; lastVarianceLitres: string | null }[];
+  stock: {
+    id: string;
+    code: string;
+    productName: string;
+    productColor: string;
+    bookStockLitres: string;
+    capacityLitres: string;
+    fillPct: string;
+    lastVarianceLitres: string | null;
+  }[];
   receivables: string;
   payables: string;
   trend: { date: string; litres: string; value: string; transactionsValue: string }[];
   alerts: OperationalAlert[];
   disclaimer: string;
 }
-interface PriceRow { id: string; productId: string; productName: string; stationId: string | null; ratePerLitre: string; effectiveTo: string | null }
+
+interface PriceRow {
+  id: string;
+  productId: string;
+  productName: string;
+  stationId: string | null;
+  ratePerLitre: string;
+  effectiveTo: string | null;
+}
+
+const MODE_LABELS: Record<string, string> = {
+  CASH: 'Cash',
+  UPI: 'UPI',
+  CARD: 'Card',
+  BANK: 'Bank / NEFT',
+  CREDIT: 'Fleet Credit',
+};
+
+const MODE_COLORS: Record<string, string> = {
+  CASH: 'bg-accent',
+  UPI: 'bg-info',
+  CARD: 'bg-accent-teal',
+  BANK: 'bg-ink-400',
+  CREDIT: 'bg-warn',
+};
 
 export default function Dashboard() {
   const { me, can } = useAuth();
@@ -37,106 +127,1002 @@ export default function Dashboard() {
   const [days, setDays] = useState(7);
   const [compare, setCompare] = useState(false);
   const chart = useChartPalette();
+
   const dashboard = useQuery({
     queryKey: ['dashboard', stationId, date],
     queryFn: () => apiGet<DashboardData>(`/reports/owner-dashboard?stationId=${stationId}&date=${date}`),
     enabled: Boolean(stationId) && !compare,
     refetchInterval: 60_000,
   });
+
   const alertsQuery = useQuery({
     queryKey: ['shift-alerts', stationId],
     queryFn: () => apiGet<ShiftAlertsResponse>(`/shifts/alerts?stationId=${stationId}`),
     enabled: Boolean(stationId) && !compare,
     refetchInterval: 60_000,
   });
+
   const pricesQuery = useQuery<PriceRow[]>({
     queryKey: ['prices', stationId],
     queryFn: () => apiGet<PriceRow[]>(`/catalog/prices?stationId=${stationId}`),
     enabled: Boolean(stationId) && !compare,
     refetchInterval: 60_000,
   });
+
   const rates = useMemo(() => {
     const found = new Map<string, PriceRow>();
-    for (const price of pricesQuery.data ?? []) if (!price.effectiveTo && (!price.stationId || price.stationId === stationId) && !found.has(price.productId)) found.set(price.productId, price);
+    for (const price of pricesQuery.data ?? []) {
+      if (
+        !price.effectiveTo &&
+        (!price.stationId || price.stationId === stationId) &&
+        !found.has(price.productId)
+      ) {
+        found.set(price.productId, price);
+      }
+    }
     return [...found.values()];
   }, [pricesQuery.data, stationId]);
-  const trend = useMemo(() => (dashboard.data?.trend ?? []).slice(-days).map((row) => ({ date: row.date.slice(5), value: Number(row.value) })), [dashboard.data, days]);
 
-  if (compare && me?.user.roleKey === 'OWNER') return <CombinedDashboard date={date} setDate={setDate} onBack={() => setCompare(false)} />;
-  if (!stationId) return <Card><EmptyState title="No pump assigned" description="Ask the owner to assign your manager account to a pump." icon={<Store />} /></Card>;
-  if (dashboard.isLoading) return <div className="space-y-5"><LoadingBlock rows={2} /><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[1, 2, 3, 4].map((n) => <Card key={n}><LoadingBlock rows={2} /></Card>)}</div><Card><LoadingBlock rows={6} /></Card></div>;
+  const trend = useMemo(
+    () =>
+      (dashboard.data?.trend ?? []).slice(-days).map((row) => ({
+        date: row.date.slice(5),
+        fullDate: row.date,
+        value: Number(row.value),
+        litres: Number(row.litres),
+      })),
+    [dashboard.data, days],
+  );
+
+  const periodStats = useMemo(() => {
+    const totalVal = trend.reduce((sum, r) => sum + r.value, 0);
+    const totalLitres = trend.reduce((sum, r) => sum + r.litres, 0);
+    const avgVal = trend.length > 0 ? totalVal / trend.length : 0;
+    return { totalVal, totalLitres, avgVal };
+  }, [trend]);
+
+  if (compare && me?.user.roleKey === 'OWNER') {
+    return <CombinedDashboard date={date} setDate={setDate} onBack={() => setCompare(false)} />;
+  }
+  if (!stationId) {
+    return (
+      <Card>
+        <EmptyState
+          title="No pump assigned"
+          description="Ask the owner to assign your manager account to a pump."
+          icon={<Store />}
+        />
+      </Card>
+    );
+  }
+  if (dashboard.isLoading) {
+    return (
+      <div className="space-y-5">
+        <LoadingBlock rows={2} />
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {[1, 2, 3, 4].map((n) => (
+            <Card key={n}>
+              <LoadingBlock rows={2} />
+            </Card>
+          ))}
+        </div>
+        <Card>
+          <LoadingBlock rows={6} />
+        </Card>
+      </div>
+    );
+  }
   if (dashboard.isError) return <ErrorState error={dashboard.error} onRetry={() => void dashboard.refetch()} />;
+
   const data = dashboard.data!;
   const openShift = data.openShifts[0];
   const lowStock = data.stock.filter((tank) => Number(tank.fillPct) < 15);
   const alerts = buildAttentionItems(data, alertsQuery.data);
   const firstName = me?.user.name.split(' ')[0] ?? '';
-  const hour = Number(new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Kolkata' }).format(new Date()));
+  const hour = Number(
+    new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Kolkata' }).format(
+      new Date(),
+    ),
+  );
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-  const paymentTotal = Object.values(data.sales.byMode).reduce((sum, amount) => sum + Number(amount), 0);
+  const paymentEntries = Object.entries(data.sales.byMode).filter(([, amount]) => Number(amount) > 0);
+  const paymentTotal = paymentEntries.reduce((sum, [, amount]) => sum + Number(amount), 0);
+
   const actions = [
-    { to: openShift ? '/shifts' : '/shifts?new=shift', label: openShift ? 'Manage shift' : 'Open a shift', detail: 'Readings & settlement', icon: <ListChecks className="h-5 w-5" /> },
-    { to: '/deliveries?new=delivery', label: 'Record delivery', detail: 'Receive fuel stock', icon: <Truck className="h-5 w-5" /> },
-    { to: '/finance?new=expense', label: 'Add expense', detail: 'Keep cash in check', icon: <Wallet className="h-5 w-5" /> },
-    { to: '/customers', label: 'Customer credit', detail: 'Udhaar & receipts', icon: <Users className="h-5 w-5" /> },
+    {
+      to: openShift ? '/shifts' : '/shifts?new=shift',
+      label: openShift ? 'Manage shift' : 'Open a shift',
+      detail: 'Readings & settlement',
+      icon: <ListChecks className="h-[18px] w-[18px]" />,
+    },
+    {
+      to: '/deliveries?new=delivery',
+      label: 'Record delivery',
+      detail: 'Receive fuel stock',
+      icon: <Truck className="h-[18px] w-[18px]" />,
+    },
+    {
+      to: '/finance?new=expense',
+      label: 'Add expense',
+      detail: 'Keep cash in check',
+      icon: <Wallet className="h-[18px] w-[18px]" />,
+    },
+    {
+      to: '/customers',
+      label: 'Customer credit',
+      detail: 'Fleet credit & receipts',
+      icon: <Users className="h-[18px] w-[18px]" />,
+    },
   ];
 
-  return <>
-    <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
-      <div><p className="mb-2 text-xs font-medium text-ink-500">{formatDate(date)} <span className="mx-1.5 text-navy-600">/</span> {station?.name ?? data.station.name}</p><h1 className="font-display text-[27px] font-extrabold tracking-tight text-ink-100 sm:text-[32px]">{greeting}, {firstName}<span className="text-accent">.</span></h1><div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-ink-400"><span className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${openShift ? 'bg-ok' : 'bg-navy-600'}`} aria-hidden />{openShift ? <>Shift #{String(openShift.shiftNumber)} open{openShift.operatorName ? <span className="text-ink-500"> · {String(openShift.operatorName)}</span> : null}</> : 'No shift open'}</span><span className="text-ink-500">Synced {formatClockTime(dashboard.dataUpdatedAt)} IST</span></div></div>
-      <div className="flex flex-wrap items-center gap-2"><Input type="date" aria-label="Business date" value={date} max={todayIst()} onChange={(event) => { if (event.target.value) setDate(event.target.value); }} className="w-auto" /><Link to={openShift ? '/shifts' : '/shifts?new=shift'}><Button variant="primary" icon={openShift ? <ArrowUpRight className="h-4 w-4" /> : <Plus className="h-4 w-4" />}>{openShift ? 'Manage shift' : 'Open shift'}</Button></Link></div>
-    </div>
+  return (
+    <>
+      {/* Operational Command Header */}
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-4 border-b border-navy-700/65 pb-4">
+        <div className="min-w-0">
+          <div className="mb-1.5 flex flex-wrap items-center gap-2 text-xs text-ink-400">
+            <span className="rounded border border-accent/25 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] font-bold text-accent">
+              {station?.code ?? data.station.code}
+            </span>
+            <span className="font-semibold text-ink-200">{station?.name ?? data.station.name}</span>
+            <span className="text-ink-600">·</span>
+            <span className="num text-ink-400">{formatDate(date)}</span>
+          </div>
 
-    {me?.user.roleKey === 'OWNER' && stations.length > 1 && <div className="mb-5 flex justify-end"><Button size="sm" variant="outline" onClick={() => setCompare(true)} icon={<Store className="h-3.5 w-3.5" />}>Compare both pumps</Button></div>}
+          <h1 className="font-display text-2xl font-extrabold tracking-tight text-ink-100 sm:text-[28px]">
+            {greeting}, {firstName}
+            <span className="text-accent">.</span>
+          </h1>
 
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <div className="relative overflow-hidden rounded-2xl bg-[#123e30] p-5 text-white shadow-card">
-        <div className="absolute -right-8 -top-10 h-36 w-36 rounded-full border-[22px] border-white/[0.035]" aria-hidden />
-        <div className="relative flex items-center justify-between"><p className="text-xs font-medium text-white/70">Estimated sales</p><span className="rounded-lg bg-white/10 p-2"><IndianRupee className="h-4 w-4" /></span></div>
-        <p className="num relative mt-4 font-display text-[30px] font-bold tracking-tight">{formatINR(data.sales.shiftValue)}</p><p className="relative mt-2 text-[11px] text-white/65">{data.sales.shiftCount} closed shifts · selected date</p>
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-ink-400">
+            <span className="inline-flex items-center gap-1.5 rounded-md border border-navy-700 bg-navy-900 px-2 py-0.5 font-medium text-ink-200">
+              <span
+                className={cn(
+                  'h-2 w-2 rounded-full',
+                  openShift ? 'bg-ok shadow-[0_0_0_3px_rgb(var(--ok)/0.16)]' : 'bg-ink-600',
+                )}
+                aria-hidden
+              />
+              {openShift ? (
+                <>
+                  Shift #{String(openShift.shiftNumber)} open
+                  {openShift.operatorName ? (
+                    <span className="text-ink-500"> · {String(openShift.operatorName)}</span>
+                  ) : null}
+                </>
+              ) : (
+                'No shift open'
+              )}
+            </span>
+            {data.flaggedShifts > 0 && (
+              <Link to="/shifts">
+                <Badge tone="warning" dot>
+                  {data.flaggedShifts} flagged {data.flaggedShifts === 1 ? 'shift' : 'shifts'}
+                </Badge>
+              </Link>
+            )}
+            <span className="num text-[11px] text-ink-500">
+              Synced {formatClockTime(dashboard.dataUpdatedAt)} IST
+            </span>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 max-sm:w-full">
+          {me?.user.roleKey === 'OWNER' && stations.length > 1 && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setCompare(true)}
+              icon={<Store className="h-3.5 w-3.5" />}
+            >
+              Compare both pumps
+            </Button>
+          )}
+          <Input
+            type="date"
+            aria-label="Business date"
+            value={date}
+            max={todayIst()}
+            onChange={(event) => {
+              if (event.target.value) setDate(event.target.value);
+            }}
+            className="h-9.5 w-auto text-xs"
+          />
+          <Link to={openShift ? '/shifts' : '/shifts?new=shift'}>
+            <Button
+              size="sm"
+              variant="primary"
+              className="h-9.5 px-3.5"
+              icon={openShift ? <ArrowUpRight className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+            >
+              {openShift ? 'Manage shift' : 'Open shift'}
+            </Button>
+          </Link>
+        </div>
       </div>
-      <Metric label="Fuel dispensed" value={formatLitres(data.sales.shiftLitres)} hint="From closed-shift totalizers" icon={<Fuel className="h-[18px] w-[18px]" />} />
-      <Metric label="Customer receivables" value={formatINR(data.receivables)} hint="Outstanding across your organization" icon={<Users className="h-[18px] w-[18px]" />} to="/customers" />
-      <Metric label="Open shifts" value={String(data.openShifts.length).padStart(2, '0')} hint={data.flaggedShifts ? `${data.flaggedShifts} flagged shifts need review` : openShift ? 'Ready for readings and settlement' : 'No shift currently running'} icon={<Clock3 className="h-[18px] w-[18px]" />} to="/shifts" />
-    </div>
 
-    <section className="mt-7" aria-labelledby="quick-actions-title"><div className="mb-3 flex items-center justify-between"><h2 id="quick-actions-title" className="text-sm font-bold text-ink-100">Quick actions</h2><span className="text-[11px] text-ink-500">Your everyday essentials</span></div><div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 xl:grid-cols-4">{actions.map((action) => <Link key={action.to} to={action.to} className="quick-action group"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent/[0.08] text-accent">{action.icon}</span><span className="min-w-0"><span className="block text-xs font-semibold text-ink-100">{action.label}</span><span className="mt-1 block text-[11px] text-ink-500">{action.detail}</span></span><ChevronRight className="ml-auto h-4 w-4 shrink-0 text-ink-500 transition group-hover:translate-x-0.5 group-hover:text-accent" /></Link>)}</div></section>
+      {/* Forecourt Rate Board */}
+      {rates.length > 0 && (
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-navy-700/80 bg-navy-900/75 px-4 py-2.5 shadow-card">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-ink-500">
+              <Tags className="h-3.5 w-3.5 text-accent" aria-hidden />
+              Forecourt rates
+            </span>
+            {rates.map((rate) => {
+              const matchingTank = data.stock.find((t) => t.productName === rate.productName);
+              return (
+                <div key={rate.id} className="flex items-baseline gap-2">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-ink-300">
+                    <span
+                      className="h-2 w-2 rounded-full"
+                      style={{ backgroundColor: matchingTank?.productColor ?? 'rgb(var(--accent))' }}
+                      aria-hidden
+                    />
+                    {rate.productName}
+                  </span>
+                  <span className="num font-display text-sm font-extrabold text-ink-100">
+                    {formatINR(rate.ratePerLitre)}
+                    <span className="ml-0.5 font-sans text-[10px] font-normal text-ink-500">/L</span>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <Link to="/products" className="text-xs font-semibold text-accent hover:text-accent-soft">
+            {can('prices.write') ? 'Update prices →' : 'Price history →'}
+          </Link>
+        </div>
+      )}
 
-    <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,1fr)]">
-      <Card>
-        <CardHeader title="Sales overview" subtitle="Estimated value from closed and flagged shifts" action={<div className="flex rounded-lg bg-navy-800 p-0.5" aria-label="Chart period">{[7, 14].map((value) => <button key={value} onClick={() => setDays(value)} aria-pressed={days === value} className={`min-h-8 rounded-md px-3 text-[11px] font-semibold ${days === value ? 'bg-navy-900 text-accent shadow-sm' : 'text-ink-500'}`}>{value} days</button>)}</div>} />
-        <CardBody className="pt-5"><div className="mb-3 flex items-center gap-2 text-[11px] text-ink-500"><span className="h-2 w-2 rounded-full bg-accent" />Estimated sales <span className="ml-auto">INR</span></div><div className="h-[235px] w-full" role="img" aria-label={`${days}-day estimated sales chart. ${trend.map((row) => `${row.date}: ${formatINR(row.value)}`).join('; ')}`}>
-          <ResponsiveContainer width="100%" height="100%"><AreaChart data={trend} margin={{ top: 10, right: 6, bottom: 0, left: -14 }}><defs><linearGradient id="salesFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={chart.accent} stopOpacity={0.18} /><stop offset="100%" stopColor={chart.accent} stopOpacity={0.01} /></linearGradient></defs><CartesianGrid strokeDasharray="3 5" stroke={chart.grid} vertical={false} /><XAxis dataKey="date" tick={{ fontSize: 10, fill: chart.axis }} axisLine={false} tickLine={false} minTickGap={20} dy={8} /><YAxis tick={{ fontSize: 10, fill: chart.axis }} axisLine={false} tickLine={false} tickFormatter={(value) => `₹${Number(value) >= 100000 ? `${(value / 100000).toFixed(1)}L` : `${Math.round(value / 1000)}k`}`} /><Tooltip contentStyle={{ background: chart.tooltipBg, border: `1px solid ${chart.tooltipBorder}`, borderRadius: 12, fontSize: 12, boxShadow: '0 8px 24px #00000010' }} labelStyle={{ color: chart.tooltipLabel }} formatter={(value: number) => [formatINR(value), 'Estimated sales']} /><Area type="monotone" dataKey="value" stroke={chart.accent} fill="url(#salesFill)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 3, stroke: chart.tooltipBg }} /></AreaChart></ResponsiveContainer>
-        </div><div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-navy-700/50 pt-4"><span className="text-xs text-ink-500">Recorded transactions <strong className="ml-1 font-semibold text-ink-200">{formatINR(data.sales.transactionValue)}</strong></span><Link to="/reports" className="flex min-h-8 items-center gap-1 text-xs font-semibold text-accent">View DSR <ArrowUpRight className="h-3.5 w-3.5" /></Link></div></CardBody>
-      </Card>
+      {/* Executive KPI Strip */}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          label="Estimated sales"
+          value={formatINR(data.sales.shiftValue)}
+          hint={`${data.sales.shiftCount} closed shifts · ${data.sales.transactions} recorded tx`}
+          icon={<IndianRupee className="h-4 w-4" />}
+          tone="accent"
+        />
+        <MetricCard
+          label="Fuel dispensed"
+          value={formatLitres(data.sales.shiftLitres)}
+          hint="Net volume from shift totalizers"
+          icon={<Fuel className="h-4 w-4" />}
+        />
+        <MetricCard
+          label="Customer receivables"
+          value={formatINR(data.receivables)}
+          hint={`Credit ledger · Payables ${formatINR(data.payables, true)}`}
+          icon={<Users className="h-4 w-4" />}
+          tone={Number(data.receivables) > 0 ? 'warning' : 'default'}
+          to="/customers"
+        />
+        <MetricCard
+          label="Open shifts"
+          value={String(data.openShifts.length).padStart(2, '0')}
+          hint={
+            data.flaggedShifts
+              ? `${data.flaggedShifts} flagged shifts require approval`
+              : openShift
+                ? 'Active forecourt shift accepting readings'
+                : 'Ready to open next crew shift'
+          }
+          icon={<Clock3 className="h-4 w-4" />}
+          tone={data.flaggedShifts ? 'warning' : openShift ? 'success' : 'default'}
+          to="/shifts"
+        />
+      </div>
 
-      <Card><CardHeader title="Fuel at a glance" subtitle="Current book stock & today’s prices" action={<Link to="/tanks" className="link text-xs">Details</Link>} /><CardBody className="space-y-5">{data.stock.length === 0 ? <EmptyState title="No tanks yet" description="Add a tank in Settings to start tracking stock." /> : data.stock.map((tank) => {
-        const fill = Math.max(0, Math.min(100, Number(tank.fillPct)));
-        return <div key={tank.id}><div className="mb-2 flex items-center justify-between gap-2"><div className="flex min-w-0 items-center gap-2"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-accent/10 text-accent"><Droplets className="h-3.5 w-3.5" /></span><span className="truncate text-xs font-semibold text-ink-200">{tank.productName}</span><span className="text-[10px] text-ink-500">{tank.code}</span></div><span className={`text-[10px] font-semibold ${fill < 15 ? 'text-warn' : 'text-ok'}`}>{fill < 15 ? 'Low stock' : 'Healthy'}</span></div><div className="h-2 overflow-hidden rounded-full bg-navy-800" role="meter" aria-label={`${tank.productName} tank fill`} aria-valuenow={fill} aria-valuemin={0} aria-valuemax={100}><div className={`h-full rounded-full ${fill < 15 ? 'bg-warn' : 'bg-accent'}`} style={{ width: `${fill}%` }} /></div><div className="mt-1.5 flex justify-between text-[10px] text-ink-500"><span><strong className="font-semibold text-ink-300">{formatLitres(tank.bookStockLitres)}</strong> of {formatLitres(tank.capacityLitres)}</span><span>{formatNumber(fill, 0)}%</span></div></div>;
-      })}{rates.length > 0 && <div className="border-t border-navy-700/60 pt-4"><div className="mb-3 flex justify-between"><p className="eyebrow">Today’s rates</p><Link to="/products" className="text-[10px] font-semibold text-accent">{can('prices.write') ? 'Update prices' : 'View prices'}</Link></div><div className="flex flex-wrap gap-x-5 gap-y-2">{rates.map((rate) => <div key={rate.id}><p className="text-[10px] text-ink-500">{rate.productName}</p><p className="num mt-0.5 text-sm font-bold text-ink-100">{formatINR(rate.ratePerLitre)}<span className="text-[10px] font-normal text-ink-500"> /L</span></p></div>)}</div></div>}</CardBody></Card>
-    </div>
+      {/* Quick Operational Workflows */}
+      <section className="mt-6" aria-labelledby="quick-actions-title">
+        <div className="mb-2.5 flex items-center justify-between">
+          <h2 id="quick-actions-title" className="text-xs font-bold uppercase tracking-[0.1em] text-ink-400">
+            Quick workflows
+          </h2>
+          <span className="text-[11px] text-ink-500">Direct operational entry</span>
+        </div>
+        <div className="grid grid-cols-1 gap-3 min-[440px]:grid-cols-2 xl:grid-cols-4">
+          {actions.map((action) => (
+            <Link key={action.to} to={action.to} className="quick-action group">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-accent/25 bg-accent/10 text-accent transition group-hover:bg-accent group-hover:text-onaccent">
+                {action.icon}
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[13px] font-bold text-ink-100">{action.label}</span>
+                <span className="mt-0.5 block text-xs text-ink-500">{action.detail}</span>
+              </span>
+              <ChevronRight
+                className="ml-auto h-4 w-4 shrink-0 text-ink-500 transition group-hover:translate-x-0.5 group-hover:text-accent"
+                aria-hidden
+              />
+            </Link>
+          ))}
+        </div>
+      </section>
 
-    <div className="mt-5 grid gap-5 lg:grid-cols-2 xl:grid-cols-[1.1fr_1fr_1fr]">
-      <Card><CardHeader title="Shift status" action={<Link to="/shifts" className="link text-xs">View shifts</Link>} /><CardBody>{openShift ? <><div className="flex items-center justify-between"><span className="flex items-center gap-2 text-sm font-semibold text-ink-100"><span className="grid h-9 w-9 place-items-center rounded-xl bg-accent/10 text-accent"><ListChecks className="h-4 w-4" /></span>Shift #{String(openShift.shiftNumber)}</span><StatusBadge status="OPEN" /></div><p className="mt-3 text-xs text-ink-500">Opened {formatDateTime(String(openShift.openedAt))}</p><p className="mt-1 text-xs text-ink-400">By {String(openShift.operatorName ?? openShift.openedByName ?? '—')}</p><Link to="/shifts" className="mt-4 flex min-h-10 items-center justify-center gap-2 rounded-xl bg-accent/10 text-xs font-semibold text-accent">Continue shift <ArrowRight className="h-3.5 w-3.5" /></Link></> : <div className="py-4 text-center"><CheckCircle2 className="mx-auto h-8 w-8 text-accent" /><p className="mt-3 text-sm font-semibold text-ink-100">No open shift</p><p className="mt-1 text-xs text-ink-500">Start a shift when the next crew is ready.</p></div>}</CardBody></Card>
-      <Card><CardHeader title="Needs attention" action={<Badge tone={alerts.length ? 'warning' : 'success'}>{alerts.length ? `${alerts.length} alerts` : 'All clear'}</Badge>} /><CardBody className="max-h-64 space-y-3 overflow-y-auto scroll-thin">{alerts.length ? alerts.map((alert) => { const body = <><AlertTriangle className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${alert.level === 'error' ? 'text-danger' : 'text-warn'}`} /><p className="min-w-0 flex-1 text-xs leading-relaxed text-ink-300">{alert.message}</p>{alert.to && <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-500" aria-hidden />}</>; return alert.to ? <Link key={alert.id} to={alert.to} className="flex items-start gap-2.5 rounded-lg bg-warn/[0.055] p-2.5 transition hover:bg-warn/[0.12]">{body}</Link> : <div key={alert.id} className="flex items-start gap-2.5 rounded-lg bg-warn/[0.055] p-2.5">{body}</div>; }) : <div className="py-5 text-center"><CheckCircle2 className="mx-auto h-8 w-8 text-accent" /><p className="mt-3 text-xs text-ink-400">Nothing needs your attention right now.</p></div>}</CardBody></Card>
-      <Card className="lg:col-span-2 xl:col-span-1"><CardHeader title="Recorded payment mix" subtitle="Transactions, not totalizer estimates" /><CardBody className="space-y-3">{paymentTotal > 0 ? Object.entries(data.sales.byMode).filter(([, amount]) => Number(amount) > 0).map(([mode, amount]) => <div key={mode}><div className="mb-1.5 flex justify-between text-xs"><span className="text-ink-400">{mode === 'UPI' ? 'UPI' : mode.charAt(0) + mode.slice(1).toLowerCase()}</span><span className="num font-semibold text-ink-200">{formatINR(amount)}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-navy-800"><div className="h-full rounded-full bg-accent/65" style={{ width: `${Number(amount) / paymentTotal * 100}%` }} /></div></div>) : <p className="py-6 text-center text-xs text-ink-500">No transactions recorded for this date.</p>}<Link to="/finance" className="link mt-2 inline-block text-xs">Open finance</Link></CardBody></Card>
-    </div>
-    <div className="mt-6 flex flex-wrap items-start justify-between gap-3 text-[10px] leading-relaxed text-ink-500"><p className="max-w-3xl">{data.disclaimer} Tank levels show current book stock.</p><span className="shrink-0">{lowStock.length ? `${lowStock.length} tanks low on stock` : `${data.stock.length} tanks tracked`}</span></div>
-  </>;
+      {/* Primary Analytics & Underground Tank Telemetry */}
+      <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,1fr)]">
+        <Card className="flex flex-col">
+          <CardHeader
+            title="Sales & volume trend"
+            subtitle="Daily estimated sales derived from closed and flagged shift totalizers"
+            action={
+              <div
+                className="flex rounded-lg border border-navy-700/80 bg-navy-800/75 p-0.5"
+                aria-label="Chart period"
+              >
+                {[7, 14].map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setDays(value)}
+                    aria-pressed={days === value}
+                    className={cn(
+                      'min-h-7 rounded-md px-2.5 text-[11px] font-semibold transition',
+                      days === value
+                        ? 'bg-navy-900 text-accent shadow-sm'
+                        : 'text-ink-500 hover:text-ink-200',
+                    )}
+                  >
+                    {value} days
+                  </button>
+                ))}
+              </div>
+            }
+          />
+          <CardBody className="flex flex-1 flex-col">
+            <div className="mb-4 grid grid-cols-3 gap-2 rounded-lg border border-navy-700/70 bg-navy-900/60 p-3">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">
+                  {days}d Total
+                </p>
+                <p className="num mt-0.5 font-display text-sm font-bold text-ink-100 sm:text-base">
+                  {formatINR(periodStats.totalVal, true)}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">Daily Avg</p>
+                <p className="num mt-0.5 font-display text-sm font-bold text-ink-100 sm:text-base">
+                  {formatINR(periodStats.avgVal, true)}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">
+                  {days}d Volume
+                </p>
+                <p className="num mt-0.5 font-display text-sm font-bold text-accent sm:text-base">
+                  {formatLitres(periodStats.totalLitres)}
+                </p>
+              </div>
+            </div>
+
+            <div
+              className="h-[235px] w-full flex-1"
+              role="img"
+              aria-label={`${days}-day estimated sales chart. ${trend.map((row) => `${row.date}: ${formatINR(row.value)}`).join('; ')}`}
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={trend} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
+                  <defs>
+                    <linearGradient id="salesFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={chart.accent} stopOpacity={0.22} />
+                      <stop offset="100%" stopColor={chart.accent} stopOpacity={0.01} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 4" stroke={chart.grid} vertical={false} />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 11, fill: chart.axis }}
+                    axisLine={false}
+                    tickLine={false}
+                    minTickGap={20}
+                    dy={6}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: chart.axis }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(value) =>
+                      `₹${Number(value) >= 100000 ? `${(value / 100000).toFixed(1)}L` : `${Math.round(value / 1000)}k`}`
+                    }
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: chart.tooltipBg,
+                      border: `1px solid ${chart.tooltipBorder}`,
+                      borderRadius: 10,
+                      fontSize: 12,
+                      boxShadow: '0 10px 28px rgb(0 0 0 / 0.16)',
+                    }}
+                    labelStyle={{ color: chart.tooltipLabel, fontWeight: 700, marginBottom: 4 }}
+                    formatter={(value: number, _name, item) => [
+                      `${formatINR(value)} (${formatLitres((item?.payload as { litres?: number })?.litres ?? 0)})`,
+                      'Est. sales',
+                    ]}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="value"
+                    stroke={chart.accent}
+                    fill="url(#salesFill)"
+                    strokeWidth={2.4}
+                    dot={false}
+                    activeDot={{ r: 5, strokeWidth: 2.5, stroke: chart.tooltipBg }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-navy-700/70 pt-3.5">
+              <span className="text-xs text-ink-500">
+                Selected date recorded tx:{' '}
+                <strong className="num ml-1 font-semibold text-ink-100">
+                  {formatINR(data.sales.transactionValue)}
+                </strong>
+              </span>
+              <Link to="/reports" className="inline-flex items-center gap-1 text-xs font-semibold text-accent hover:text-accent-soft">
+                Open Daily Sales Report <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
+              </Link>
+            </div>
+          </CardBody>
+        </Card>
+
+        {/* Underground Tank Telemetry */}
+        <Card className="flex flex-col">
+          <CardHeader
+            title="Underground tank stock"
+            subtitle="Ledger book stock, capacity & safe ullage"
+            action={
+              <Link to="/tanks" className="link text-xs">
+                Tank ledger →
+              </Link>
+            }
+          />
+          <CardBody className="flex-1 space-y-3.5">
+            {data.stock.length === 0 ? (
+              <EmptyState title="No tanks yet" description="Add a tank in Settings to start tracking stock." />
+            ) : (
+              data.stock.map((tank) => {
+                const fill = Math.max(0, Math.min(100, Number(tank.fillPct)));
+                const ullage = Math.max(0, Number(tank.capacityLitres) - Number(tank.bookStockLitres));
+                const isLow = fill < 15;
+                const isWatch = !isLow && fill < 25;
+                return (
+                  <div
+                    key={tank.id}
+                    className="rounded-lg border border-navy-700/75 bg-navy-900/55 p-3.5"
+                  >
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span
+                          className="h-2.5 w-2.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: tank.productColor || 'rgb(var(--accent))' }}
+                          aria-hidden
+                        />
+                        <span className="truncate text-xs font-bold text-ink-100">{tank.productName}</span>
+                        <span className="rounded border border-navy-700 bg-navy-800 px-1.5 py-0.5 font-mono text-[10px] font-medium text-ink-400">
+                          {tank.code}
+                        </span>
+                      </div>
+                      <Badge tone={isLow ? 'danger' : isWatch ? 'warning' : 'success'} dot>
+                        {isLow ? 'Low stock' : isWatch ? 'Reorder' : `${formatNumber(fill, 0)}%`}
+                      </Badge>
+                    </div>
+
+                    <MeterBar
+                      value={fill}
+                      tone={isLow ? 'danger' : isWatch ? 'warn' : 'accent'}
+                      color={!isLow && !isWatch ? tank.productColor : undefined}
+                      label={`${tank.productName} tank fill`}
+                    />
+
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-ink-500">
+                      <span className="num">
+                        <strong className="font-semibold text-ink-100">
+                          {formatLitres(tank.bookStockLitres)}
+                        </strong>{' '}
+                        / {formatLitres(tank.capacityLitres)}
+                      </span>
+                      <span className="num">Ullage {formatNumber(ullage, 0)} L</span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </CardBody>
+        </Card>
+      </div>
+
+      {/* Bottom Forecourt Operations Grid */}
+      <div className="mt-5 grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
+        {/* Active Shift Console */}
+        <Card className="flex flex-col">
+          <CardHeader
+            title="Forecourt shift status"
+            subtitle="Active crew & totalizer capture"
+            action={
+              <Link to="/shifts" className="link text-xs">
+                All shifts →
+              </Link>
+            }
+          />
+          <CardBody className="flex flex-1 flex-col justify-between">
+            {openShift ? (
+              <>
+                <div>
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-navy-700/75 bg-navy-900/60 p-3">
+                    <div className="flex items-center gap-2.5">
+                      <span className="grid h-9 w-9 place-items-center rounded-lg border border-accent/25 bg-accent/10 text-accent">
+                        <ListChecks className="h-4 w-4" />
+                      </span>
+                      <div>
+                        <p className="font-display text-sm font-bold text-ink-100">
+                          Shift #{String(openShift.shiftNumber)}
+                        </p>
+                        <p className="text-[11px] text-ink-500">
+                          Operator: {String(openShift.operatorName ?? openShift.openedByName ?? '—')}
+                        </p>
+                      </div>
+                    </div>
+                    <StatusBadge status="OPEN" />
+                  </div>
+                  <p className="mt-3 text-xs text-ink-400">
+                    Opened <span className="num text-ink-200">{formatDateTime(String(openShift.openedAt))}</span>
+                  </p>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <Link
+                      to="/readings"
+                      className="flex items-center gap-1.5 rounded-lg border border-navy-700/75 bg-navy-900/50 px-2.5 py-2 text-xs font-medium text-ink-300 transition hover:border-accent/40 hover:text-ink-100"
+                    >
+                      <Gauge className="h-3.5 w-3.5 text-accent" aria-hidden /> Meter readings
+                    </Link>
+                    <Link
+                      to="/density"
+                      className="flex items-center gap-1.5 rounded-lg border border-navy-700/75 bg-navy-900/50 px-2.5 py-2 text-xs font-medium text-ink-300 transition hover:border-accent/40 hover:text-ink-100"
+                    >
+                      <Thermometer className="h-3.5 w-3.5 text-accent" aria-hidden /> Density check
+                    </Link>
+                  </div>
+                </div>
+                <Link
+                  to="/shifts"
+                  className="mt-4 flex min-h-10 items-center justify-center gap-2 rounded-lg border border-accent/30 bg-accent/10 text-xs font-semibold text-accent transition hover:bg-accent/16"
+                >
+                  Continue shift &amp; settle <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+                </Link>
+              </>
+            ) : (
+              <div className="flex flex-1 flex-col items-center justify-center py-5 text-center">
+                <span className="grid h-10 w-10 place-items-center rounded-xl border border-navy-700 bg-navy-800/70 text-accent">
+                  <CheckCircle2 className="h-5 w-5" />
+                </span>
+                <p className="mt-2.5 font-display text-sm font-bold text-ink-100">No shift currently open</p>
+                <p className="mt-1 max-w-xs text-xs text-ink-500">
+                  Open a shift to capture nozzle opening totalizers for the incoming crew.
+                </p>
+                <Link to="/shifts?new=shift" className="mt-4">
+                  <Button size="sm" variant="primary" icon={<Plus className="h-3.5 w-3.5" />}>
+                    Open shift
+                  </Button>
+                </Link>
+              </div>
+            )}
+          </CardBody>
+        </Card>
+
+        {/* Actionable Attention Center */}
+        <Card className="flex flex-col">
+          <CardHeader
+            title="Needs attention"
+            subtitle="Live operational & compliance checks"
+            action={
+              <Badge tone={alerts.some((a) => a.level === 'error') ? 'danger' : alerts.length ? 'warning' : 'success'} dot>
+                {alerts.length ? `${alerts.length} active` : 'All clear'}
+              </Badge>
+            }
+          />
+          <CardBody className="max-h-64 flex-1 space-y-2.5 overflow-y-auto scroll-thin">
+            {alerts.length ? (
+              alerts.map((alert) => {
+                const isErr = alert.level === 'error';
+                const Icon = isErr ? AlertCircle : AlertTriangle;
+                const rowStyle = isErr
+                  ? 'border-danger/25 bg-danger/8 hover:border-danger/45'
+                  : 'border-warn/25 bg-warn/8 hover:border-warn/45';
+                const body = (
+                  <>
+                    <Icon
+                      className={cn('mt-0.5 h-4 w-4 shrink-0', isErr ? 'text-danger' : 'text-warn')}
+                      aria-hidden
+                    />
+                    <p className="min-w-0 flex-1 text-xs leading-relaxed text-ink-200">{alert.message}</p>
+                    {alert.to && (
+                      <ChevronRight
+                        className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-500 transition group-hover:translate-x-0.5 group-hover:text-ink-100"
+                        aria-hidden
+                      />
+                    )}
+                  </>
+                );
+                return alert.to ? (
+                  <Link
+                    key={alert.id}
+                    to={alert.to}
+                    className={cn('group flex items-start gap-2.5 rounded-lg border p-2.5 transition', rowStyle)}
+                  >
+                    {body}
+                  </Link>
+                ) : (
+                  <div key={alert.id} className={cn('flex items-start gap-2.5 rounded-lg border p-2.5', rowStyle)}>
+                    {body}
+                  </div>
+                );
+              })
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center py-6 text-center">
+                <span className="grid h-10 w-10 place-items-center rounded-xl border border-ok/25 bg-ok/10 text-ok">
+                  <CheckCircle2 className="h-5 w-5" />
+                </span>
+                <p className="mt-2.5 text-xs font-semibold text-ink-100">All checks passing</p>
+                <p className="mt-0.5 text-[11px] text-ink-500">Nothing requires immediate intervention.</p>
+              </div>
+            )}
+          </CardBody>
+        </Card>
+
+        {/* Recorded Payment Mix */}
+        <Card className="flex flex-col lg:col-span-2 xl:col-span-1">
+          <CardHeader
+            title="Recorded payment mix"
+            subtitle="Transaction-level collections by mode"
+            action={
+              <Link to="/finance" className="link text-xs">
+                Finance →
+              </Link>
+            }
+          />
+          <CardBody className="flex flex-1 flex-col justify-between">
+            {paymentTotal > 0 ? (
+              <div className="space-y-3.5">
+                {/* Stacked distribution bar */}
+                <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-navy-800 ring-1 ring-inset ring-navy-700/60">
+                  {paymentEntries.map(([mode, amount]) => (
+                    <div
+                      key={mode}
+                      className={cn('h-full', MODE_COLORS[mode] ?? 'bg-accent')}
+                      style={{ width: `${(Number(amount) / paymentTotal) * 100}%` }}
+                      title={`${MODE_LABELS[mode] ?? mode}: ${formatINR(amount)}`}
+                    />
+                  ))}
+                </div>
+
+                <div className="space-y-2.5">
+                  {paymentEntries.map(([mode, amount]) => {
+                    const share = (Number(amount) / paymentTotal) * 100;
+                    return (
+                      <div key={mode} className="flex items-center justify-between text-xs">
+                        <span className="inline-flex items-center gap-2 text-ink-300">
+                          <span
+                            className={cn('h-2 w-2 rounded-full', MODE_COLORS[mode] ?? 'bg-accent')}
+                            aria-hidden
+                          />
+                          {MODE_LABELS[mode] ?? mode}
+                        </span>
+                        <span className="num">
+                          <span className="mr-2 text-[11px] text-ink-500">{formatNumber(share, 0)}%</span>
+                          <strong className="font-semibold text-ink-100">{formatINR(amount)}</strong>
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-1 flex-col items-center justify-center py-6 text-center">
+                <Droplets className="h-6 w-6 text-ink-500" aria-hidden />
+                <p className="mt-2 text-xs font-medium text-ink-300">No transaction-level sales on this date</p>
+                <p className="mt-0.5 text-[11px] text-ink-500">
+                  Totalizer shifts capture aggregate volume; mode splits come from settlements &amp; credit slips.
+                </p>
+              </div>
+            )}
+
+            <div className="mt-4 flex items-center justify-between border-t border-navy-700/70 pt-3 text-xs">
+              <span className="text-ink-500">Recorded total</span>
+              <span className="num font-bold text-ink-100">{formatINR(paymentTotal)}</span>
+            </div>
+          </CardBody>
+        </Card>
+      </div>
+
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-navy-700/60 bg-navy-900/40 px-4 py-2.5 text-[11px] text-ink-500">
+        <p>{data.disclaimer} Tank levels reflect ledger book stock.</p>
+        <span className="num shrink-0 font-medium text-ink-400">
+          {lowStock.length ? `${lowStock.length} tanks below 15%` : `${data.stock.length} underground tanks monitored`}
+        </span>
+      </div>
+    </>
+  );
 }
 
-function Metric({ label, value, hint, icon, to }: { label: string; value: string; hint: string; icon: React.ReactNode; to?: string }) {
-  const content = <><div className="flex items-center justify-between gap-2"><p className="text-xs font-medium text-ink-400">{label}</p><span className="rounded-lg bg-navy-800 p-2 text-ink-400">{icon}</span></div><p className="num mt-4 font-display text-[28px] font-bold tracking-tight text-ink-100">{value}</p><p className="mt-2 text-[11px] text-ink-500">{hint}</p></>;
-  return to ? <Link to={to} className="card card-hover block p-5">{content}</Link> : <div className="card p-5">{content}</div>;
+function MetricCard({
+  label,
+  value,
+  hint,
+  icon,
+  tone = 'default',
+  to,
+}: {
+  label: string;
+  value: string;
+  hint: string;
+  icon: React.ReactNode;
+  tone?: 'default' | 'accent' | 'success' | 'warning';
+  to?: string;
+}) {
+  const card = (
+    <StatCard
+      label={label}
+      value={value}
+      hint={hint}
+      icon={icon}
+      tone={tone}
+    />
+  );
+  return to ? (
+    <Link to={to} className="block rounded-xl transition hover:-translate-y-0.5 [&>.card]:hover:border-accent/45 [&>.card]:hover:shadow-pop">
+      {card}
+    </Link>
+  ) : (
+    card
+  );
 }
 
-interface CombinedStation { id: string; name: string; code: string; litres: string; value: string; monthValue: string; shortExcess: string | null; tanks: DashboardData['stock']; alerts: DashboardData['alerts']; trend: { date: string; value: string }[] }
-interface CombinedData { date: string; stations: CombinedStation[]; totalValue: string; totalLitres: string; monthValue: string }
-function CombinedDashboard({ date, setDate, onBack }: { date: string; setDate: (date: string) => void; onBack: () => void }) {
+/* ----------------------------------------------------- Multi-Outlet Compare */
+
+interface CombinedStation {
+  id: string;
+  name: string;
+  code: string;
+  litres: string;
+  value: string;
+  monthValue: string;
+  shortExcess: string | null;
+  tanks: DashboardData['stock'];
+  alerts: DashboardData['alerts'];
+  trend: { date: string; value: string }[];
+}
+
+interface CombinedData {
+  date: string;
+  stations: CombinedStation[];
+  totalValue: string;
+  totalLitres: string;
+  monthValue: string;
+}
+
+function CombinedDashboard({
+  date,
+  setDate,
+  onBack,
+}: {
+  date: string;
+  setDate: (date: string) => void;
+  onBack: () => void;
+}) {
   const { selectStation } = useStations();
-  const result = useQuery<CombinedData>({ queryKey: ['combined-dashboard', date], queryFn: () => apiGet(`/reports/combined-dashboard?date=${date}`), refetchInterval: 60_000 });
+  const chart = useChartPalette();
+  const result = useQuery<CombinedData>({
+    queryKey: ['combined-dashboard', date],
+    queryFn: () => apiGet(`/reports/combined-dashboard?date=${date}`),
+    refetchInterval: 60_000,
+  });
+
   if (result.isLoading) return <LoadingBlock rows={8} />;
   if (result.isError || !result.data) return <ErrorState error={result.error} onRetry={() => void result.refetch()} />;
+
   const data = result.data;
-  return <><div className="mb-6 flex flex-wrap items-end justify-between gap-3"><div><p className="eyebrow mb-2">Owner’s overview</p><h1 className="font-display text-3xl font-bold text-ink-100">Both pumps. One clear picture.</h1><p className="mt-2 text-sm text-ink-400">Compare your outlets for {formatDate(date)}.</p></div><div className="flex gap-2"><Input type="date" aria-label="Business date" value={date} max={todayIst()} onChange={(event) => { if (event.target.value) setDate(event.target.value); }} className="w-auto" /><Button onClick={onBack} variant="outline">Single pump</Button></div></div><div className="grid gap-4 sm:grid-cols-3"><Metric label="Combined estimated sales" value={formatINR(data.totalValue)} hint={`${formatLitres(data.totalLitres)} dispensed`} icon={<Banknote className="h-4 w-4" />} /><Metric label="Month to date" value={formatINR(data.monthValue)} hint="Closed and flagged shifts" icon={<Gauge className="h-4 w-4" />} /><Metric label="Active outlets" value={String(data.stations.length)} hint="Separate operations, shared control" icon={<Store className="h-4 w-4" />} /></div><div className="mt-6 grid gap-5 lg:grid-cols-2">{data.stations.map((pump) => <Card key={pump.id}><CardHeader title={pump.name} subtitle={pump.code} action={<Badge tone={pump.alerts.length ? 'warning' : 'success'}>{pump.alerts.length} alerts</Badge>} /><CardBody><p className="text-xs text-ink-500">Estimated sales</p><p className="num mt-1 font-display text-3xl font-bold text-ink-100">{formatINR(pump.value)}</p><p className="mt-1 text-xs text-ink-500">{formatLitres(pump.litres)} · Cash short/excess: {pump.shortExcess === null ? 'Not settled' : formatINR(pump.shortExcess)}</p><div className="mt-5 space-y-4">{pump.tanks.map((tank) => <div key={tank.id}><div className="mb-1.5 flex justify-between text-xs"><span className="text-ink-300">{tank.code} · {tank.productName}</span><span className="num text-ink-500">{formatLitres(tank.bookStockLitres)}</span></div><div className="h-2 overflow-hidden rounded-full bg-navy-800"><div className="h-full rounded-full bg-accent" style={{ width: `${Math.max(0, Math.min(100, Number(tank.fillPct)))}%` }} /></div></div>)}</div>{pump.alerts.length > 0 && <div className="mt-5 space-y-2 border-t border-navy-700/60 pt-4">{pump.alerts.map((alert, index) => <p key={index} className="flex gap-2 text-xs text-ink-400"><AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warn" />{alert.message}</p>)}</div>}<Button className="mt-5 w-full" variant="outline" onClick={() => { selectStation(pump.id); onBack(); }}>Open this pump <ArrowRight className="h-4 w-4" /></Button></CardBody></Card>)}</div><p className="mt-5 text-xs text-ink-500">Sales are totalizer estimates, not audited revenue. Tank levels are current book stock.</p></>;
+  const grandTotal = Number(data.totalValue) || 0;
+  const chartRows = data.stations.map((s) => ({
+    outlet: s.code,
+    name: s.name,
+    daySales: Number(s.value),
+    monthSales: Number(s.monthValue),
+  }));
+
+  return (
+    <>
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4 border-b border-navy-700/65 pb-4">
+        <div>
+          <p className="eyebrow mb-1 text-accent">Multi-Outlet Executive Overview</p>
+          <h1 className="font-display text-2xl font-extrabold tracking-tight text-ink-100 sm:text-[28px]">
+            Both pumps. One clear picture.
+          </h1>
+          <p className="mt-1 text-xs text-ink-400 sm:text-sm">
+            Side-by-side forecourt sales, tank positions and cash settlement for {formatDate(date)}.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            type="date"
+            aria-label="Business date"
+            value={date}
+            max={todayIst()}
+            onChange={(event) => {
+              if (event.target.value) setDate(event.target.value);
+            }}
+            className="h-9.5 w-auto text-xs"
+          />
+          <Button size="sm" onClick={onBack} variant="outline" className="h-9.5">
+            Single pump
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard
+          label="Combined estimated sales"
+          value={formatINR(data.totalValue)}
+          hint={`${formatLitres(data.totalLitres)} dispensed across outlets`}
+          icon={<Banknote className="h-4 w-4" />}
+          tone="accent"
+        />
+        <StatCard
+          label="Month-to-date sales"
+          value={formatINR(data.monthValue)}
+          hint="Aggregate closed & flagged shifts"
+          icon={<Gauge className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Active outlets"
+          value={String(data.stations.length)}
+          hint="Independent ledgers, unified owner governance"
+          icon={<Store className="h-4 w-4" />}
+          tone="success"
+        />
+      </div>
+
+      {chartRows.length > 1 && (
+        <Card className="mt-5">
+          <CardHeader
+            title="Outlet sales comparison"
+            subtitle="Selected business date vs month-to-date performance (INR)"
+          />
+          <CardBody>
+            <div className="h-[190px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartRows} margin={{ top: 8, right: 12, bottom: 0, left: -10 }}>
+                  <CartesianGrid strokeDasharray="3 4" stroke={chart.grid} vertical={false} />
+                  <XAxis dataKey="outlet" tick={{ fontSize: 11, fill: chart.axis }} axisLine={false} tickLine={false} />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: chart.axis }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v) =>
+                      `₹${Number(v) >= 100000 ? `${(v / 100000).toFixed(1)}L` : `${Math.round(v / 1000)}k`}`
+                    }
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: chart.tooltipBg,
+                      border: `1px solid ${chart.tooltipBorder}`,
+                      borderRadius: 10,
+                      fontSize: 12,
+                    }}
+                    formatter={(value: number, key: string) => [
+                      formatINR(value),
+                      key === 'daySales' ? 'Selected date' : 'Month to date',
+                    ]}
+                  />
+                  <Bar dataKey="daySales" fill={chart.accent} radius={[6, 6, 0, 0]} maxBarSize={48} />
+                  <Bar dataKey="monthSales" fill={chart.secondary} radius={[6, 6, 0, 0]} maxBarSize={48} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardBody>
+        </Card>
+      )}
+
+      <div className="mt-5 grid gap-5 lg:grid-cols-2">
+        {data.stations.map((pump) => {
+          const share = grandTotal > 0 ? (Number(pump.value) / grandTotal) * 100 : 0;
+          return (
+            <Card key={pump.id} className="flex flex-col">
+              <CardHeader
+                title={pump.name}
+                subtitle={`${pump.code} · ${formatNumber(share, 0)}% of organization day sales`}
+                action={
+                  <Badge tone={pump.alerts.length ? 'warning' : 'success'} dot>
+                    {pump.alerts.length} alerts
+                  </Badge>
+                }
+              />
+              <CardBody className="flex flex-1 flex-col justify-between space-y-4">
+                <div className="grid grid-cols-2 gap-3 rounded-lg border border-navy-700/75 bg-navy-900/55 p-3.5 sm:grid-cols-3">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">Day sales</p>
+                    <p className="num mt-0.5 font-display text-lg font-extrabold text-ink-100">
+                      {formatINR(pump.value)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">Dispensed</p>
+                    <p className="num mt-0.5 font-display text-lg font-extrabold text-accent">
+                      {formatLitres(pump.litres)}
+                    </p>
+                  </div>
+                  <div className="col-span-2 sm:col-span-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">Cash variance</p>
+                    <p
+                      className={cn(
+                        'num mt-0.5 text-sm font-bold',
+                        pump.shortExcess === null
+                          ? 'text-ink-400'
+                          : Number(pump.shortExcess) < 0
+                            ? 'text-danger'
+                            : 'text-ok',
+                      )}
+                    >
+                      {pump.shortExcess === null ? 'Not settled' : formatINR(pump.shortExcess)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-ink-500">Tank inventory</p>
+                  {pump.tanks.map((tank) => {
+                    const fill = Math.max(0, Math.min(100, Number(tank.fillPct)));
+                    return (
+                      <div key={tank.id}>
+                        <div className="mb-1 flex justify-between text-xs">
+                          <span className="font-medium text-ink-200">
+                            {tank.code} · {tank.productName}
+                          </span>
+                          <span className="num text-ink-400">
+                            {formatLitres(tank.bookStockLitres)} ({formatNumber(fill, 0)}%)
+                          </span>
+                        </div>
+                        <MeterBar
+                          value={fill}
+                          tone={fill < 15 ? 'danger' : fill < 25 ? 'warn' : 'accent'}
+                          color={fill >= 25 ? tank.productColor : undefined}
+                          height="sm"
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {pump.alerts.length > 0 && (
+                  <div className="space-y-1.5 border-t border-navy-700/70 pt-3">
+                    {pump.alerts.slice(0, 3).map((alert, index) => (
+                      <p key={index} className="flex items-start gap-2 text-xs text-ink-400">
+                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warn" aria-hidden />
+                        <span>{alert.message}</span>
+                      </p>
+                    ))}
+                  </div>
+                )}
+
+                <Button
+                  className="w-full"
+                  variant="outline"
+                  onClick={() => {
+                    selectStation(pump.id);
+                    onBack();
+                  }}
+                >
+                  Open this pump <ArrowRight className="h-4 w-4" aria-hidden />
+                </Button>
+              </CardBody>
+            </Card>
+          );
+        })}
+      </div>
+      <p className="mt-5 text-xs text-ink-500">
+        Sales figures represent shift totalizer estimates, not audited invoice revenue. Tank levels reflect book stock.
+      </p>
+    </>
+  );
 }

@@ -160,10 +160,10 @@ export default function Dispensers() {
     mutationFn: ({ id, tankId }: { id: string; tankId: string | null }) =>
       apiPatch<Nozzle>(`/catalog/nozzles/${id}`, { tankId }),
     onSuccess: () => {
-      toast('Nozzle-tank jod gaya', { tone: 'success', description: 'Is nozzle ki bikri ab is tank se kategi.' });
+      toast('Nozzle-tank mapping updated', { tone: 'success', description: 'Dispensed volume from this nozzle will deduct from the mapped tank.' });
       invalidate();
     },
-    onError: (error: Error) => toast('Mapping nahi hui', { tone: 'danger', description: error.message }),
+    onError: (error: Error) => toast('Could not update mapping', { tone: 'danger', description: error.message }),
   });
 
   const rows = dispensers.data ?? [];
@@ -197,7 +197,7 @@ export default function Dispensers() {
           label="Tank-unmapped"
           value={allNozzles.filter((n) => !n.tankId).length}
           tone={allNozzles.some((n) => !n.tankId) ? 'warning' : 'success'}
-          hint="Bina tank wali nozzle ki bikri sab tankon me bantti hai — tank jod do."
+          hint="Unmapped nozzle volumes distribute proportionally across same-product tanks."
         />
         {can('devices.read') && (
           <StatCard
@@ -405,16 +405,16 @@ export default function Dispensers() {
             <Input value={nozzleForm.totalizerUnit} onChange={(e) => setNozzleForm({ ...nozzleForm, totalizerUnit: e.target.value })} />
           </Field>
           <Field
-            label="Tank — is nozzle ka fuel kis tanki se aata hai"
+            label="Source underground tank"
             className="sm:col-span-2"
-            hint="Ye sabse zaruri setting hai: nozzle ki bikri seedha is tank ke stock se kategi. Galat tank = galat dip milaan."
+            hint="Critical mapping: volume dispensed from this nozzle deducts directly from the selected tank's book stock."
           >
             <Select
               value={nozzleForm.tankId}
               onChange={(e) => setNozzleForm({ ...nozzleForm, tankId: e.target.value })}
               disabled={!nozzleForm.productId}
             >
-              <option value="">{nozzleForm.productId ? 'Tank chuno…' : 'Pehle product chuno'}</option>
+              <option value="">{nozzleForm.productId ? 'Select tank…' : 'Select fuel product first'}</option>
               {(tanks.data ?? [])
                 .filter((t) => t.productId === nozzleForm.productId)
                 .map((t) => (
