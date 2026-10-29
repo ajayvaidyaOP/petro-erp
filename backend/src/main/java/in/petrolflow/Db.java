@@ -38,6 +38,10 @@ public final class Db {
         mysql.script(sql);
     }
 
+    public static void close() {
+        if (mysql != null) mysql.close();
+    }
+
     public static String str(Map<String, Object> row, String key) {
         if (row == null) return null;
         Object value = row.get(key);

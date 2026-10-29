@@ -25,6 +25,7 @@ public final class BackendTests {
             testHttpAndDatabaseIntegration();
         }
         System.out.println("ALL " + passed + " JAVA BACKEND ASSERTIONS PASSED.");
+        System.exit(0);
     }
 
     private static void testMoneyAndJson() {
@@ -158,6 +159,7 @@ public final class BackendTests {
             Main.seedIfEmpty(base);
         } finally {
             web.stop();
+            Db.close();
         }
     }
 

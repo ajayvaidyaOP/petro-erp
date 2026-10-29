@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public final class Web {
@@ -27,6 +28,7 @@ public final class Web {
     private final List<Route> routes = new ArrayList<>();
     private final Path spaDist;
     private HttpServer server;
+    private ExecutorService executor;
 
     public Web(Config config) {
         this.config = config;
@@ -52,13 +54,15 @@ public final class Web {
     public void listen() throws IOException {
         server = HttpServer.create(new InetSocketAddress(config.host, config.port), 0);
         server.createContext("/", this::dispatch);
-        server.setExecutor(Executors.newFixedThreadPool(16));
+        executor = Executors.newFixedThreadPool(16);
+        server.setExecutor(executor);
         server.start();
         System.out.println("PetroFlow Java API listening on http://" + config.host + ":" + config.port);
     }
 
     public void stop() {
         if (server != null) server.stop(0);
+        if (executor != null) executor.shutdownNow();
     }
 
     private void dispatch(HttpExchange exchange) throws IOException {
