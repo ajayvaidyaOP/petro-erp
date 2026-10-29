@@ -3,127 +3,125 @@
 @tailwind utilities;
 
 /* ============================================================================
-   PetroFlow — "Precision Forecourt Command" Design System
-   ----------------------------------------------------------------------------
-   Architectural cool-slate & porcelain neutrals in light mode, deep obsidian
-   cockpit surfaces in dark mode, paired with jewel emerald-petrol, cyan-teal,
-   and liquid amber-gold semantic accents.
+   PetroFlow — Forecourt Blue
+   A clear, energetic palette for busy fuel stations: confident cobalt,
+   midnight navy, fuel-orange highlights and highly legible work surfaces.
    ========================================================================== */
 @layer base {
   :root,
   [data-theme='light'] {
     color-scheme: light;
-    /* Surfaces: 950 = porcelain canvas, 900/850 = pure crisp white elevations */
-    --navy-950: 246 248 252;
+    /* Surfaces and type */
+    --navy-950: 243 246 252;
     --navy-900: 255 255 255;
     --navy-850: 255 255 255;
-    --navy-800: 241 245 249;
-    --navy-750: 226 232 240;
-    --navy-700: 214 222 234;
-    --navy-600: 182 194 212;
-    /* Typography ramp: razor-sharp obsidian to muted architectural slate */
-    --ink-100: 9 14 26;
-    --ink-200: 26 36 54;
-    --ink-300: 51 65 85;
-    --ink-400: 81 96 120;
-    --ink-500: 105 120 143;
-    --ink-600: 142 156 178;
-    /* Signature Brand Accents */
-    --accent: 4 120 87;
-    --accent-soft: 6 95 70;
-    --accent-teal: 8 145 178;
-    --accent-energy: 180 83 9;
+    --navy-800: 241 245 251;
+    --navy-750: 231 237 247;
+    --navy-700: 218 227 240;
+    --navy-600: 190 203 222;
+    --ink-100: 20 36 66;
+    --ink-200: 40 58 86;
+    --ink-300: 62 81 109;
+    --ink-400: 80 101 128;
+    --ink-500: 91 111 138;
+    --ink-600: 95 113 138;
+    /* Cobalt = navigation & action; orange = fuel / energy */
+    --accent: 36 85 221;
+    --accent-soft: 28 70 185;
+    --accent-teal: 10 127 130;
+    --accent-energy: 195 84 18;
+    --fuel: 249 124 44;
+    --plum: 111 70 179;
+    --on-fuel: 40 26 17;
+    --brand-start: 36 85 221;
+    --brand-end: 36 106 204;
     --on-accent: 255 255 255;
-    /* Foreground on status fills */
     --on-ok: 255 255 255;
     --on-warn: 255 255 255;
     --on-danger: 255 255 255;
     --on-energy: 255 255 255;
-    --scrim: 9 14 26;
-    --inset: 241 245 249;
-    /* Always-dark architectural showcase panel */
-    --panel-ink: 7 11 20;
-    --panel-deep: 4 7 13;
-    --panel-raised: 14 21 35;
-    --panel-line: 32 46 72;
-    --panel-text: 241 245 252;
-    --panel-muted: 154 170 196;
-    --panel-dim: 106 124 152;
-    --panel-accent: 32 224 172;
-    --panel-energy: 251 191 36;
-    /* Semantic Statuses */
-    --ok: 5 138 82;
-    --warn: 180 83 9;
-    --danger: 205 29 58;
-    --info: 29 98 216;
-    /* Multi-layered Elevation & Specular Highlights */
-    --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 4px 14px -4px rgb(15 23 42 / 0.055),
-      0 18px 36px -26px rgb(15 23 42 / 0.14);
-    --shadow-card-hover: 0 2px 6px rgb(15 23 42 / 0.05), 0 14px 32px -12px rgb(4 120 87 / 0.16),
-      0 8px 20px -10px rgb(15 23 42 / 0.08);
-    --shadow-focus: 0 0 0 3px rgb(4 120 87 / 0.16);
-    --shadow-pop: 0 24px 60px -16px rgb(15 23 42 / 0.22), 0 6px 18px -6px rgb(15 23 42 / 0.1),
-      0 0 0 1px rgb(15 23 42 / 0.04);
-    --shadow-glow: inset 0 1px 0 rgb(255 255 255 / 0.28), 0 2px 6px rgb(4 120 87 / 0.22),
-      0 10px 24px -10px rgb(4 120 87 / 0.42);
-    --card-sheen: inset 0 1px 0 rgb(255 255 255 / 0.9);
-    /* Subtle atmospheric aurora washes */
-    --canvas-glow-1: rgb(4 120 87 / 0.055);
-    --canvas-glow-2: rgb(8 145 178 / 0.045);
-    --canvas-glow-3: rgb(180 83 9 / 0.03);
-    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23516078' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    --scrim: 9 18 40;
+    --inset: 241 245 251;
+    /* Showcase is deliberately dark in both themes. */
+    --panel-ink: 11 23 57;
+    --panel-deep: 8 17 43;
+    --panel-raised: 20 38 79;
+    --panel-line: 54 77 126;
+    --panel-text: 247 250 255;
+    --panel-muted: 188 203 231;
+    --panel-dim: 142 162 200;
+    --panel-accent: 145 190 255;
+    --panel-energy: 255 159 85;
+    --ok: 12 130 86;
+    --warn: 180 80 13;
+    --danger: 198 43 65;
+    --info: 35 97 198;
+    --shadow-card: 0 1px 2px rgb(23 43 83 / 0.035), 0 8px 24px -14px rgb(23 43 83 / 0.14);
+    --shadow-card-hover: 0 5px 20px -8px rgb(36 85 221 / 0.18), 0 12px 28px -18px rgb(23 43 83 / 0.16);
+    --shadow-focus: 0 0 0 3px rgb(36 85 221 / 0.17);
+    --shadow-pop: 0 24px 65px -16px rgb(20 36 66 / 0.24), 0 6px 18px -6px rgb(20 36 66 / 0.12);
+    --shadow-glow: inset 0 1px 0 rgb(255 255 255 / 0.2), 0 8px 20px -8px rgb(36 85 221 / 0.48);
+    --card-sheen: inset 0 1px 0 rgb(255 255 255 / 0.92);
+    --canvas-glow-1: rgb(36 85 221 / 0.045);
+    --canvas-glow-2: rgb(249 124 44 / 0.045);
+    --canvas-glow-3: rgb(18 147 151 / 0.035);
+    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235a6d88' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   }
 
   [data-theme='dark'] {
     color-scheme: dark;
-    --navy-950: 8 11 18;
-    --navy-900: 13 18 28;
-    --navy-850: 17 24 38;
-    --navy-800: 24 34 52;
-    --navy-750: 32 45 68;
-    --navy-700: 42 56 82;
-    --navy-600: 62 80 112;
-    --ink-100: 244 247 253;
-    --ink-200: 218 226 240;
-    --ink-300: 176 190 212;
-    --ink-400: 138 154 180;
-    --ink-500: 104 120 146;
-    --ink-600: 76 90 116;
-    --accent: 16 212 162;
-    --accent-soft: 52 228 184;
-    --accent-teal: 34 211 238;
-    --accent-energy: 251 191 36;
-    --on-accent: 4 24 19;
-    --on-ok: 4 28 18;
-    --on-warn: 38 22 2;
-    --on-danger: 42 6 14;
-    --on-energy: 38 22 2;
-    --scrim: 3 5 10;
-    --inset: 10 15 24;
-    --panel-ink: 7 11 20;
-    --panel-deep: 4 7 13;
-    --panel-raised: 14 21 35;
-    --panel-line: 32 46 72;
-    --panel-text: 241 245 252;
-    --panel-muted: 154 170 196;
-    --panel-dim: 106 124 152;
-    --panel-accent: 32 224 172;
-    --panel-energy: 251 191 36;
-    --ok: 34 209 138;
-    --warn: 251 191 36;
-    --danger: 251 105 122;
-    --info: 76 168 255;
-    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.45), 0 12px 30px -14px rgb(0 0 0 / 0.65);
-    --shadow-card-hover: 0 4px 12px rgb(0 0 0 / 0.5), 0 20px 42px -16px rgb(0 0 0 / 0.78),
-      0 0 24px -10px rgb(16 212 162 / 0.18);
-    --shadow-focus: 0 0 0 3px rgb(16 212 162 / 0.25);
-    --shadow-pop: 0 28px 72px -18px rgb(0 0 0 / 0.85), 0 6px 20px rgb(0 0 0 / 0.5);
-    --shadow-glow: inset 0 1px 0 rgb(255 255 255 / 0.16), 0 6px 20px -6px rgb(16 212 162 / 0.4);
-    --card-sheen: inset 0 1px 0 rgb(255 255 255 / 0.065);
-    --canvas-glow-1: rgb(16 212 162 / 0.075);
-    --canvas-glow-2: rgb(34 211 238 / 0.055);
-    --canvas-glow-3: rgb(76 168 255 / 0.045);
-    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238a9ab4' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    --navy-950: 10 18 35;
+    --navy-900: 16 28 49;
+    --navy-850: 20 33 56;
+    --navy-800: 28 44 70;
+    --navy-750: 37 55 84;
+    --navy-700: 48 68 100;
+    --navy-600: 74 95 128;
+    --ink-100: 244 248 255;
+    --ink-200: 222 231 246;
+    --ink-300: 193 207 228;
+    --ink-400: 168 185 210;
+    --ink-500: 149 168 194;
+    --ink-600: 132 148 172;
+    --accent: 151 181 255;
+    --accent-soft: 184 204 255;
+    --accent-teal: 92 218 203;
+    --accent-energy: 255 185 115;
+    --fuel: 255 157 82;
+    --plum: 199 166 255;
+    --on-fuel: 37 24 14;
+    --brand-start: 151 181 255;
+    --brand-end: 112 207 238;
+    --on-accent: 10 24 52;
+    --on-ok: 5 35 26;
+    --on-warn: 43 25 8;
+    --on-danger: 48 9 18;
+    --on-energy: 43 25 8;
+    --scrim: 3 7 18;
+    --inset: 12 23 42;
+    --panel-ink: 11 23 57;
+    --panel-deep: 8 17 43;
+    --panel-raised: 20 38 79;
+    --panel-line: 54 77 126;
+    --panel-text: 247 250 255;
+    --panel-muted: 188 203 231;
+    --panel-dim: 142 162 200;
+    --panel-accent: 145 190 255;
+    --panel-energy: 255 159 85;
+    --ok: 91 218 164;
+    --warn: 255 185 104;
+    --danger: 255 123 141;
+    --info: 132 183 255;
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 28px -16px rgb(0 0 0 / 0.55);
+    --shadow-card-hover: 0 8px 28px -12px rgb(0 0 0 / 0.6), 0 0 24px -12px rgb(151 181 255 / 0.2);
+    --shadow-focus: 0 0 0 3px rgb(151 181 255 / 0.28);
+    --shadow-pop: 0 28px 72px -18px rgb(0 0 0 / 0.8), 0 6px 20px rgb(0 0 0 / 0.45);
+    --shadow-glow: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 6px 20px -6px rgb(92 151 255 / 0.35);
+    --card-sheen: inset 0 1px 0 rgb(255 255 255 / 0.06);
+    --canvas-glow-1: rgb(73 117 225 / 0.1);
+    --canvas-glow-2: rgb(255 157 82 / 0.045);
+    --canvas-glow-3: rgb(92 218 203 / 0.045);
+    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a8b9d2' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   }
 
   html,
@@ -200,9 +198,10 @@
     box-shadow: var(--shadow-card-hover), var(--card-sheen);
   }
 
-  /* Signature Brand Gradient — Emerald Petrol → Electric Cyan */
+  /* The solid action gradient is separate from semantic/chart colours so its
+     foreground remains legible in both themes. */
   .brand-gradient {
-    background-image: linear-gradient(135deg, rgb(var(--accent)) 0%, rgb(var(--accent-teal)) 100%);
+    background-image: linear-gradient(135deg, rgb(var(--brand-start)) 0%, rgb(var(--brand-end)) 100%);
   }
 
   .brand-gradient-soft {
@@ -215,7 +214,80 @@
 
   .hero-mesh {
     background-image: radial-gradient(420px 180px at 0% 0%, rgb(var(--accent) / 0.09), transparent 70%),
-      radial-gradient(360px 160px at 100% 0%, rgb(var(--accent-teal) / 0.07), transparent 70%);
+      radial-gradient(360px 160px at 100% 0%, rgb(var(--fuel) / 0.08), transparent 70%);
+  }
+
+  /* Always-dark navigation creates a stable frame around either workspace theme. */
+  .sidebar-surface {
+    --navy-950: 11 22 49;
+    --navy-900: 15 31 65;
+    --navy-850: 21 39 76;
+    --navy-800: 28 47 87;
+    --navy-750: 37 58 100;
+    --navy-700: 53 75 116;
+    --navy-600: 79 100 142;
+    --ink-100: 248 250 255;
+    --ink-200: 224 233 249;
+    --ink-300: 203 216 239;
+    --ink-400: 173 192 223;
+    --ink-500: 146 166 200;
+    --ink-600: 113 135 174;
+    --accent: 145 190 255;
+    --accent-soft: 185 213 255;
+    --accent-teal: 86 207 212;
+    --brand-start: 39 100 239;
+    --brand-end: 39 125 221;
+    --on-accent: 255 255 255;
+    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23adc0df' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background: linear-gradient(175deg, #132b5d 0%, #101f43 57%, #0b1732 100%);
+  }
+
+  .sidebar-surface .nav-item {
+    color: rgb(var(--ink-300));
+  }
+
+  .sidebar-surface .nav-item:hover {
+    background: rgb(255 255 255 / 0.07);
+    color: white;
+  }
+
+  .sidebar-surface .nav-icon {
+    color: rgb(var(--ink-400));
+  }
+
+  .sidebar-surface .nav-item-active,
+  .sidebar-surface .nav-item-active:hover {
+    color: white;
+    background: linear-gradient(100deg, #285be1, #2d72d5);
+    box-shadow: 0 6px 18px rgb(0 0 0 / 0.15), inset 0 1px 0 rgb(255 255 255 / 0.16);
+  }
+
+  .sidebar-surface .nav-item-active .nav-icon,
+  .sidebar-surface .nav-item-active:hover .nav-icon {
+    color: white;
+  }
+
+  .sidebar-surface .nav-item-active::before {
+    background: #ff9b58;
+    box-shadow: none;
+  }
+
+  .dashboard-hero {
+    background: linear-gradient(112deg, #112755 0%, #193b85 52%, #245fc5 100%);
+    box-shadow: 0 14px 32px -20px rgb(20 54 131 / 0.65);
+  }
+
+  .dashboard-hero::after {
+    content: '';
+    position: absolute;
+    right: -2rem;
+    top: -9rem;
+    width: 24rem;
+    height: 24rem;
+    border: 1px solid rgb(255 255 255 / 0.10);
+    border-radius: 9999px;
+    box-shadow: 0 0 0 3rem rgb(255 255 255 / 0.025), 0 0 0 6rem rgb(255 255 255 / 0.02);
+    pointer-events: none;
   }
 
   /* --------------------------------------------------------------- forms */
@@ -224,7 +296,7 @@
   }
 
   .input {
-    @apply min-h-10 w-full rounded-xl border border-navy-600/75 bg-navy-900 px-3.5 py-2 text-sm text-ink-100 shadow-[inset_0_1px_2px_rgb(15_23_42/0.035)] transition-all duration-150 placeholder:text-ink-500/80 hover:border-navy-600 focus:border-accent focus:outline-none disabled:cursor-not-allowed disabled:opacity-60;
+    @apply min-h-10 w-full rounded-xl border border-navy-600/75 bg-navy-900 px-3.5 py-2 text-sm text-ink-100 shadow-[inset_0_1px_2px_rgb(15_23_42/0.035)] transition-all duration-150 placeholder:text-ink-500 hover:border-navy-600 focus:border-accent focus:outline-none disabled:cursor-not-allowed disabled:opacity-60;
   }
 
   .input:focus {
@@ -241,7 +313,7 @@
 
   /* ------------------------------------------------------------ sidebar */
   .nav-item {
-    @apply relative flex min-h-10 items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-medium text-ink-400 transition-all duration-150 hover:bg-navy-800/85 hover:text-ink-100;
+    @apply relative flex min-h-11 items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-medium text-ink-400 transition-all duration-150 hover:bg-navy-800/85 hover:text-ink-100;
   }
 
   .nav-item-active {

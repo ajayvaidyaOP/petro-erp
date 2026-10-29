@@ -167,8 +167,8 @@ export default function Dashboard() {
   const trend = useMemo(
     () =>
       (dashboard.data?.trend ?? []).slice(-days).map((row) => ({
-        date: row.date.slice(5),
-        fullDate: row.date,
+        // The dashboard API currently returns MM-DD; tolerate full ISO dates too.
+        date: row.date.length > 5 ? row.date.slice(5) : row.date,
         value: Number(row.value),
         litres: Number(row.litres),
       })),
@@ -218,6 +218,7 @@ export default function Dashboard() {
   const data = dashboard.data!;
   const openShift = data.openShifts[0];
   const lowStock = data.stock.filter((tank) => Number(tank.fillPct) < 15);
+  const totalBookStock = data.stock.reduce((sum, tank) => sum + (Number(tank.bookStockLitres) || 0), 0);
   const alerts = buildAttentionItems(data, alertsQuery.data);
   const firstName = me?.user.name.split(' ')[0] ?? '';
   const hour = Number(
@@ -235,24 +236,28 @@ export default function Dashboard() {
       label: openShift ? 'Manage shift' : 'Open a shift',
       detail: 'Readings & settlement',
       icon: <ListChecks className="h-[18px] w-[18px]" />,
+      iconStyle: 'bg-accent/10 text-accent',
     },
     {
       to: '/deliveries?new=delivery',
       label: 'Record delivery',
       detail: 'Receive fuel stock',
       icon: <Truck className="h-[18px] w-[18px]" />,
+      iconStyle: 'bg-warn/10 text-warn',
     },
     {
       to: '/finance?new=expense',
       label: 'Add expense',
       detail: 'Keep cash in check',
       icon: <Wallet className="h-[18px] w-[18px]" />,
+      iconStyle: 'bg-accent-teal/10 text-accent-teal',
     },
     {
       to: '/customers',
       label: 'Customer credit',
       detail: 'Fleet credit & receipts',
       icon: <Users className="h-[18px] w-[18px]" />,
+      iconStyle: 'bg-plum/10 text-plum',
     },
   ];
 
@@ -260,65 +265,53 @@ export default function Dashboard() {
 
   return (
     <>
-      {/* Hero Forecourt Command Banner */}
-      <div className="card hero-mesh relative mb-5 overflow-hidden p-4 sm:p-6">
-        <span aria-hidden className="brand-gradient absolute inset-x-0 top-0 h-[2.5px] opacity-90" />
-        <div className="flex flex-wrap items-end justify-between gap-4">
+      {/* A clear, station-specific starting point for the working day. */}
+      <div className="dashboard-hero relative isolate mb-5 overflow-hidden rounded-2.5xl p-5 text-white sm:p-6 lg:p-7">
+        <div aria-hidden className="pointer-events-none absolute right-12 top-5 hidden text-white/[0.07] lg:block">
+          <Fuel className="h-32 w-32" strokeWidth={1} />
+        </div>
+        <div className="relative z-10 flex flex-wrap items-end justify-between gap-5">
           <div className="min-w-0">
-            <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-ink-400">
-              <span className="rounded-md border border-accent/25 bg-accent/10 px-2 py-0.5 font-mono text-[10.5px] font-bold text-accent">
+            <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-blue-100">
+              <span className="h-2 w-2 rounded-full bg-fuel" aria-hidden />
+              Your station overview
+              <span className="rounded-md border border-white/20 bg-white/10 px-2 py-0.5 font-mono tracking-normal text-white">
                 {station?.code ?? data.station.code}
               </span>
-              <span className="font-semibold text-ink-200">{station?.name ?? data.station.name}</span>
-              <span className="text-ink-600">·</span>
-              <span className="num font-medium text-ink-400">{formatDate(date)}</span>
             </div>
-
-            <h1 className="font-display text-2xl font-extrabold tracking-[-0.032em] text-ink-100 sm:text-[30px] sm:leading-9">
-              {greeting}, {firstName}
-              <span className="text-accent">.</span>
+            <h1 className="mt-3 font-display text-[27px] font-extrabold leading-tight tracking-[-0.035em] text-white sm:text-[32px]">
+              {greeting}, {firstName}<span className="text-fuel">.</span>
             </h1>
-
-            <div className="mt-2.5 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-xs text-ink-400">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-navy-700/85 bg-navy-900/90 px-2.5 py-1 font-semibold text-ink-200 shadow-sheen">
-                <span
-                  className={cn(
-                    'h-2 w-2 rounded-full',
-                    openShift ? 'animate-pulse-soft bg-ok shadow-[0_0_0_3px_rgb(var(--ok)/0.18)]' : 'bg-ink-600',
-                  )}
-                  aria-hidden
-                />
+            <p className="mt-1.5 text-sm text-blue-100/90">
+              Here’s what’s happening at <span className="font-semibold text-white">{station?.name ?? data.station.name}</span>.
+            </p>
+            <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs">
+              <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 font-semibold text-white">
+                <span className={cn('h-2 w-2 rounded-full', openShift ? 'bg-[#6ee7b7]' : 'bg-white/50')} aria-hidden />
                 {openShift ? (
                   <>
                     Shift #{String(openShift.shiftNumber)} open
-                    {openShift.operatorName ? (
-                      <span className="font-medium text-ink-500"> · {String(openShift.operatorName)}</span>
-                    ) : null}
+                    {openShift.operatorName ? <span className="font-normal text-blue-100">· {String(openShift.operatorName)}</span> : null}
                   </>
-                ) : (
-                  'No shift open'
-                )}
+                ) : 'No shift open'}
               </span>
               {data.flaggedShifts > 0 && (
-                <Link to="/shifts">
-                  <Badge tone="warning" dot>
-                    {data.flaggedShifts} flagged {data.flaggedShifts === 1 ? 'shift' : 'shifts'}
-                  </Badge>
+                <Link to="/shifts" className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 font-semibold text-white hover:bg-white/20">
+                  {data.flaggedShifts} flagged {data.flaggedShifts === 1 ? 'shift' : 'shifts'}
                 </Link>
               )}
-              <span className="num text-[11px] font-medium text-ink-500">
-                Synced {formatClockTime(dashboard.dataUpdatedAt)} IST
-              </span>
+              <span className="num text-[11px] font-medium text-blue-100/80">Updated {formatClockTime(dashboard.dataUpdatedAt)} IST</span>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 max-sm:w-full">
+          <div className="flex flex-wrap items-center gap-2 max-sm:w-full lg:justify-end">
             {me?.user.roleKey === 'OWNER' && stations.length > 1 && (
               <Button
                 size="sm"
-                variant="outline"
+                variant="ghost"
                 onClick={() => setCompare(true)}
                 icon={<Store className="h-3.5 w-3.5" />}
+                className="h-10 border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white"
               >
                 Compare both pumps
               </Button>
@@ -331,64 +324,69 @@ export default function Dashboard() {
               onChange={(event) => {
                 if (event.target.value) setDate(event.target.value);
               }}
-              className="h-9.5 w-auto text-xs"
+              className="h-10 w-auto border-white/20 bg-white/10 text-xs text-white [color-scheme:dark] hover:border-white/40"
             />
-            <Link to={openShift ? '/shifts' : '/shifts?new=shift'}>
-              <Button
-                size="sm"
-                variant="primary"
-                className="h-9.5 px-4"
-                icon={openShift ? <ArrowUpRight className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-              >
-                {openShift ? 'Manage shift' : 'Open shift'}
-              </Button>
+            <Link
+              to={openShift ? '/shifts' : '/shifts?new=shift'}
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-fuel px-4 text-xs font-bold text-onfuel shadow-sm transition hover:brightness-110"
+            >
+              {openShift ? <ArrowUpRight className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              {openShift ? 'Manage shift' : 'Open shift'}
             </Link>
           </div>
         </div>
       </div>
 
-      {/* Digital Forecourt Rate Totem */}
+      {/* Current configured prices are always independent of the selected business date. */}
       {rates.length > 0 && (
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-navy-700/80 bg-navy-850 px-4 py-3 shadow-card">
-          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3.5">
-            <span className="inline-flex items-center gap-1.5 rounded-lg bg-accent/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.13em] text-accent">
-              <Tags className="h-3.5 w-3.5" aria-hidden />
-              Live Rates
-            </span>
-            {rates.map((rate) => {
-              const matchingTank = data.stock.find((t) => t.productName === rate.productName);
-              const dotColor = matchingTank?.productColor ?? 'rgb(var(--accent))';
-              return (
-                <div
-                  key={rate.id}
-                  className="inline-flex items-center gap-2 rounded-xl border border-navy-700/75 bg-navy-800/55 px-3 py-1.5"
-                >
-                  <span
-                    className="h-2.5 w-2.5 rounded-full shadow-sm"
-                    style={{ backgroundColor: dotColor }}
-                    aria-hidden
-                  />
-                  <span className="text-xs font-semibold text-ink-300">{rate.productName}</span>
-                  <span className="num font-display text-sm font-extrabold text-ink-100">
-                    {formatINR(rate.ratePerLitre)}
-                    <span className="ml-0.5 font-sans text-[10px] font-medium text-ink-500">/L</span>
-                  </span>
-                </div>
-              );
-            })}
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-navy-700/80 bg-navy-850 px-4 py-3.5 shadow-card sm:px-5">
+          <div className="flex min-w-0 flex-wrap items-center gap-3 sm:gap-5">
+            <div className="flex items-center gap-2.5">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-warn/10 text-warn">
+                <Tags className="h-4 w-4" aria-hidden />
+              </span>
+              <span>
+                <span className="block text-xs font-bold text-ink-100">Current fuel rates</span>
+                <span className="block text-[10.5px] text-ink-500">At this pump · per litre</span>
+              </span>
+            </div>
+            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
+              {rates.map((rate) => {
+                const matchingTank = data.stock.find((t) => t.productName === rate.productName);
+                const dotColor = matchingTank?.productColor ?? 'rgb(var(--accent))';
+                return (
+                  <div key={rate.id} className="rounded-xl bg-navy-800/75 px-3 py-2 sm:inline-flex sm:items-center sm:gap-2">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: dotColor }} aria-hidden />
+                      <span className="text-[11px] font-semibold text-ink-400">{rate.productName}</span>
+                    </span>
+                    <span className="num mt-0.5 block pl-4 font-display text-[13px] font-extrabold text-ink-100 sm:mt-0 sm:pl-0">{formatINR(rate.ratePerLitre)}</span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <Link to="/products" className="link text-xs">
-            {can('prices.write') ? 'Update prices →' : 'Price history →'}
-          </Link>
+          {can('products.read') && (
+            <Link to="/products" className="link text-xs">
+              {can('prices.write') ? 'Update prices' : 'Price history'} <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+            </Link>
+          )}
         </div>
       )}
 
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h2 className="font-display text-base font-extrabold tracking-tight text-ink-100">Station snapshot</h2>
+          <p className="mt-0.5 text-xs text-ink-500">Your key numbers for {formatDate(date)}</p>
+        </div>
+        <span className="text-[11px] font-medium text-ink-500">Sales based on closed & flagged shifts</span>
+      </div>
       {/* Executive KPI Strip */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4 xl:gap-4">
         <MetricCard
           label="Estimated sales"
           value={formatINR(data.sales.shiftValue)}
-          hint={`${data.sales.shiftCount} closed shifts · ${data.sales.transactions} recorded tx`}
+          hint={`${data.sales.shiftCount} closed or flagged shifts · ${data.sales.transactions} recorded tx`}
           icon={<IndianRupee className="h-4 w-4" />}
           tone="accent"
         />
@@ -425,15 +423,15 @@ export default function Dashboard() {
       {/* Quick Operational Workflows */}
       <section className="mt-6" aria-labelledby="quick-actions-title">
         <div className="mb-3 flex items-center justify-between">
-          <h2 id="quick-actions-title" className="text-[11px] font-bold uppercase tracking-[0.12em] text-ink-400">
-            Quick workflows
+          <h2 id="quick-actions-title" className="font-display text-base font-extrabold tracking-tight text-ink-100">
+            Quick actions
           </h2>
-          <span className="text-[11px] font-medium text-ink-500">Direct forecourt entry</span>
+          <span className="text-[11px] font-medium text-ink-500">Everything you need, a tap away</span>
         </div>
         <div className="grid grid-cols-1 gap-3 min-[440px]:grid-cols-2 xl:grid-cols-4">
           {actions.map((action) => (
             <Link key={action.to} to={action.to} className="quick-action group">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-accent/25 bg-accent/10 text-accent shadow-sheen transition-all duration-200 group-hover:scale-105 group-hover:bg-accent group-hover:text-onaccent">
+              <span className={cn('grid h-11 w-11 shrink-0 place-items-center rounded-xl transition-transform duration-200 group-hover:scale-105', action.iconStyle)}>
                 {action.icon}
               </span>
               <span className="min-w-0">
@@ -455,8 +453,8 @@ export default function Dashboard() {
       <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(330px,1fr)]">
         <Card className="flex flex-col">
           <CardHeader
-            title="Sales & volume trend"
-            subtitle="Daily estimated performance derived from shift totalizers"
+            title="Sales performance"
+            subtitle="Estimated sales and volume from shift totalizers"
             action={
               <div className="flex flex-wrap items-center gap-1.5">
                 <div
@@ -534,9 +532,9 @@ export default function Dashboard() {
             </div>
 
             <div
-              className="h-[240px] w-full flex-1"
+              className="h-[240px] min-h-[240px] w-full flex-1"
               role="img"
-              aria-label={`${days}-day estimated sales chart. ${trend.map((row) => `${row.date}: ${formatINR(row.value)}`).join('; ')}`}
+              aria-label={`${days}-day estimated ${chartMetric === 'value' ? 'sales' : 'fuel volume'} chart. ${trend.map((row) => `${row.date}: ${chartMetric === 'value' ? formatINR(row.value) : formatLitres(row.litres)}`).join('; ')}`}
             >
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={trend} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
@@ -618,15 +616,15 @@ export default function Dashboard() {
         {/* Underground Tank Silo Telemetry */}
         <Card className="flex flex-col">
           <CardHeader
-            title="Underground tank stock"
-            subtitle="Book stock, silo level & safe ullage"
+            title="Fuel stock levels"
+            subtitle="Book stock, capacity & available ullage"
             action={
               <Link to="/tanks" className="link text-xs">
                 Tank ledger →
               </Link>
             }
           />
-          <CardBody className="flex-1 space-y-3">
+          <CardBody className="flex flex-1 flex-col gap-3">
             {data.stock.length === 0 ? (
               <EmptyState title="No tanks yet" description="Add a tank in Settings to start tracking stock." />
             ) : (
@@ -653,16 +651,13 @@ export default function Dashboard() {
                       <div
                         className="absolute inset-x-0 bottom-0 transition-all duration-500"
                         style={{
-                          height: `${Math.max(6, fill)}%`,
+                          height: `${fill}%`,
                           backgroundColor: liquidColor,
                           opacity: 0.85,
                         }}
                       >
                         <div className="h-[2px] w-full bg-white/45" />
                       </div>
-                      <span className="relative z-[1] grid h-full place-items-center font-mono text-[9.5px] font-extrabold text-ink-100 drop-shadow-[0_1px_2px_rgb(0_0_0/0.35)]">
-                        {formatNumber(fill, 0)}%
-                      </span>
                     </div>
 
                     <div className="min-w-0 flex-1">
@@ -674,6 +669,7 @@ export default function Dashboard() {
                           <span className="rounded border border-navy-700 bg-navy-900 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-ink-400">
                             {tank.code}
                           </span>
+                          <span className="num text-[11px] font-bold text-ink-300">{formatNumber(fill, 0)}%</span>
                         </div>
                         <Badge tone={isLow ? 'danger' : isWatch ? 'warning' : 'success'} dot>
                           {isLow ? 'Low' : isWatch ? 'Reorder' : 'Optimal'}
@@ -701,6 +697,15 @@ export default function Dashboard() {
                   </div>
                 );
               })
+            )}
+            {data.stock.length > 0 && (
+              <div className="mt-auto flex items-center justify-between gap-3 rounded-xl bg-accent/6 px-3.5 py-3">
+                <span className="inline-flex items-center gap-2 text-xs font-semibold text-ink-300">
+                  <Droplets className="h-4 w-4 text-accent" aria-hidden />
+                  Current book stock
+                </span>
+                <span className="num font-display text-sm font-extrabold text-ink-100">{formatLitres(totalBookStock)}</span>
+              </div>
             )}
           </CardBody>
         </Card>

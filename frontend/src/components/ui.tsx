@@ -831,54 +831,31 @@ export function StatCard({
   tone?: 'default' | 'accent' | 'success' | 'warning' | 'danger';
   footer?: ReactNode;
 }) {
-  const tones = {
-    default: 'text-ink-100',
-    accent: 'text-accent',
-    success: 'text-ok',
-    warning: 'text-warn',
-    danger: 'text-danger',
-  };
   const iconTones = {
-    default: 'bg-navy-800/90 text-ink-400 border-navy-700/85',
-    accent: 'bg-accent/10 text-accent border-accent/25',
-    success: 'bg-ok/10 text-ok border-ok/25',
-    warning: 'bg-warn/10 text-warn border-warn/25',
-    danger: 'bg-danger/10 text-danger border-danger/25',
+    default: 'bg-info/10 text-info',
+    accent: 'bg-accent/12 text-accent',
+    success: 'bg-ok/12 text-ok',
+    warning: 'bg-warn/12 text-warn',
+    danger: 'bg-danger/12 text-danger',
   };
-  const accentStrip = {
-    default: 'before:bg-gradient-to-r before:from-navy-600/55 before:to-transparent',
-    accent: 'before:bg-gradient-to-r before:from-accent before:via-accent-teal before:to-transparent',
-    success: 'before:bg-gradient-to-r before:from-ok before:to-transparent',
-    warning: 'before:bg-gradient-to-r before:from-warn before:to-transparent',
-    danger: 'before:bg-gradient-to-r before:from-danger before:to-transparent',
-  };
-  const washes = {
+  const surfaces = {
     default: '',
-    accent: 'after:bg-accent/[0.08]',
-    success: 'after:bg-ok/[0.08]',
-    warning: 'after:bg-warn/[0.08]',
-    danger: 'after:bg-danger/[0.08]',
+    accent: 'border-accent/20 bg-gradient-to-br from-accent/[0.09] via-navy-850 to-navy-850',
+    success: 'border-ok/20 bg-gradient-to-br from-ok/[0.08] via-navy-850 to-navy-850',
+    warning: 'border-warn/20 bg-gradient-to-br from-warn/[0.09] via-navy-850 to-navy-850',
+    danger: 'border-danger/20 bg-gradient-to-br from-danger/[0.08] via-navy-850 to-navy-850',
   };
   return (
-    <div
-      className={cn(
-        'card relative overflow-hidden p-4 sm:p-5',
-        'before:absolute before:inset-x-0 before:top-0 before:h-[2px] before:opacity-90',
-        'after:pointer-events-none after:absolute after:-right-8 after:-top-10 after:h-28 after:w-28 after:rounded-full after:blur-2xl',
-        accentStrip[tone],
-        washes[tone],
-      )}
-    >
-      <div className="relative flex items-start justify-between gap-2.5">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-ink-400">{label}</p>
-        {icon && <div className={cn('rounded-xl border p-2 shadow-sheen', iconTones[tone])}>{icon}</div>}
-      </div>
-      <p
-        className={cn(
-          'num relative mt-2.5 break-words font-display text-stat-lg font-extrabold leading-tight',
-          tones[tone],
+    <div className={cn('card relative h-full overflow-hidden p-4 sm:p-5', surfaces[tone])}>
+      <div className="relative flex items-start justify-between gap-3">
+        <p className="pt-0.5 text-[12px] font-semibold leading-snug text-ink-400">{label}</p>
+        {icon && (
+          <div className={cn('grid h-10 w-10 shrink-0 place-items-center rounded-xl', iconTones[tone])}>
+            {icon}
+          </div>
         )}
-      >
+      </div>
+      <p className="num relative mt-2 break-words font-display text-[21px] font-extrabold leading-tight tracking-[-0.035em] text-ink-100 sm:text-[27px]">
         {value}
       </p>
       {hint && <p className="mt-1.5 text-[11.5px] leading-snug text-ink-500">{hint}</p>}
