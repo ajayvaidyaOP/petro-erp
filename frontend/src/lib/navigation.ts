@@ -2,7 +2,13 @@ export interface NavigationItem {
   to: string;
   label: string;
   permission: string;
+  /** Extra permissions that also reveal this item. Any one is enough. */
+  anyOf?: string[];
   end?: boolean;
+}
+
+export function canOpen(can: (permission: string) => boolean, item: { permission: string; anyOf?: string[] }) {
+  return can(item.permission) || Boolean(item.anyOf?.some((permission) => can(permission)));
 }
 
 export type NavigationGroup = 'Forecourt Operations' | 'Sales & Accounting' | 'Workspace & Setup';
@@ -83,8 +89,9 @@ export const navigation: NavigationSection[] = [
     to: '/employees',
     label: 'Team',
     group: 'Workspace & Setup',
-    description: 'Owner & manager access and attendance',
+    description: 'Staff logins, permissions and attendance',
     permission: 'employees.read',
+    anyOf: ['attendance.read'],
     children: [],
   },
   {

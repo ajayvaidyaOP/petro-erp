@@ -33,7 +33,7 @@ import {
 } from 'lucide-react';
 import { useAuth, useStations } from '../lib/auth';
 import { useTheme } from '../lib/theme';
-import { navigation } from '../lib/navigation';
+import { canOpen, navigation } from '../lib/navigation';
 import { cn } from '../lib/utils';
 
 interface CommandItem {
@@ -163,7 +163,7 @@ export function CommandPalette({
 
       const seen = new Set<string>();
       for (const section of navigation) {
-        if (can(section.permission) && !seen.has(section.to)) {
+        if (canOpen(can, section) && !seen.has(section.to)) {
           seen.add(section.to);
           result.push({
             id: `nav-${section.to}`,

@@ -38,7 +38,7 @@ import {
 } from 'lucide-react';
 import { useAuth, useStations } from '../lib/auth';
 import { useTheme } from '../lib/theme';
-import { activeSection, navigation, type NavigationGroup } from '../lib/navigation';
+import { activeSection, canOpen, navigation, type NavigationGroup } from '../lib/navigation';
 import { useAttentionItems } from '../lib/alerts';
 import { cn } from '../lib/utils';
 import { formatDate, initials, todayIst } from '../lib/format';
@@ -178,7 +178,7 @@ function PrimaryNav({
     );
   }
 
-  const permitted = navigation.filter((item) => can(item.permission));
+  const permitted = navigation.filter((item) => canOpen(can, item));
 
   return (
     <nav aria-label="Primary" className="flex-1 space-y-6 overflow-y-auto px-3 py-5 scroll-thin">
@@ -232,7 +232,7 @@ function SectionNav() {
   const { pathname } = useLocation();
   const section = activeSection(pathname);
   if (!section || section.children.length < 2) return null;
-  const children = section.children.filter((item) => can(item.permission));
+  const children = section.children.filter((item) => canOpen(can, item));
   if (children.length < 2) return null;
   return (
     <nav
@@ -267,7 +267,7 @@ function SectionNav() {
 function MobileNav({ onMenu }: { onMenu: () => void }) {
   const { can } = useAuth();
   const { pathname } = useLocation();
-  const items = navigation.filter((item) => can(item.permission)).slice(0, 4);
+  const items = navigation.filter((item) => canOpen(can, item)).slice(0, 4);
   return (
     <nav
       aria-label="Quick navigation"

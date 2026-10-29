@@ -13,7 +13,7 @@ try {
 } catch {
   throw new Error(
     'This Node.js runtime has no node:sqlite support. Use Node 22+ or switch the ' +
-      'database adapter to MySQL (see docs/ARCHITECTURE.md).',
+      'database adapter. See README.md.',
   );
 }
 
@@ -64,6 +64,7 @@ const COLUMN_MIGRATIONS: [table: string, column: string, ddl: string][] = [
   ['credit_entries', 'product_id', 'ALTER TABLE credit_entries ADD COLUMN product_id TEXT REFERENCES fuel_products(id) ON DELETE SET NULL'],
   ['credit_entries', 'quantity_litres', 'ALTER TABLE credit_entries ADD COLUMN quantity_litres TEXT'],
   ['credit_entries', 'rate_per_litre', 'ALTER TABLE credit_entries ADD COLUMN rate_per_litre TEXT'],
+  ['users', 'granted_permissions', "ALTER TABLE users ADD COLUMN granted_permissions TEXT NOT NULL DEFAULT '[]'"],
 ];
 
 function applyColumnMigrations() {
@@ -77,7 +78,7 @@ function applyColumnMigrations() {
 
 /** Execute a migration script (used at boot and by tests). */
 export function migrate(schemaPath?: string) {
-  const file = schemaPath ?? path.join(env.ROOT_DIR, 'db', 'schema.sql');
+  const file = schemaPath ?? path.join(env.ROOT_DIR, 'backend', 'db', 'schema.sql');
   const sql = fs.readFileSync(file, 'utf8');
   getDb().exec(sql);
   applyColumnMigrations();

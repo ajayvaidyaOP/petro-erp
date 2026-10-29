@@ -1,0 +1,423 @@
+package in.petrolflow;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+public final class ShiftApi {
+    private ShiftApi() {}
+
+    public static void register(Web web) {
+        web.get("/shifts", ShiftApi::list);
+        web.get("/shifts/alerts", ShiftApi::alerts);
+        web.get("/shifts/day-closings", ShiftApi::dayClosings);
+        web.post("/shifts/day-close", ShiftApi::dayClose);
+        web.post("/shifts/day-close/reopen", ShiftApi::reopen);
+        web.get("/shifts/:id", ShiftApi::detail);
+        web.post("/shifts", ShiftApi::open);
+        web.post("/shifts/:id/capture", ShiftApi::capture);
+        web.post("/shifts/:id/close", ShiftApi::close);
+        web.post("/shifts/:id/approve", ShiftApi::approve);
+        web.post("/shifts/:id/reverse", ShiftApi::reverse);
+        web.patch("/shifts/:id/nozzles/:nozzleId", ShiftApi::patchNozzle);
+    }
+
+    private static void list(Web.Ctx ctx) {
+        Auth auth = ctx.requireAuth();
+        auth.require("shifts.read");
+        int page = Domain.pageOf(ctx);
+        int size = Domain.pageSize(ctx);
+        String where = "s.tenant_id = ?";
+        List<Object> queryParams = new ArrayList<>();
+        queryParams.add(auth.tenantId());
+        if (ctx.q("stationId") != null) {
+            auth.station(ctx.q("stationId"));
+            where += " AND s.station_id = ?";
+            queryParams.add(ctx.q("stationId"));
+        } else if (!auth.allStations) {
+            where += " AND s.station_id IN (" + placeholders(auth.stationIds.size()) + ")";
+            queryParams.addAll(auth.stationIds);
+        }
+        if (ctx.q("status") != null) {
+            where += " AND s.status = ?";
+            queryParams.add(ctx.q("status"));
+        }
+        if (ctx.q("businessDate") != null) {
+            where += " AND s.business_date = ?";
+            queryParams.add(ctx.q("businessDate"));
+        }
+        long total = Db.count("SELECT COUNT(*) AS count FROM shifts s WHERE " + where, queryParams.toArray());
+        queryParams.add(size);
+        queryParams.add((page - 1) * size);
+        ctx.ok(Json.shapeAll(Db.all(
+                """
+                SELECT s.*, st.name AS station_name, u.name AS operator_name
+                  FROM shifts s JOIN stations st ON st.id = s.station_id
+                  LEFT JOIN users u ON u.id = s.operator_id
+                 WHERE %s ORDER BY s.business_date DESC, s.shift_number DESC LIMIT ? OFFSET ?
+                """.formatted(where), queryParams.toArray())), Domain.page(total, page, size));
+    }
+
+    private static void alerts(Web.Ctx ctx) {
+        Auth auth = ctx.requireAuth();
+        auth.require("shifts.read");
+        if (ctx.q("stationId") != null) auth.station(ctx.q("stationId"));
+        double hours = Domain.settingNumber("shifts.unclosedAlertHours", auth.tenantId(), ctx.q("stationId"), 14);
+        List<Map<String, Object>> rows = ctx.q("stationId") == null
+                ? Db.all("SELECT s.*, st.name AS station_name FROM shifts s JOIN stations st ON st.id = s.station_id WHERE s.tenant_id = ? AND s.status = 'OPEN'", auth.tenantId())
+                : Db.all("SELECT s.*, st.name AS station_name FROM shifts s JOIN stations st ON st.id = s.station_id WHERE s.tenant_id = ? AND s.status = 'OPEN' AND s.station_id = ?", auth.tenantId(), ctx.q("stationId"));
+        List<Map<String, Object>> alerts = new ArrayList<>();
+        long now = System.currentTimeMillis();
+        for (Map<String, Object> row : rows) {
+            if (!auth.allStations && !auth.stationIds.contains(Db.str(row, "station_id"))) continue;
+            long opened = java.time.Instant.parse(Db.str(row, "opened_at")).toEpochMilli();
+            if (now - opened <= hours * 3_600_000) continue;
+            Map<String, Object> alert = Json.shape(row);
+            alert.put("hoursOpen", String.format(java.util.Locale.ROOT, "%.1f", (now - opened) / 3_600_000d));
+            alerts.add(alert);
+        }
+        ctx.ok(Map.of("thresholdHours", hours, "count", alerts.size(), "alerts", alerts));
+    }
+
+    private static void dayClosings(Web.Ctx ctx) {
+        Auth auth = ctx.requireAuth();
+        auth.require("shifts.read");
+        Map<String, Object> station = auth.station(ctx.q("stationId"));
+        ctx.ok(Json.shapeAll(Db.all(
+                """
+                SELECT dc.*, uc.name AS closed_by_name, ur.name AS reopened_by_name
+                  FROM day_closings dc
+                  LEFT JOIN users uc ON uc.id = dc.closed_by
+                  LEFT JOIN users ur ON ur.id = dc.reopened_by
+                 WHERE dc.station_id = ? ORDER BY dc.business_date DESC LIMIT 93
+                """, station.get("id"))));
+    }
+
+    private static void dayClose(Web.Ctx ctx) {
+        Auth auth = ctx.requireAuth();
+        auth.require("dayclose.manage");
+        Map<String, Object> station = auth.station(required(ctx, "stationId"));
+        String date = required(ctx, "businessDate");
+        if (!Clock.isIsoDate(date)) throw ApiException.validation("businessDate", "Enter a valid YYYY-MM-DD date");
+        if (date.compareTo(Clock.todayIst()) > 0) throw ApiException.unprocessable("A future business date cannot be closed");
+        Map<String, Object> open = Db.one("SELECT id, shift_number, business_date FROM shifts WHERE station_id = ? AND status = 'OPEN' AND business_date <= ? LIMIT 1", station.get("id"), date);
+        if (open != null) throw ApiException.conflict("Shift #" + open.get("shift_number") + " (" + open.get("business_date") + ") is still open — close it before closing the day.");
+        Map<String, Object> existing = Db.one("SELECT id, status FROM day_closings WHERE station_id = ? AND business_date = ?", station.get("id"), date);
+        if (existing != null && "CLOSED".equals(existing.get("status"))) throw ApiException.conflict("Business date " + date + " is already closed");
+        String id = existing == null ? Clock.newId("dcl") : Db.str(existing, "id");
+        if (existing == null) {
+            Db.exec("INSERT INTO day_closings (id, tenant_id, station_id, business_date, status, closed_by, closed_at, notes, created_at) VALUES (?, ?, ?, ?, 'CLOSED', ?, ?, ?, ?)",
+                    id, station.get("tenant_id"), station.get("id"), date, auth.userId, Clock.nowIso(), ctx.str("notes"), Clock.nowIso());
+        } else {
+            Db.exec("UPDATE day_closings SET status = 'CLOSED', closed_by = ?, closed_at = ?, notes = COALESCE(?, notes) WHERE id = ?", auth.userId, Clock.nowIso(), ctx.str("notes"), id);
+        }
+        Auth.audit(auth, "DAY_CLOSED", "DayClosing", id, Db.str(station, "id"), "Business date " + date + " closed");
+        ctx.created(Json.shape(Db.one("SELECT * FROM day_closings WHERE id = ?", id)));
+    }
+
+    private static void reopen(Web.Ctx ctx) {
+        Auth auth = ctx.requireAuth();
+        auth.require("dayclose.manage");
+        Map<String, Object> station = auth.station(required(ctx, "stationId"));
+        String date = required(ctx, "businessDate");
+        String reason = required(ctx, "reason");
+        if (reason.length() < 10) throw ApiException.validation("reason", "Reason must be at least 10 characters");
+        Map<String, Object> existing = Db.one("SELECT id, status FROM day_closings WHERE station_id = ? AND business_date = ?", station.get("id"), date);
+        if (existing == null || !"CLOSED".equals(existing.get("status"))) throw ApiException.conflict("Business date " + date + " is not closed");
+        Db.exec("UPDATE day_closings SET status = 'REOPENED', reopened_by = ?, reopened_at = ?, reopen_reason = ? WHERE id = ?", auth.userId, Clock.nowIso(), reason, existing.get("id"));
+        ctx.ok(Json.shape(Db.one("SELECT * FROM day_closings WHERE id = ?", existing.get("id"))));
+    }
+
+    private static void detail(Web.Ctx ctx) {
+        Auth auth = ctx.requireAuth();
+        auth.require("shifts.read");
+        ctx.ok(detailOf(load(auth, ctx.p("id"))));
+    }
+
+    private static void open(Web.Ctx ctx) {
+        Auth auth = ctx.requireAuth();
+        auth.require("shifts.open");
+        Map<String, Object> station = auth.station(required(ctx, "stationId"));
+        String date = ctx.str("businessDate") == null ? Clock.todayIst() : ctx.str("businessDate");
+        if (!Clock.isIsoDate(date)) throw ApiException.validation("businessDate", "Enter a valid YYYY-MM-DD date");
+        Domain.assertDayOpen(Db.str(station, "id"), date);
+        Map<String, Object> open = Db.one("SELECT id, shift_number FROM shifts WHERE station_id = ? AND status IN ('OPEN','FLAGGED') LIMIT 1", station.get("id"));
+        if (open != null) throw ApiException.conflict("Shift #" + open.get("shift_number") + " is still open. Close it before opening a new shift.");
+        int number = (int) Db.count("SELECT COALESCE(MAX(shift_number), 0) + 1 AS count FROM shifts WHERE station_id = ? AND business_date = ?", station.get("id"), date);
+        List<Map<String, Object>> nozzles = Db.all("SELECT * FROM nozzles WHERE station_id = ? AND status = 'ACTIVE' ORDER BY number", station.get("id"));
+        if (nozzles.isEmpty()) throw ApiException.unprocessable("Configure nozzles before opening a shift");
+        String id = Clock.newId("shf");
+        String now = Clock.nowIso();
+        Db.tx(() -> {
+            Db.exec(
+                    """
+                    INSERT INTO shifts
+                      (id, tenant_id, station_id, shift_number, business_date, opened_at, operator_id, opened_by, status,
+                       total_litres, total_value, opening_cash, closing_cash, notes, is_demo, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', '0', '0', ?, '0', ?, 0, ?, ?)
+                    """,
+                    id, station.get("tenant_id"), station.get("id"), number, date, now,
+                    ctx.str("operatorId") == null ? auth.userId : ctx.str("operatorId"), auth.userId,
+                    Money.rate(ctx.str("openingCash") == null ? "0" : ctx.str("openingCash")), ctx.str("notes"), now, now);
+            for (Map<String, Object> nozzle : nozzles) {
+                Map<String, Object> latest = Db.one("SELECT id, reading_value FROM meter_readings WHERE nozzle_id = ? AND is_countable = 1 ORDER BY reading_at DESC LIMIT 1", nozzle.get("id"));
+                Db.exec(
+                        """
+                        INSERT INTO shift_nozzle_readings
+                          (id, shift_id, nozzle_id, opening_reading, opening_reading_id, opening_source, adjustment_litres, testing_litres, status, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, '0', '0', 'PENDING', ?, ?)
+                        """,
+                        Clock.newId("snr"), id, nozzle.get("id"),
+                        latest == null ? null : latest.get("reading_value"),
+                        latest == null ? null : latest.get("id"),
+                        latest == null ? null : "DEVICE", now, now);
+            }
+            return id;
+        });
+        Auth.audit(auth, "SHIFT_OPENED", "Shift", id, Db.str(station, "id"), "Shift #" + number + " opened for " + date);
+        Map<String, Object> detail = detailOf(Db.one("SELECT * FROM shifts WHERE id = ?", id));
+        detail.put("warnings", List.of());
+        ctx.created(detail);
+    }
+
+    private static void capture(Web.Ctx ctx) {
+        Auth auth = ctx.requireAuth();
+        auth.require("shifts.close");
+        Map<String, Object> shift = load(auth, ctx.p("id"));
+        ctx.ok(Map.of("shiftId", shift.get("id"), "preview", closings(shift, false), "note", "Preview only — no readings or stock movements were written."));
+    }
+
+    private static void close(Web.Ctx ctx) {
+        Auth auth = ctx.requireAuth();
+        auth.require("shifts.close");
+        Map<String, Object> shift = load(auth, ctx.p("id"));
+        if (!"OPEN".equals(shift.get("status"))) throw ApiException.conflict("This shift is not open");
+        Domain.assertDayOpen(Db.str(shift, "station_id"), Db.str(shift, "business_date"));
+        Db.tx(() -> {
+            List<Map<String, Object>> ops = closings(shift, true);
+            BigDecimal litres = BigDecimal.ZERO;
+            BigDecimal value = BigDecimal.ZERO;
+            boolean flagged = ops.isEmpty();
+            for (Map<String, Object> op : ops) {
+                if ("FLAGGED".equals(op.get("status"))) flagged = true;
+                if (op.get("litres") != null) {
+                    litres = litres.add(Money.d(op.get("litres")));
+                    value = value.add(Money.d(op.get("value")));
+                    if (op.get("tankId") != null) {
+                        Domain.movement(Db.str(shift, "tenant_id"), Db.str(shift, "station_id"), Db.str(op, "tankId"), Db.str(op, "productId"),
+                                "DISPENSED", Money.litres(op.get("litres")), "SHIFT", Db.str(shift, "id"),
+                                "Dispensed during shift #" + shift.get("shift_number"), auth.userId, Db.num(shift, "is_demo") == 1);
+                    }
+                }
+                Db.exec(
+                        """
+                        UPDATE shift_nozzle_readings
+                           SET closing_reading = ?, closing_reading_id = ?, closing_source = ?, litres_sold = ?, rate = ?,
+                               sales_value = ?, variance_litres = ?, status = ?, note = ?, updated_at = ?
+                         WHERE id = ?
+                        """,
+                        op.get("closing"), op.get("closingReadingId"), op.get("source"), op.get("litres"), op.get("rate"),
+                        op.get("value"), op.get("variance"), op.get("status"), op.get("note"), Clock.nowIso(), op.get("rowId"));
+            }
+            String status = flagged ? "FLAGGED" : "CLOSED";
+            Db.exec(
+                    """
+                    UPDATE shifts SET status = ?, closed_at = ?, closed_by = ?, total_litres = ?, total_value = ?,
+                           closing_cash = ?, close_notes = ?, updated_at = ? WHERE id = ?
+                    """,
+                    status, Clock.nowIso(), auth.userId, Money.litres(litres), Money.money(value),
+                    Money.rate(ctx.str("closingCash") == null ? "0" : ctx.str("closingCash")), ctx.str("notes"), Clock.nowIso(), shift.get("id"));
+            return status;
+        });
+        Auth.audit(auth, "SHIFT_CLOSED", "Shift", Db.str(shift, "id"), Db.str(shift, "station_id"), "Shift closed");
+        ctx.ok(detailOf(Db.one("SELECT * FROM shifts WHERE id = ?", shift.get("id"))));
+    }
+
+    private static void approve(Web.Ctx ctx) {
+        Auth auth = ctx.requireAuth();
+        auth.require("shifts.approve");
+        Map<String, Object> shift = load(auth, ctx.p("id"));
+        if (!"FLAGGED".equals(shift.get("status")) && !"CLOSED".equals(shift.get("status"))) throw ApiException.conflict("Only closed or flagged shifts can be approved");
+        if (auth.userId.equals(Db.str(shift, "closed_by")) && !"OWNER".equals(auth.roleKey)) {
+            throw ApiException.forbidden("A shift must be approved by someone other than the person who closed it");
+        }
+        Db.exec("UPDATE shifts SET status = 'CLOSED', approved_by = ?, approved_at = ?, updated_at = ? WHERE id = ?", auth.userId, Clock.nowIso(), Clock.nowIso(), shift.get("id"));
+        Db.exec("UPDATE shift_nozzle_readings SET status = 'APPROVED', updated_at = ? WHERE shift_id = ? AND status != 'REVERSED'", Clock.nowIso(), shift.get("id"));
+        ctx.ok(detailOf(Db.one("SELECT * FROM shifts WHERE id = ?", shift.get("id"))));
+    }
+
+    private static void reverse(Web.Ctx ctx) {
+        Auth auth = ctx.requireAuth();
+        auth.require("shifts.approve");
+        Map<String, Object> shift = load(auth, ctx.p("id"));
+        Domain.assertDayOpen(Db.str(shift, "station_id"), Db.str(shift, "business_date"));
+        String reason = required(ctx, "reason");
+        if (reason.length() < 10) throw ApiException.validation("reason", "Reason must be at least 10 characters");
+        for (Map<String, Object> movement : Db.all("SELECT * FROM stock_movements WHERE reference_type = 'SHIFT' AND reference_id = ? AND type = 'DISPENSED'", shift.get("id"))) {
+            Domain.movement(Db.str(shift, "tenant_id"), Db.str(shift, "station_id"), Db.str(movement, "tank_id"), Db.str(movement, "product_id"),
+                    "ADJUSTMENT", Money.litres(Money.d(movement.get("quantity_litres")).negate()), "SHIFT_REVERSAL", Db.str(shift, "id"),
+                    "Reversal of shift #" + shift.get("shift_number") + ": " + reason, auth.userId, false);
+        }
+        Db.exec("UPDATE shifts SET status = 'REVERSED', close_notes = ?, updated_at = ? WHERE id = ?", "REVERSED: " + reason, Clock.nowIso(), shift.get("id"));
+        Db.exec("UPDATE shift_nozzle_readings SET status = 'REVERSED', updated_at = ? WHERE shift_id = ?", Clock.nowIso(), shift.get("id"));
+        ctx.ok(detailOf(Db.one("SELECT * FROM shifts WHERE id = ?", shift.get("id"))));
+    }
+
+    private static void patchNozzle(Web.Ctx ctx) {
+        Auth auth = ctx.requireAuth();
+        auth.require("shifts.close");
+        Map<String, Object> shift = load(auth, ctx.p("id"));
+        if (!"OPEN".equals(shift.get("status"))) throw ApiException.conflict("Only open shifts can be edited.");
+        Domain.assertDayOpen(Db.str(shift, "station_id"), Db.str(shift, "business_date"));
+        List<String> sets = new ArrayList<>();
+        List<Object> params = new ArrayList<>();
+        if (ctx.body().containsKey("openingReading")) { sets.add("opening_reading = ?"); params.add(Money.rate(ctx.str("openingReading"))); sets.add("opening_source = 'MANUAL'"); }
+        if (ctx.body().containsKey("closingReading")) { sets.add("closing_reading = ?"); params.add(Money.rate(ctx.str("closingReading"))); sets.add("closing_source = 'MANUAL'"); }
+        if (ctx.body().containsKey("testingLitres")) { sets.add("testing_litres = ?"); params.add(Money.litres(ctx.str("testingLitres"))); }
+        if (ctx.body().containsKey("note")) { sets.add("note = ?"); params.add(ctx.str("note")); }
+        if (!sets.isEmpty()) {
+            sets.add("updated_at = ?");
+            params.add(Clock.nowIso());
+            params.add(shift.get("id"));
+            params.add(ctx.p("nozzleId"));
+            Db.exec("UPDATE shift_nozzle_readings SET " + String.join(", ", sets) + " WHERE shift_id = ? AND nozzle_id = ?", params.toArray());
+        }
+        ctx.ok(detailOf(Db.one("SELECT * FROM shifts WHERE id = ?", shift.get("id"))));
+    }
+
+    private static List<Map<String, Object>> closings(Map<String, Object> shift, boolean commit) {
+        List<Map<String, Object>> rows = Db.all(
+                """
+                SELECT snr.*, n.label, n.product_id, n.tank_id
+                  FROM shift_nozzle_readings snr JOIN nozzles n ON n.id = snr.nozzle_id
+                 WHERE snr.shift_id = ?
+                """, shift.get("id"));
+        List<Map<String, Object>> ops = new ArrayList<>();
+        for (Map<String, Object> row : rows) {
+            String closing = Db.str(row, "closing_reading");
+            String source = Db.str(row, "closing_source");
+            String closingId = Db.str(row, "closing_reading_id");
+            if (closing == null) {
+                Map<String, Object> device = Db.one(
+                        "SELECT id, reading_value, reading_at FROM meter_readings WHERE nozzle_id = ? AND is_countable = 1 ORDER BY reading_at DESC LIMIT 1",
+                        row.get("nozzle_id"));
+                if (device != null && Db.str(device, "reading_at").compareTo(Db.str(shift, "opened_at")) >= 0) {
+                    closing = Db.str(device, "reading_value");
+                    closingId = Db.str(device, "id");
+                    source = "DEVICE";
+                }
+            }
+            String opening = Db.str(row, "opening_reading");
+            Map<String, Object> price = Domain.priceAt(Db.str(shift, "tenant_id"), Db.str(row, "product_id"), Db.str(shift, "station_id"));
+            String rate = price == null ? "0.000" : Money.rate(price.get("rate_per_litre"));
+            String status = "CAPTURED";
+            String litres = null;
+            String note = Db.str(row, "note");
+            if (opening == null || closing == null) {
+                status = "FLAGGED";
+                note = note == null ? "Opening or closing reading is missing" : note;
+            } else {
+                BigDecimal net = Money.d(closing).subtract(Money.d(opening)).subtract(Money.d(row.get("testing_litres")));
+                if (net.signum() < 0) status = "FLAGGED";
+                else litres = Money.litres(net);
+            }
+            Map<String, Object> op = new LinkedHashMap<>();
+            op.put("rowId", row.get("id"));
+            op.put("nozzleId", row.get("nozzle_id"));
+            op.put("label", row.get("label"));
+            op.put("productId", row.get("product_id"));
+            op.put("tankId", row.get("tank_id"));
+            op.put("opening", opening);
+            op.put("closing", closing);
+            op.put("closingReadingId", closingId);
+            op.put("source", source);
+            op.put("litres", litres);
+            op.put("rate", rate);
+            op.put("value", litres == null ? "0.00" : Money.money(Money.d(litres).multiply(Money.d(rate))));
+            op.put("variance", "0.000");
+            op.put("status", status);
+            op.put("note", note);
+            ops.add(op);
+            if (commit && "MANUAL".equals(source) && closingId == null && closing != null) {
+                String readingId = Clock.newId("rdg");
+                Db.exec(
+                        """
+                        INSERT INTO meter_readings
+                          (id, tenant_id, station_id, nozzle_id, reading_value, unit, quality, source, reading_at, sequence, is_countable, is_simulated, note, created_by, created_at)
+                        VALUES (?, ?, ?, ?, ?, 'L', 'VALID', 'MANUAL', ?, 0, 1, 0, 'Shift closing capture', ?, ?)
+                        """,
+                        readingId, shift.get("tenant_id"), shift.get("station_id"), row.get("nozzle_id"), closing, Clock.nowIso(), authUser(shift), Clock.nowIso());
+                op.put("closingReadingId", readingId);
+            }
+        }
+        return ops;
+    }
+
+    private static String authUser(Map<String, Object> shift) {
+        return Db.str(shift, "opened_by");
+    }
+
+    private static Map<String, Object> load(Auth auth, String id) {
+        Map<String, Object> shift = Db.one("SELECT * FROM shifts WHERE id = ?", id);
+        if (shift == null || !auth.tenantId().equals(Db.str(shift, "tenant_id"))) throw ApiException.notFound("Shift not found");
+        auth.station(Db.str(shift, "station_id"));
+        return shift;
+    }
+
+    private static Map<String, Object> detailOf(Map<String, Object> shift) {
+        List<Map<String, Object>> nozzles = Json.shapeAll(Db.all(
+                """
+                SELECT snr.*, n.label AS nozzle_label, n.number AS nozzle_number, d.code AS dispenser_code,
+                       p.name AS product_name, p.color AS product_color
+                  FROM shift_nozzle_readings snr
+                  JOIN nozzles n ON n.id = snr.nozzle_id
+                  JOIN dispensers d ON d.id = n.dispenser_id
+                  JOIN fuel_products p ON p.id = n.product_id
+                 WHERE snr.shift_id = ? ORDER BY d.code, n.number
+                """, shift.get("id")));
+        Map<String, Object> station = Db.one("SELECT name, code FROM stations WHERE id = ?", shift.get("station_id"));
+        Map<String, Object> detail = Json.shape(shift);
+        detail.put("stationName", station == null ? null : station.get("name"));
+        detail.put("stationCode", station == null ? null : station.get("code"));
+        detail.put("operatorName", nameOf(Db.str(shift, "operator_id")));
+        detail.put("openedByName", nameOf(Db.str(shift, "opened_by")));
+        detail.put("closedByName", nameOf(Db.str(shift, "closed_by")));
+        detail.put("approvedByName", nameOf(Db.str(shift, "approved_by")));
+        detail.put("nozzles", nozzles);
+        detail.put("nozzleReadings", nozzles);
+        detail.put("settlements", Json.shapeAll(Db.all("SELECT * FROM shift_settlements WHERE shift_id = ? ORDER BY mode", shift.get("id"))));
+        detail.put("denominations", Json.shapeAll(Db.all("SELECT * FROM shift_cash_denominations WHERE shift_id = ? ORDER BY denomination DESC", shift.get("id"))));
+        BigDecimal testing = BigDecimal.ZERO;
+        int flagged = 0;
+        for (Map<String, Object> nozzle : nozzles) {
+            testing = testing.add(Money.d(nozzle.get("testingLitres")));
+            if ("FLAGGED".equals(nozzle.get("status"))) flagged++;
+        }
+        detail.put("totals", Map.of(
+                "litres", String.valueOf(shift.get("total_litres")),
+                "value", String.valueOf(shift.get("total_value")),
+                "testingLitres", Money.litres(testing),
+                "nozzleCount", nozzles.size(),
+                "flaggedNozzles", flagged));
+        return detail;
+    }
+
+    private static String nameOf(String userId) {
+        if (userId == null) return null;
+        Map<String, Object> row = Db.one("SELECT name FROM users WHERE id = ?", userId);
+        return row == null ? null : Db.str(row, "name");
+    }
+
+    private static String placeholders(int count) {
+        if (count == 0) return "''";
+        return String.join(",", java.util.Collections.nCopies(count, "?"));
+    }
+
+    private static String required(Web.Ctx ctx, String key) {
+        String value = ctx.str(key);
+        if (value == null || value.isBlank()) throw ApiException.validation(key, key + " is required");
+        return value;
+    }
+}

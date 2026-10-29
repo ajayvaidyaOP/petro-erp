@@ -8,7 +8,7 @@ build/
 *.tsbuildinfo
 frontend/dist/
 backend/dist/
-gateway/dist/
+backend/gateway/dist/
 
 # environment / secrets — never commit real values
 .env
@@ -18,6 +18,10 @@ gateway/dist/
 *.key
 
 # local databases & backups
+backend/db/*.db
+backend/db/*.db-wal
+backend/db/*.db-shm
+backend/db/backups/
 db/*.db
 db/*.db-wal
 db/*.db-shm

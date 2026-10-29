@@ -96,7 +96,7 @@ export default function Login() {
     <div className="grid min-h-dvh bg-carbon-950 lg:grid-cols-[1.12fr_1fr]">
       {/* Brand illustration is decorative; no sample figures are presented as live data. */}
       <section className="relative hidden min-h-dvh flex-col overflow-hidden bg-panel px-10 py-9 text-panel-text lg:flex xl:px-14 xl:py-11">
-        <div aria-hidden className="pointer-events-none absolute -right-32 -top-40 h-[430px] w-[430px] rounded-full bg-orange-500/25 blur-[100px]" />
+        <div aria-hidden className="pointer-events-none absolute -right-32 -top-40 h-[430px] w-[430px] rounded-full bg-teal-400/20 blur-[100px]" />
         <div aria-hidden className="pointer-events-none absolute -bottom-48 -left-20 h-[380px] w-[380px] rounded-full bg-emerald-500/12 blur-[110px]" />
 
         <div className="relative flex items-center justify-between gap-4">
@@ -290,7 +290,7 @@ export default function Login() {
                 </span>
               </div>
 
-              <div className="mt-3.5 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+              <div className="mt-3.5 grid grid-cols-1 gap-2.5">
                 {demo.data.accounts.map((account) => (
                   <button
                     key={account.email}
@@ -317,12 +317,14 @@ export default function Login() {
                       )}
                     </span>
                     <span className="block font-display text-xs font-extrabold text-ink-100">
-                      {account.roleKey === 'OWNER' ? 'Owner Workspace' : 'Manager Workspace'}
+                      {account.roleKey === 'OWNER' ? 'Owner Workspace' : account.roleKey === 'STAFF' ? 'Staff login' : 'Manager Workspace'}
                     </span>
                     <span className="mt-0.5 block text-[10.5px] text-ink-500">
                       {account.roleKey === 'OWNER'
                         ? 'Both pumps, prices & finance'
-                        : 'Shifts, stock & daily operations'}
+                        : account.roleKey === 'STAFF'
+                          ? 'Only the screens the owner ticked'
+                          : 'Shifts, stock & daily operations'}
                     </span>
                     <span
                       title={account.email}

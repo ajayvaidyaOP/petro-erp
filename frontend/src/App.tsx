@@ -61,13 +61,13 @@ function AdminOnly({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-function PermissionOnly({ permission, children }: { permission: string; children: ReactNode }) {
+function PermissionOnly({ permission, anyOf, children }: { permission: string; anyOf?: string[]; children: ReactNode }) {
   const { can } = useAuth();
-  if (!can(permission)) return <CardAccessDenied />;
+  if (!can(permission) && !anyOf?.some((item) => can(item))) return <CardAccessDenied />;
   return <>{children}</>;
 }
 function CardAccessDenied() {
-  return <EmptyState title="Owner access required" description="This section is managed by the owner. Your manager workspace has the tools for daily operations." action={<Link to="/"><Button variant="outline">Back to overview</Button></Link>} />;
+  return <EmptyState title="Not included in your access" description="This screen was not ticked for your login. Ask the owner if you need it." action={<Link to="/"><Button variant="outline">Back to overview</Button></Link>} />;
 }
 const pages = [
   ['shifts', Shifts, 'shifts.read'], ['readings', Readings, 'readings.read'],
@@ -116,7 +116,7 @@ export default function App() {
               </TenantOnly>
             }
           />
-          {pages.map(([path, Page, permission]) => <Route key={path} path={path} element={<TenantOnly><PermissionOnly permission={permission}><Page /></PermissionOnly></TenantOnly>} />)}
+          {pages.map(([path, Page, permission]) => <Route key={path} path={path} element={<TenantOnly><PermissionOnly permission={permission} anyOf={path === 'employees' ? ['attendance.read'] : undefined}><Page /></PermissionOnly></TenantOnly>} />)}
 
           <Route path="admin" element={<AdminOnly><AdminDashboard /></AdminOnly>} />
           <Route path="admin/tenants" element={<AdminOnly><Tenants /></AdminOnly>} />

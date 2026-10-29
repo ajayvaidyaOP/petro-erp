@@ -7,7 +7,7 @@ import { accessibleStationIds, getStationOrThrow, tenantIdOf } from '../lib/tena
 import { addDays, istDayEnd, istDayStart, isIsoDate, todayIst } from '../lib/time.js';
 import { D, Decimal, money } from '../lib/decimal.js';
 import { tankSummary, signedLitres, tankBookStock } from '../lib/stock.js';
-import { ACCOUNTING_DISCLAIMER, HARDWARE_DISCLAIMER, STOCK_VARIANCE_TOLERANCE_LITRES, STOCK_LOSS_NORM_PCT } from '@petroflow/shared';
+import { ACCOUNTING_DISCLAIMER, HARDWARE_DISCLAIMER, STOCK_VARIANCE_TOLERANCE_LITRES, STOCK_LOSS_NORM_PCT } from '../shared/index.js';
 import { complianceAlerts } from './compliance.js';
 import { isDayClosed } from '../lib/dayclose.js';
 

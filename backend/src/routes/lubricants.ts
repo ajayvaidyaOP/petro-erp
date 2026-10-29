@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { PAYMENT_MODES } from '@petroflow/shared';
+import { PAYMENT_MODES } from '../shared/index.js';
 import { all, get, run, shape, shapeAll, tx } from '../db/index.js';
 import { asyncHandler, created, ok, parse, pageMeta, paging } from '../lib/http.js';
 import { conflict, forbidden, notFound, unprocessable } from '../lib/errors.js';

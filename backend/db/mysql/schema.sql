@@ -21,8 +21,8 @@ CREATE TABLE IF NOT EXISTS `tenants` (
   `status` VARCHAR(255) NOT NULL DEFAULT 'ACTIVE',
   `notes` TEXT,
   `is_demo` TINYINT(1) NOT NULL DEFAULT 0,
-  `created_at` DATETIME(3) NOT NULL,
-  `updated_at` DATETIME(3) NOT NULL
+  `created_at` VARCHAR(40) NOT NULL,
+  `updated_at` VARCHAR(40) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `subscription_plans` (
@@ -38,8 +38,8 @@ CREATE TABLE IF NOT EXISTS `subscription_plans` (
   `features` VARCHAR(1024) NOT NULL DEFAULT '[]',
   `trial_days` INT NOT NULL DEFAULT 14,
   `is_active` TINYINT(1) NOT NULL DEFAULT 1,
-  `created_at` DATETIME(3) NOT NULL,
-  `updated_at` DATETIME(3) NOT NULL
+  `created_at` VARCHAR(40) NOT NULL,
+  `updated_at` VARCHAR(40) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `subscriptions` (
@@ -47,14 +47,14 @@ CREATE TABLE IF NOT EXISTS `subscriptions` (
   `tenant_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `plan_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `status` VARCHAR(255) NOT NULL DEFAULT 'TRIALING',
-  `starts_at` DATETIME(3) NOT NULL,
-  `ends_at` DATETIME(3),
-  `trial_ends_at` DATETIME(3),
+  `starts_at` VARCHAR(40) NOT NULL,
+  `ends_at` VARCHAR(40),
+  `trial_ends_at` VARCHAR(40),
   `seats` INT NOT NULL DEFAULT 5,
   `auto_renew` TINYINT(1) NOT NULL DEFAULT 1,
   `notes` TEXT,
-  `created_at` DATETIME(3) NOT NULL,
-  `updated_at` DATETIME(3) NOT NULL,
+  `created_at` VARCHAR(40) NOT NULL,
+  `updated_at` VARCHAR(40) NOT NULL,
     CONSTRAINT `fk_subscriptions_tenant_id` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_subscriptions_plan_id` FOREIGN KEY (`plan_id`) REFERENCES `subscription_plans` (`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -76,13 +76,13 @@ CREATE TABLE IF NOT EXISTS `subscription_invoices` (
   `tax_amount` VARCHAR(255) NOT NULL DEFAULT '0',
   `total_amount` VARCHAR(255) NOT NULL,
   `status` VARCHAR(255) NOT NULL DEFAULT 'ISSUED',
-  `issued_at` DATETIME(3) NOT NULL,
-  `due_at` DATETIME(3),
-  `paid_at` DATETIME(3),
+  `issued_at` VARCHAR(40) NOT NULL,
+  `due_at` VARCHAR(40),
+  `paid_at` VARCHAR(40),
   `payment_method` VARCHAR(255),
   `payment_reference` VARCHAR(255),
   `notes` TEXT,
-  `created_at` DATETIME(3) NOT NULL,
+  `created_at` VARCHAR(40) NOT NULL,
     CONSTRAINT `fk_subscription_invoices_tenant_id` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_subscription_invoices_subscription_id` FOREIGN KEY (`subscription_id`) REFERENCES `subscriptions` (`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -106,8 +106,8 @@ CREATE TABLE IF NOT EXISTS `stations` (
   `status` VARCHAR(255) NOT NULL DEFAULT 'ACTIVE',
   `opening_date` DATE,
   `is_demo` TINYINT(1) NOT NULL DEFAULT 0,
-  `created_at` DATETIME(3) NOT NULL,
-  `updated_at` DATETIME(3) NOT NULL,
+  `created_at` VARCHAR(40) NOT NULL,
+  `updated_at` VARCHAR(40) NOT NULL,
   UNIQUE KEY `uq_stations_tenant_id__code` (tenant_id, code),
     CONSTRAINT `fk_stations_tenant_id` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -123,7 +123,7 @@ CREATE TABLE IF NOT EXISTS `roles` (
   `key` VARCHAR(255) NOT NULL UNIQUE,
   `name` VARCHAR(255) NOT NULL,
   `description` TEXT,
-  `permissions` VARCHAR(255) NOT NULL DEFAULT '[]',
+  `permissions` VARCHAR(2048) NOT NULL DEFAULT '[]',
   `scope` VARCHAR(255) NOT NULL DEFAULT 'STATION',
   `is_system` TINYINT(1) NOT NULL DEFAULT 1
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -134,14 +134,15 @@ CREATE TABLE IF NOT EXISTS `users` (
   `email` VARCHAR(255) NOT NULL UNIQUE,
   `name` VARCHAR(255) NOT NULL,
   `phone` VARCHAR(255),
-  `password_hash` VARCHAR(255) NOT NULL,
+  `password_hash` VARCHAR(2048) NOT NULL,
   `role_key` VARCHAR(255) NOT NULL,
   `status` VARCHAR(255) NOT NULL DEFAULT 'ACTIVE',
   `must_change_password` TINYINT(1) NOT NULL DEFAULT 0,
-  `last_login_at` DATETIME(3),
+  `last_login_at` VARCHAR(40),
   `is_demo` TINYINT(1) NOT NULL DEFAULT 0,
-  `created_at` DATETIME(3) NOT NULL,
-  `updated_at` DATETIME(3) NOT NULL,
+  `granted_permissions` VARCHAR(2048) NOT NULL DEFAULT '[]',
+  `created_at` VARCHAR(40) NOT NULL,
+  `updated_at` VARCHAR(40) NOT NULL,
     CONSTRAINT `fk_users_tenant_id` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_users_role_key` FOREIGN KEY (`role_key`) REFERENCES `roles` (`key`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -156,8 +157,8 @@ CREATE TABLE IF NOT EXISTS `user_station_access` (
   `id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
   `user_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `station_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-  `permissions` VARCHAR(255) NOT NULL DEFAULT '[]',
-  `created_at` DATETIME(3) NOT NULL,
+  `permissions` VARCHAR(2048) NOT NULL DEFAULT '[]',
+  `created_at` VARCHAR(40) NOT NULL,
   UNIQUE KEY `uq_user_station_access_user_id__station_id` (user_id, station_id),
     CONSTRAINT `fk_user_station_access_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
     CONSTRAINT `fk_user_station_access_station_id` FOREIGN KEY (`station_id`) REFERENCES `stations` (`id`) ON DELETE RESTRICT
@@ -167,12 +168,12 @@ CREATE TABLE IF NOT EXISTS `sessions` (
   `id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
   `user_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `token_hash` VARCHAR(255) NOT NULL UNIQUE,
-  `expires_at` DATETIME(3) NOT NULL,
+  `expires_at` VARCHAR(40) NOT NULL,
   `ip` VARCHAR(255),
-  `user_agent` VARCHAR(255),
-  `revoked_at` DATETIME(3),
-  `last_seen_at` DATETIME(3),
-  `created_at` DATETIME(3) NOT NULL,
+  `user_agent` VARCHAR(2048),
+  `revoked_at` VARCHAR(40),
+  `last_seen_at` VARCHAR(40),
+  `created_at` VARCHAR(40) NOT NULL,
     CONSTRAINT `fk_sessions_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -192,8 +193,8 @@ CREATE TABLE IF NOT EXISTS `fuel_products` (
   `color` VARCHAR(255) NOT NULL DEFAULT '#38bdf8',
   `is_active` TINYINT(1) NOT NULL DEFAULT 1,
   `is_demo` TINYINT(1) NOT NULL DEFAULT 0,
-  `created_at` DATETIME(3) NOT NULL,
-  `updated_at` DATETIME(3) NOT NULL,
+  `created_at` VARCHAR(40) NOT NULL,
+  `updated_at` VARCHAR(40) NOT NULL,
   UNIQUE KEY `uq_fuel_products_tenant_id__code` (tenant_id, code),
     CONSTRAINT `fk_fuel_products_tenant_id` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -209,7 +210,7 @@ CREATE TABLE IF NOT EXISTS `fuel_prices` (
   `note` TEXT,
   `created_by` VARCHAR(255),
   `is_demo` TINYINT(1) NOT NULL DEFAULT 0,
-  `created_at` DATETIME(3) NOT NULL,
+  `created_at` VARCHAR(40) NOT NULL,
     CONSTRAINT `fk_fuel_prices_tenant_id` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_fuel_prices_product_id` FOREIGN KEY (`product_id`) REFERENCES `fuel_products` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_fuel_prices_station_id` FOREIGN KEY (`station_id`) REFERENCES `stations` (`id`) ON DELETE RESTRICT
@@ -244,8 +245,8 @@ CREATE TABLE IF NOT EXISTS `tanks` (
   `calibration_reference` VARCHAR(255),
   `status` VARCHAR(255) NOT NULL DEFAULT 'ACTIVE',
   `is_demo` TINYINT(1) NOT NULL DEFAULT 0,
-  `created_at` DATETIME(3) NOT NULL,
-  `updated_at` DATETIME(3) NOT NULL,
+  `created_at` VARCHAR(40) NOT NULL,
+  `updated_at` VARCHAR(40) NOT NULL,
   UNIQUE KEY `uq_tanks_station_id__code` (station_id, code),
     CONSTRAINT `fk_tanks_station_id` FOREIGN KEY (`station_id`) REFERENCES `stations` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_tanks_product_id` FOREIGN KEY (`product_id`) REFERENCES `fuel_products` (`id`) ON DELETE RESTRICT
@@ -265,7 +266,7 @@ CREATE TABLE IF NOT EXISTS `tank_measurements` (
   `tenant_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `station_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `tank_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-  `measured_at` DATETIME(3) NOT NULL,
+  `measured_at` VARCHAR(40) NOT NULL,
   `dip_cm` VARCHAR(255),
   `water_dip_cm` VARCHAR(255),
   `measured_litres` VARCHAR(255) NOT NULL,
@@ -276,7 +277,7 @@ CREATE TABLE IF NOT EXISTS `tank_measurements` (
   `entered_by` VARCHAR(255),
   `note` TEXT,
   `is_demo` TINYINT(1) NOT NULL DEFAULT 0,
-  `created_at` DATETIME(3) NOT NULL,
+  `created_at` VARCHAR(40) NOT NULL,
     CONSTRAINT `fk_tank_measurements_tenant_id` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_tank_measurements_station_id` FOREIGN KEY (`station_id`) REFERENCES `stations` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_tank_measurements_tank_id` FOREIGN KEY (`tank_id`) REFERENCES `tanks` (`id`) ON DELETE RESTRICT
@@ -298,8 +299,8 @@ CREATE TABLE IF NOT EXISTS `dispensers` (
   `protocol` VARCHAR(255),
   `status` VARCHAR(255) NOT NULL DEFAULT 'ACTIVE',
   `is_demo` TINYINT(1) NOT NULL DEFAULT 0,
-  `created_at` DATETIME(3) NOT NULL,
-  `updated_at` DATETIME(3) NOT NULL,
+  `created_at` VARCHAR(40) NOT NULL,
+  `updated_at` VARCHAR(40) NOT NULL,
   UNIQUE KEY `uq_dispensers_station_id__code` (station_id, code),
   UNIQUE KEY `uq_dispensers_station_id__serial_number` (station_id, serial_number),
     CONSTRAINT `fk_dispensers_station_id` FOREIGN KEY (`station_id`) REFERENCES `stations` (`id`) ON DELETE RESTRICT
@@ -316,8 +317,8 @@ CREATE TABLE IF NOT EXISTS `nozzles` (
   `totalizer_unit` VARCHAR(255) NOT NULL DEFAULT 'L',
   `status` VARCHAR(255) NOT NULL DEFAULT 'ACTIVE',
   `is_demo` TINYINT(1) NOT NULL DEFAULT 0,
-  `created_at` DATETIME(3) NOT NULL,
-  `updated_at` DATETIME(3) NOT NULL,
+  `created_at` VARCHAR(40) NOT NULL,
+  `updated_at` VARCHAR(40) NOT NULL,
   UNIQUE KEY `uq_nozzles_dispenser_id__number` (dispenser_id, number),
     CONSTRAINT `fk_nozzles_station_id` FOREIGN KEY (`station_id`) REFERENCES `stations` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_nozzles_dispenser_id` FOREIGN KEY (`dispenser_id`) REFERENCES `dispensers` (`id`) ON DELETE RESTRICT,
@@ -340,13 +341,13 @@ CREATE TABLE IF NOT EXISTS `hardware_devices` (
   `api_key_hash` VARCHAR(255) NOT NULL,
   `api_key_prefix` VARCHAR(255) NOT NULL,
   `key_version` TINYINT(1) NOT NULL DEFAULT 1,
-  `last_heartbeat_at` DATETIME(3),
-  `last_sync_at` DATETIME(3),
+  `last_heartbeat_at` VARCHAR(40),
+  `last_sync_at` VARCHAR(40),
   `firmware_version` VARCHAR(255),
   `is_simulated` TINYINT(1) NOT NULL DEFAULT 1,
   `notes` TEXT,
-  `created_at` DATETIME(3) NOT NULL,
-  `updated_at` DATETIME(3) NOT NULL,
+  `created_at` VARCHAR(40) NOT NULL,
+  `updated_at` VARCHAR(40) NOT NULL,
     CONSTRAINT `fk_hardware_devices_tenant_id` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_hardware_devices_station_id` FOREIGN KEY (`station_id`) REFERENCES `stations` (`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -365,9 +366,9 @@ CREATE TABLE IF NOT EXISTS `device_credentials` (
   `version` INT NOT NULL,
   `status` VARCHAR(255) NOT NULL DEFAULT 'ACTIVE',
   `created_by` VARCHAR(255),
-  `created_at` DATETIME(3) NOT NULL,
-  `rotated_at` DATETIME(3),
-  `revoked_at` DATETIME(3),
+  `created_at` VARCHAR(40) NOT NULL,
+  `rotated_at` VARCHAR(40),
+  `revoked_at` VARCHAR(40),
   UNIQUE KEY `uq_device_credentials_device_id__version` (device_id, version),
     CONSTRAINT `fk_device_credentials_device_id` FOREIGN KEY (`device_id`) REFERENCES `hardware_devices` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -380,13 +381,13 @@ CREATE TABLE IF NOT EXISTS `device_events` (
   `event_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `event_type` VARCHAR(255) NOT NULL,
   `sequence` TINYINT(1) NOT NULL DEFAULT 0,
-  `occurred_at` DATETIME(3) NOT NULL,
-  `received_at` DATETIME(3) NOT NULL,
+  `occurred_at` VARCHAR(40) NOT NULL,
+  `received_at` VARCHAR(40) NOT NULL,
   `payload` TEXT NOT NULL,
   `payload_hash` VARCHAR(255) NOT NULL,
   `status` VARCHAR(255) NOT NULL DEFAULT 'RECEIVED',
   `error` VARCHAR(255),
-  `processed_at` DATETIME(3),
+  `processed_at` VARCHAR(40),
   `source_ip` VARCHAR(255),
   UNIQUE KEY `uq_device_events_device_id__event_id` (device_id, event_id),
     CONSTRAINT `fk_device_events_tenant_id` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
@@ -413,8 +414,8 @@ CREATE TABLE IF NOT EXISTS `device_error_logs` (
   `code` VARCHAR(255) NOT NULL,
   `message` TEXT NOT NULL,
   `detail` TEXT,
-  `created_at` DATETIME(3) NOT NULL,
-  `resolved_at` DATETIME(3),
+  `created_at` VARCHAR(40) NOT NULL,
+  `resolved_at` VARCHAR(40),
     CONSTRAINT `fk_device_error_logs_device_id` FOREIGN KEY (`device_id`) REFERENCES `hardware_devices` (`id`) ON DELETE CASCADE,
     CONSTRAINT `fk_device_error_logs_station_id` FOREIGN KEY (`station_id`) REFERENCES `stations` (`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -436,7 +437,7 @@ CREATE TABLE IF NOT EXISTS `meter_readings` (
   `unit` VARCHAR(255) NOT NULL,
   `source` VARCHAR(255) NOT NULL DEFAULT 'DEVICE',
   `quality` VARCHAR(255) NOT NULL DEFAULT 'VALID',
-  `reading_at` DATETIME(3) NOT NULL,
+  `reading_at` VARCHAR(40) NOT NULL,
   `sequence` TINYINT(1) NOT NULL DEFAULT 0,
   `delta_litres` VARCHAR(255),
   `previous_reading_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin,
@@ -444,7 +445,7 @@ CREATE TABLE IF NOT EXISTS `meter_readings` (
   `is_simulated` TINYINT(1) NOT NULL DEFAULT 0,
   `note` TEXT,
   `created_by` VARCHAR(255),
-  `created_at` DATETIME(3) NOT NULL,
+  `created_at` VARCHAR(40) NOT NULL,
     CONSTRAINT `fk_meter_readings_tenant_id` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_meter_readings_station_id` FOREIGN KEY (`station_id`) REFERENCES `stations` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_meter_readings_nozzle_id` FOREIGN KEY (`nozzle_id`) REFERENCES `nozzles` (`id`) ON DELETE RESTRICT,
@@ -471,8 +472,8 @@ CREATE TABLE IF NOT EXISTS `shifts` (
   `station_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `shift_number` INT NOT NULL,
   `business_date` DATE NOT NULL,
-  `opened_at` DATETIME(3) NOT NULL,
-  `closed_at` DATETIME(3),
+  `opened_at` VARCHAR(40) NOT NULL,
+  `closed_at` VARCHAR(40),
   `operator_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin,
   `opened_by` VARCHAR(255),
   `closed_by` VARCHAR(255),
@@ -486,10 +487,10 @@ CREATE TABLE IF NOT EXISTS `shifts` (
   `notes` TEXT,
   `close_notes` TEXT,
   `approved_by` VARCHAR(255),
-  `approved_at` DATETIME(3),
+  `approved_at` VARCHAR(40),
   `is_demo` TINYINT(1) NOT NULL DEFAULT 0,
-  `created_at` DATETIME(3) NOT NULL,
-  `updated_at` DATETIME(3) NOT NULL,
+  `created_at` VARCHAR(40) NOT NULL,
+  `updated_at` VARCHAR(40) NOT NULL,
   UNIQUE KEY `uq_shifts_station_id__business_date__shift_number` (station_id, business_date, shift_number),
     CONSTRAINT `fk_shifts_tenant_id` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_shifts_station_id` FOREIGN KEY (`station_id`) REFERENCES `stations` (`id`) ON DELETE RESTRICT,
@@ -525,8 +526,8 @@ CREATE TABLE IF NOT EXISTS `shift_nozzle_readings` (
   `adjustment_reason` TEXT,
   `status` VARCHAR(255) NOT NULL DEFAULT 'PENDING',
   `note` TEXT,
-  `created_at` DATETIME(3) NOT NULL,
-  `updated_at` DATETIME(3) NOT NULL,
+  `created_at` VARCHAR(40) NOT NULL,
+  `updated_at` VARCHAR(40) NOT NULL,
   UNIQUE KEY `uq_shift_nozzle_readings_shift_id__nozzle_id` (shift_id, nozzle_id),
     CONSTRAINT `fk_shift_nozzle_readings_shift_id` FOREIGN KEY (`shift_id`) REFERENCES `shifts` (`id`) ON DELETE CASCADE,
     CONSTRAINT `fk_shift_nozzle_readings_nozzle_id` FOREIGN KEY (`nozzle_id`) REFERENCES `nozzles` (`id`) ON DELETE RESTRICT,
@@ -553,17 +554,17 @@ CREATE TABLE IF NOT EXISTS `fuel_transactions` (
   `amount` VARCHAR(255) NOT NULL,
   `payment_mode` VARCHAR(255) NOT NULL DEFAULT 'CASH',
   `customer_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin,
-  `occurred_at` DATETIME(3) NOT NULL,
+  `occurred_at` VARCHAR(40) NOT NULL,
   `reference` VARCHAR(255),
   `source` VARCHAR(255) NOT NULL DEFAULT 'MANUAL',
   `is_estimated` TINYINT(1) NOT NULL DEFAULT 0,
   `is_demo` TINYINT(1) NOT NULL DEFAULT 0,
   `created_by` VARCHAR(255),
   `reversal_of` VARCHAR(255),
-  `voided_at` DATETIME(3),
+  `voided_at` VARCHAR(40),
   `void_reason` TEXT,
   `note` TEXT,
-  `created_at` DATETIME(3) NOT NULL,
+  `created_at` VARCHAR(40) NOT NULL,
   UNIQUE KEY `uq_fuel_transactions_tenant_id__reference` (tenant_id, reference),
     CONSTRAINT `fk_fuel_transactions_tenant_id` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_fuel_transactions_station_id` FOREIGN KEY (`station_id`) REFERENCES `stations` (`id`) ON DELETE RESTRICT,
@@ -598,8 +599,8 @@ CREATE TABLE IF NOT EXISTS `suppliers` (
   `opening_balance` VARCHAR(255) NOT NULL DEFAULT '0',
   `is_active` TINYINT(1) NOT NULL DEFAULT 1,
   `is_demo` TINYINT(1) NOT NULL DEFAULT 0,
-  `created_at` DATETIME(3) NOT NULL,
-  `updated_at` DATETIME(3) NOT NULL,
+  `created_at` VARCHAR(40) NOT NULL,
+  `updated_at` VARCHAR(40) NOT NULL,
   UNIQUE KEY `uq_suppliers_tenant_id__code` (tenant_id, code),
     CONSTRAINT `fk_suppliers_tenant_id` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -620,7 +621,7 @@ CREATE TABLE IF NOT EXISTS `deliveries` (
   `tax_amount` VARCHAR(255) NOT NULL DEFAULT '0',
   `total_amount` VARCHAR(255) NOT NULL,
   `status` VARCHAR(255) NOT NULL DEFAULT 'DRAFT',
-  `received_at` DATETIME(3),
+  `received_at` VARCHAR(40),
   `vehicle_number` VARCHAR(255),
   `driver_name` VARCHAR(255),
   `dip_before_cm` VARCHAR(255),
@@ -635,8 +636,8 @@ CREATE TABLE IF NOT EXISTS `deliveries` (
   `notes` TEXT,
   `is_demo` TINYINT(1) NOT NULL DEFAULT 0,
   `created_by` VARCHAR(255),
-  `created_at` DATETIME(3) NOT NULL,
-  `updated_at` DATETIME(3) NOT NULL,
+  `created_at` VARCHAR(40) NOT NULL,
+  `updated_at` VARCHAR(40) NOT NULL,
   UNIQUE KEY `uq_deliveries_tenant_id__supplier_id__invoice_number` (tenant_id, supplier_id, invoice_number),
     CONSTRAINT `fk_deliveries_tenant_id` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_deliveries_station_id` FOREIGN KEY (`station_id`) REFERENCES `stations` (`id`) ON DELETE RESTRICT,
@@ -661,11 +662,11 @@ CREATE TABLE IF NOT EXISTS `stock_movements` (
   `quantity_litres` VARCHAR(255) NOT NULL,
   `reference_type` VARCHAR(255),
   `reference_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin,
-  `occurred_at` DATETIME(3) NOT NULL,
+  `occurred_at` VARCHAR(40) NOT NULL,
   `note` TEXT,
   `created_by` VARCHAR(255),
   `is_demo` TINYINT(1) NOT NULL DEFAULT 0,
-  `created_at` DATETIME(3) NOT NULL,
+  `created_at` VARCHAR(40) NOT NULL,
     CONSTRAINT `fk_stock_movements_tenant_id` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_stock_movements_station_id` FOREIGN KEY (`station_id`) REFERENCES `stations` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_stock_movements_tank_id` FOREIGN KEY (`tank_id`) REFERENCES `tanks` (`id`) ON DELETE RESTRICT,
@@ -698,8 +699,8 @@ CREATE TABLE IF NOT EXISTS `customers` (
   `balance` VARCHAR(255) NOT NULL DEFAULT '0',
   `status` VARCHAR(255) NOT NULL DEFAULT 'ACTIVE',
   `is_demo` TINYINT(1) NOT NULL DEFAULT 0,
-  `created_at` DATETIME(3) NOT NULL,
-  `updated_at` DATETIME(3) NOT NULL,
+  `created_at` VARCHAR(40) NOT NULL,
+  `updated_at` VARCHAR(40) NOT NULL,
   UNIQUE KEY `uq_customers_tenant_id__code` (tenant_id, code),
     CONSTRAINT `fk_customers_tenant_id` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -718,14 +719,14 @@ CREATE TABLE IF NOT EXISTS `credit_entries` (
   `quantity_litres` VARCHAR(255),
   `rate_per_litre` VARCHAR(255),
   `reference` VARCHAR(255),
-  `occurred_at` DATETIME(3) NOT NULL,
+  `occurred_at` VARCHAR(40) NOT NULL,
   `due_date` DATE,
   `transaction_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin,
   `payment_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin,
   `note` TEXT,
   `status` VARCHAR(255) NOT NULL DEFAULT 'POSTED',
   `created_by` VARCHAR(255),
-  `created_at` DATETIME(3) NOT NULL,
+  `created_at` VARCHAR(40) NOT NULL,
     CONSTRAINT `fk_credit_entries_tenant_id` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_credit_entries_station_id` FOREIGN KEY (`station_id`) REFERENCES `stations` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_credit_entries_customer_id` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE RESTRICT,
@@ -749,18 +750,18 @@ CREATE TABLE IF NOT EXISTS `payments` (
   `amount` VARCHAR(255) NOT NULL,
   `mode` VARCHAR(255) NOT NULL DEFAULT 'CASH',
   `reference` VARCHAR(255),
-  `occurred_at` DATETIME(3) NOT NULL,
+  `occurred_at` VARCHAR(40) NOT NULL,
   `status` VARCHAR(255) NOT NULL DEFAULT 'POSTED',
   `settlement_ref` VARCHAR(255),
-  `settled_at` DATETIME(3),
+  `settled_at` VARCHAR(40),
   `notes` TEXT,
   `created_by` VARCHAR(255),
   `is_demo` TINYINT(1) NOT NULL DEFAULT 0,
-  `created_at` DATETIME(3) NOT NULL,
+  `created_at` VARCHAR(40) NOT NULL,
   UNIQUE KEY `uq_payments_tenant_id__reference` (tenant_id, reference),
     CONSTRAINT `fk_payments_tenant_id` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_payments_station_id` FOREIGN KEY (`station_id`) REFERENCES `stations` (`id`) ON DELETE RESTRICT,
-    CONSTRAINT `fk_payments_CUSTOMER` FOREIGN KEY (`CUSTOMER`) REFERENCES `customers` (`id`) ON DELETE RESTRICT,
+    CONSTRAINT `fk_payments_customer_id` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_payments_supplier_id` FOREIGN KEY (`supplier_id`) REFERENCES `suppliers` (`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -787,13 +788,13 @@ CREATE TABLE IF NOT EXISTS `expenses` (
   `category_name` VARCHAR(255) NOT NULL,
   `description` TEXT NOT NULL,
   `amount` VARCHAR(255) NOT NULL,
-  `occurred_at` DATETIME(3) NOT NULL,
+  `occurred_at` VARCHAR(40) NOT NULL,
   `paid_via` VARCHAR(255) NOT NULL DEFAULT 'CASH',
   `reference` VARCHAR(255),
   `note` TEXT,
   `created_by` VARCHAR(255),
   `is_demo` TINYINT(1) NOT NULL DEFAULT 0,
-  `created_at` DATETIME(3) NOT NULL,
+  `created_at` VARCHAR(40) NOT NULL,
     CONSTRAINT `fk_expenses_tenant_id` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_expenses_station_id` FOREIGN KEY (`station_id`) REFERENCES `stations` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_expenses_category_id` FOREIGN KEY (`category_id`) REFERENCES `expense_categories` (`id`) ON DELETE SET NULL
@@ -821,11 +822,11 @@ CREATE TABLE IF NOT EXISTS `reconciliations` (
   `notes` TEXT,
   `created_by` VARCHAR(255),
   `approved_by` VARCHAR(255),
-  `approved_at` DATETIME(3),
-  `created_at` DATETIME(3) NOT NULL,
+  `approved_at` VARCHAR(40),
+  `created_at` VARCHAR(40) NOT NULL,
     CONSTRAINT `fk_reconciliations_tenant_id` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_reconciliations_station_id` FOREIGN KEY (`station_id`) REFERENCES `stations` (`id`) ON DELETE RESTRICT,
-    CONSTRAINT `fk_reconciliations_CASH` FOREIGN KEY (`CASH`) REFERENCES `shifts` (`id`) ON DELETE SET NULL
+    CONSTRAINT `fk_reconciliations_shift_id` FOREIGN KEY (`shift_id`) REFERENCES `shifts` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 SET @exists := (SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'reconciliations' AND index_name = 'idx_reconciliations_station');
@@ -848,9 +849,9 @@ CREATE TABLE IF NOT EXISTS `audit_logs` (
   `before_data` TEXT,
   `after_data` TEXT,
   `ip` VARCHAR(255),
-  `user_agent` VARCHAR(255),
+  `user_agent` VARCHAR(2048),
   `is_demo` TINYINT(1) NOT NULL DEFAULT 0,
-  `created_at` DATETIME(3) NOT NULL
+  `created_at` VARCHAR(40) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 SET @exists := (SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'audit_logs' AND index_name = 'idx_audit_tenant');
@@ -874,8 +875,8 @@ CREATE TABLE IF NOT EXISTS `idempotency_keys` (
   `status` VARCHAR(255) NOT NULL DEFAULT 'COMPLETED',
   `response_status` INT,
   `response_body` TEXT,
-  `created_at` DATETIME(3) NOT NULL,
-  `expires_at` DATETIME(3) NOT NULL,
+  `created_at` VARCHAR(40) NOT NULL,
+  `expires_at` VARCHAR(40) NOT NULL,
   UNIQUE KEY `uq_idempotency_keys_tenant_id__scope__key` (tenant_id, scope, key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -886,7 +887,7 @@ CREATE TABLE IF NOT EXISTS `app_settings` (
   `key` VARCHAR(255) NOT NULL,
   `value` VARCHAR(255),
   `updated_by` VARCHAR(255),
-  `updated_at` DATETIME(3) NOT NULL,
+  `updated_at` VARCHAR(40) NOT NULL,
   UNIQUE KEY `uq_app_settings_tenant_id__station_id__key` (tenant_id, station_id, key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -898,8 +899,8 @@ CREATE TABLE IF NOT EXISTS `platform_errors` (
   `detail` TEXT,
   `path` VARCHAR(255),
   `severity` VARCHAR(255) NOT NULL DEFAULT 'ERROR',
-  `created_at` DATETIME(3) NOT NULL,
-  `resolved_at` DATETIME(3)
+  `created_at` VARCHAR(40) NOT NULL,
+  `resolved_at` VARCHAR(40)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 SET @exists := (SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'platform_errors' AND index_name = 'idx_platform_errors_created');
@@ -915,7 +916,7 @@ CREATE TABLE IF NOT EXISTS `density_checks` (
   `tank_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `product_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `business_date` DATE NOT NULL,
-  `checked_at` DATETIME(3) NOT NULL,
+  `checked_at` VARCHAR(40) NOT NULL,
   `observed_density` VARCHAR(255) NOT NULL,
   `observed_temp_c` VARCHAR(255) NOT NULL,
   `density_at_15c` VARCHAR(255) NOT NULL,
@@ -926,7 +927,7 @@ CREATE TABLE IF NOT EXISTS `density_checks` (
   `checked_by` VARCHAR(255),
   `note` TEXT,
   `is_demo` TINYINT(1) NOT NULL DEFAULT 0,
-  `created_at` DATETIME(3) NOT NULL,
+  `created_at` VARCHAR(40) NOT NULL,
     CONSTRAINT `fk_density_checks_tenant_id` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_density_checks_station_id` FOREIGN KEY (`station_id`) REFERENCES `stations` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_density_checks_tank_id` FOREIGN KEY (`tank_id`) REFERENCES `tanks` (`id`) ON DELETE RESTRICT,
@@ -959,7 +960,7 @@ CREATE TABLE IF NOT EXISTS `shift_settlements` (
   `received_amount` VARCHAR(255),
   `difference_amount` VARCHAR(255),
   `note` TEXT,
-  `created_at` DATETIME(3) NOT NULL,
+  `created_at` VARCHAR(40) NOT NULL,
   UNIQUE KEY `uq_shift_settlements_shift_id__mode` (shift_id, mode),
     CONSTRAINT `fk_shift_settlements_shift_id` FOREIGN KEY (`shift_id`) REFERENCES `shifts` (`id`) ON DELETE CASCADE,
     CONSTRAINT `fk_shift_settlements_tenant_id` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
@@ -979,12 +980,12 @@ CREATE TABLE IF NOT EXISTS `day_closings` (
   `business_date` DATE NOT NULL,
   `status` VARCHAR(255) NOT NULL DEFAULT 'CLOSED',
   `closed_by` VARCHAR(255),
-  `closed_at` DATETIME(3) NOT NULL,
+  `closed_at` VARCHAR(40) NOT NULL,
   `reopened_by` VARCHAR(255),
-  `reopened_at` DATETIME(3),
+  `reopened_at` VARCHAR(40),
   `reopen_reason` TEXT,
   `notes` TEXT,
-  `created_at` DATETIME(3) NOT NULL,
+  `created_at` VARCHAR(40) NOT NULL,
   UNIQUE KEY `uq_day_closings_station_id__business_date` (station_id, business_date),
     CONSTRAINT `fk_day_closings_tenant_id` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_day_closings_station_id` FOREIGN KEY (`station_id`) REFERENCES `stations` (`id`) ON DELETE RESTRICT
@@ -1004,8 +1005,8 @@ CREATE TABLE IF NOT EXISTS `customer_vehicles` (
   `vehicle_type` VARCHAR(255),
   `driver_name` VARCHAR(255),
   `is_active` TINYINT(1) NOT NULL DEFAULT 1,
-  `created_at` DATETIME(3) NOT NULL,
-  `updated_at` DATETIME(3) NOT NULL,
+  `created_at` VARCHAR(40) NOT NULL,
+  `updated_at` VARCHAR(40) NOT NULL,
   UNIQUE KEY `uq_customer_vehicles_customer_id__vehicle_number` (customer_id, vehicle_number),
     CONSTRAINT `fk_customer_vehicles_tenant_id` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_customer_vehicles_customer_id` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE CASCADE
@@ -1032,8 +1033,8 @@ CREATE TABLE IF NOT EXISTS `compliance_documents` (
   `renewal_lead_days` INT NOT NULL DEFAULT 30,
   `notes` TEXT,
   `is_demo` TINYINT(1) NOT NULL DEFAULT 0,
-  `created_at` DATETIME(3) NOT NULL,
-  `updated_at` DATETIME(3) NOT NULL,
+  `created_at` VARCHAR(40) NOT NULL,
+  `updated_at` VARCHAR(40) NOT NULL,
     CONSTRAINT `fk_compliance_documents_tenant_id` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_compliance_documents_station_id` FOREIGN KEY (`station_id`) REFERENCES `stations` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_compliance_documents_dispenser_id` FOREIGN KEY (`dispenser_id`) REFERENCES `dispensers` (`id`) ON DELETE SET NULL,
@@ -1059,8 +1060,8 @@ CREATE TABLE IF NOT EXISTS `lube_products` (
   `sale_rate` VARCHAR(255) NOT NULL DEFAULT '0',
   `is_active` TINYINT(1) NOT NULL DEFAULT 1,
   `is_demo` TINYINT(1) NOT NULL DEFAULT 0,
-  `created_at` DATETIME(3) NOT NULL,
-  `updated_at` DATETIME(3) NOT NULL,
+  `created_at` VARCHAR(40) NOT NULL,
+  `updated_at` VARCHAR(40) NOT NULL,
   UNIQUE KEY `uq_lube_products_tenant_id__code` (tenant_id, code),
     CONSTRAINT `fk_lube_products_tenant_id` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -1072,23 +1073,22 @@ CREATE TABLE IF NOT EXISTS `lube_movements` (
   `product_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `type` VARCHAR(255) NOT NULL,
   `quantity` VARCHAR(255) NOT NULL,
-  ,
-  - bahar rate TEXT NOT NULL DEFAULT '0',
+  `rate` VARCHAR(255) NOT NULL DEFAULT '0',
   `amount` VARCHAR(255) NOT NULL DEFAULT '0',
   `payment_mode` VARCHAR(255),
   `customer_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin,
   `vehicle_number` VARCHAR(255),
   `supplier_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin,
   `reference` VARCHAR(255),
-  `occurred_at` DATETIME(3) NOT NULL,
+  `occurred_at` VARCHAR(40) NOT NULL,
   `note` TEXT,
   `created_by` VARCHAR(255),
   `is_demo` TINYINT(1) NOT NULL DEFAULT 0,
-  `created_at` DATETIME(3) NOT NULL,
+  `created_at` VARCHAR(40) NOT NULL,
     CONSTRAINT `fk_lube_movements_tenant_id` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_lube_movements_station_id` FOREIGN KEY (`station_id`) REFERENCES `stations` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_lube_movements_product_id` FOREIGN KEY (`product_id`) REFERENCES `lube_products` (`id`) ON DELETE RESTRICT,
-    CONSTRAINT `fk_lube_movements_CASH` FOREIGN KEY (`CASH`) REFERENCES `customers` (`id`) ON DELETE SET NULL,
+    CONSTRAINT `fk_lube_movements_customer_id` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE SET NULL,
     CONSTRAINT `fk_lube_movements_supplier_id` FOREIGN KEY (`supplier_id`) REFERENCES `suppliers` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -1115,8 +1115,8 @@ CREATE TABLE IF NOT EXISTS `attendance_records` (
   `out_time` VARCHAR(255),
   `note` TEXT,
   `marked_by` VARCHAR(255),
-  `created_at` DATETIME(3) NOT NULL,
-  `updated_at` DATETIME(3) NOT NULL,
+  `created_at` VARCHAR(40) NOT NULL,
+  `updated_at` VARCHAR(40) NOT NULL,
   UNIQUE KEY `uq_attendance_records_user_id__attendance_date` (user_id, attendance_date),
     CONSTRAINT `fk_attendance_records_tenant_id` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_attendance_records_station_id` FOREIGN KEY (`station_id`) REFERENCES `stations` (`id`) ON DELETE RESTRICT,
@@ -1125,6 +1125,34 @@ CREATE TABLE IF NOT EXISTS `attendance_records` (
 
 SET @exists := (SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'attendance_records' AND index_name = 'idx_attendance_station_date');
 SET @ddl := IF(@exists = 0, 'ALTER TABLE `attendance_records` ADD INDEX `idx_attendance_station_date` (station_id, attendance_date)', 'DO 0');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+CREATE TABLE IF NOT EXISTS `customer_followups` (
+  `id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
+  `tenant_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `customer_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `station_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin,
+  `kind` VARCHAR(255) NOT NULL DEFAULT 'NOTE',
+  `note` TEXT NOT NULL,
+  `promised_amount` VARCHAR(255),
+  `next_on` DATE,
+  `created_by` VARCHAR(255),
+  `created_at` VARCHAR(40) NOT NULL,
+    CONSTRAINT `fk_customer_followups_tenant_id` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
+    CONSTRAINT `fk_customer_followups_customer_id` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE CASCADE,
+    CONSTRAINT `fk_customer_followups_station_id` FOREIGN KEY (`station_id`) REFERENCES `stations` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+SET @exists := (SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'customer_followups' AND index_name = 'idx_followups_customer');
+SET @ddl := IF(@exists = 0, 'ALTER TABLE `customer_followups` ADD INDEX `idx_followups_customer` (customer_id, created_at)', 'DO 0');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @exists := (SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'customer_followups' AND index_name = 'idx_followups_due');
+SET @ddl := IF(@exists = 0, 'ALTER TABLE `customer_followups` ADD INDEX `idx_followups_due` (tenant_id, next_on)', 'DO 0');
 PREPARE stmt FROM @ddl;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;

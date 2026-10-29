@@ -143,7 +143,7 @@ export function apiDelete<T>(path: string): Promise<T> {
 }
 
 /** Authenticated file download (CSV exports etc.) — same cookie/Bearer rules as request(). */
-export async function apiDownload(path: string, filename: string): Promise<void> {
+async function fetchBlob(path: string): Promise<Blob> {
   const previewToken = getPreviewSessionToken();
   const res = await fetch(`${BASE}${path}`, {
     credentials: 'include',
@@ -159,7 +159,16 @@ export async function apiDownload(path: string, filename: string): Promise<void>
     }
     throw new Error(message);
   }
-  const blob = await res.blob();
+  return res.blob();
+}
+
+export function apiBlob(path: string): Promise<Blob> {
+  return fetchBlob(path);
+}
+
+/** Authenticated file download (CSV exports etc.) — same cookie/Bearer rules as request(). */
+export async function apiDownload(path: string, filename: string): Promise<void> {
+  const blob = await fetchBlob(path);
   const url = URL.createObjectURL(blob);
   const anchorEl = document.createElement('a');
   anchorEl.href = url;

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { COMPLIANCE_DOC_TYPES } from '@petroflow/shared';
+import { COMPLIANCE_DOC_TYPES } from '../shared/index.js';
 import { all, get, run, shape } from '../db/index.js';
 import { asyncHandler, created, ok, parse } from '../lib/http.js';
 import { forbidden, notFound, unprocessable } from '../lib/errors.js';

@@ -1,4 +1,4 @@
-import { DENSITY_SPEC_KG_M3 } from '@petroflow/shared';
+import { DENSITY_SPEC_KG_M3 } from '../shared/index.js';
 import { D, Decimal } from './decimal.js';
 
 /**

@@ -12,7 +12,7 @@ import { evaluateDensity } from '../lib/density.js';
 import { assertDayOpen } from '../lib/dayclose.js';
 import { D, money, rate as fmtRate } from '../lib/decimal.js';
 import { recordMovement, signedLitres, stockByProduct, tankBookStock, tankSummary } from '../lib/stock.js';
-import { STOCK_VARIANCE_TOLERANCE_LITRES } from '@petroflow/shared';
+import { STOCK_VARIANCE_TOLERANCE_LITRES } from '../shared/index.js';
 
 export const inventoryRouter = Router();
 inventoryRouter.use(requireAuth);

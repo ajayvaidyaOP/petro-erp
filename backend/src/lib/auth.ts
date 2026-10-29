@@ -6,7 +6,7 @@ import { forbidden, unauthorized } from './errors.js';
 import { addHoursIso, nowIso } from './time.js';
 import { sha256, verifyPassword } from './security.js';
 import { newId } from './ids.js';
-import { permissionsForRole } from '@petroflow/shared';
+import { permissionsForRole, sanitizeStaffGrants } from '../shared/index.js';
 
 export interface PublicUser {
   id: string;
@@ -87,12 +87,26 @@ export function revokeUserSessions(userId: string) {
   run('UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL', [nowIso(), userId]);
 }
 
+function grantedPermissions(userId: string): string[] {
+  const row = get<{ granted_permissions: string | null }>('SELECT granted_permissions FROM users WHERE id = ?', [userId]);
+  if (!row?.granted_permissions) return [];
+  try {
+    return sanitizeStaffGrants(JSON.parse(row.granted_permissions));
+  } catch {
+    return [];
+  }
+}
+
 function buildContext(userId: string, sessionId: string): AuthContext | null {
   const user = publicUser(userId);
   if (!user || user.status !== 'ACTIVE') return null;
   const scope = roleScopeOf(user.roleKey);
   const rolePermissions = new Set<string>(permissionsForRole(user.roleKey));
   const permissions = new Set(rolePermissions);
+  // Staff access is an explicit grant on the user row. Station JSON can never add rights.
+  if (user.roleKey === 'STAFF') {
+    for (const permission of grantedPermissions(user.id)) permissions.add(permission);
+  }
   const access = user.tenantId
     ? all<{ station_id: string; permissions: string }>(
         'SELECT station_id, permissions FROM user_station_access WHERE user_id = ?',
@@ -102,6 +116,7 @@ function buildContext(userId: string, sessionId: string): AuthContext | null {
   for (const row of access) {
     try {
       const extra = JSON.parse(row.permissions);
+      // Intersection only: a forged station list cannot elevate a manager or a staff login.
       if (Array.isArray(extra)) for (const perm of extra) if (rolePermissions.has(String(perm))) permissions.add(String(perm));
     } catch {
       /* ignore malformed override list */
