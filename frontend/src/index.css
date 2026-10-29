@@ -2,10 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* PetroFlow Fuel-Tech Design System:
-   - Light theme: crisp white & cool-slate surfaces, steel-blue borders, deep slate ink, fuel emerald primary.
-   - Dark theme: midnight navy & deep blue-gray layered surfaces, steel-blue borders, luminous emerald primary.
-   Semantic token names are preserved across every screen. */
+/* PetroFlow Fuel-Tech Design System */
 @layer base {
   :root,
   [data-theme='light'] {
@@ -141,7 +138,12 @@
   }
 
   .input {
-    @apply min-h-10 w-full rounded-lg border border-navy-600/80 bg-navy-900 px-3 py-2 text-sm text-ink-100 placeholder:text-ink-500/80 transition focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/16 disabled:cursor-not-allowed disabled:opacity-60;
+    @apply min-h-10 w-full rounded-lg border border-navy-600/80 bg-navy-900 px-3 py-2 text-sm text-ink-100 placeholder:text-ink-500/80 transition focus:border-accent focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60;
+    box-shadow: none;
+  }
+
+  .input:focus {
+    box-shadow: var(--shadow-focus);
   }
 
   .select-input {
@@ -157,7 +159,13 @@
   }
 
   .nav-item-active {
-    @apply bg-accent/12 font-semibold text-accent hover:bg-accent/16 hover:text-accent;
+    @apply font-semibold text-accent;
+    background-color: rgb(var(--accent) / 0.12);
+  }
+
+  .nav-item-active:hover {
+    background-color: rgb(var(--accent) / 0.16);
+    color: rgb(var(--accent));
   }
 
   .nav-item-active::before {
@@ -201,7 +209,11 @@
   }
 
   .data-table tbody tr {
-    @apply transition-colors hover:bg-navy-800/45;
+    @apply transition-colors;
+  }
+
+  .data-table tbody tr:hover {
+    background-color: rgb(var(--navy-800) / 0.45);
   }
 
   .data-table tbody tr:last-child td {
@@ -243,19 +255,23 @@
   }
 
   .callout-ok {
-    @apply rounded-lg border border-ok/25 bg-ok/8 px-3.5 py-2.5 text-xs text-ok;
+    @apply rounded-lg border border-ok/25 px-3.5 py-2.5 text-xs text-ok;
+    background-color: rgb(var(--ok) / 0.08);
   }
 
   .callout-warn {
-    @apply rounded-lg border border-warn/25 bg-warn/8 px-3.5 py-2.5 text-xs text-warn;
+    @apply rounded-lg border border-warn/25 px-3.5 py-2.5 text-xs text-warn;
+    background-color: rgb(var(--warn) / 0.08);
   }
 
   .callout-danger {
-    @apply rounded-lg border border-danger/25 bg-danger/8 px-3.5 py-2.5 text-xs text-danger;
+    @apply rounded-lg border border-danger/25 px-3.5 py-2.5 text-xs text-danger;
+    background-color: rgb(var(--danger) / 0.08);
   }
 
   .callout-info {
-    @apply rounded-lg border border-info/25 bg-info/8 px-3.5 py-2.5 text-xs text-info;
+    @apply rounded-lg border border-info/25 px-3.5 py-2.5 text-xs text-info;
+    background-color: rgb(var(--info) / 0.08);
   }
 }
 
@@ -263,6 +279,7 @@
   .data-table thead th {
     @apply px-3 py-2;
   }
+
   .data-table tbody td {
     @apply px-3 py-2.5;
   }
@@ -275,6 +292,7 @@
     font-size: 16px;
     line-height: 1.5rem;
   }
+
   .btn-touch {
     min-height: 2.65rem;
   }
@@ -309,19 +327,23 @@
   .btn-touch {
     display: none !important;
   }
+
   main {
     max-width: none !important;
     padding: 0 !important;
   }
+
   body {
     background: white !important;
     color: #0f172a !important;
   }
+
   .card {
     break-inside: avoid;
     border-color: #cbd5e1 !important;
     box-shadow: none !important;
   }
+
   .table-wrap {
     overflow: visible !important;
   }
