@@ -231,7 +231,7 @@ export default function Customers() {
                         <td className={`num text-right ${balance > 0 ? 'text-warn' : 'text-ink-300'}`}>{formatINR(customer.balance)}</td>
                         <td className="w-36">
                           <div className="flex items-center gap-2">
-                            <div className="h-2 flex-1 overflow-hidden rounded-full bg-navy-800 ring-1 ring-inset ring-navy-700/60">
+                            <div className="h-2 flex-1 overflow-hidden rounded-full bg-carbon-800 ring-1 ring-inset ring-carbon-700/60">
                               <div className={`h-full rounded-full ${util > 90 ? 'bg-danger' : util > 70 ? 'bg-warn' : 'bg-accent'}`} style={{ width: `${util}%` }} />
                             </div>
                             <span className="num text-[10px] font-medium text-ink-500">{formatNumber(util, 0)}%</span>
@@ -351,8 +351,8 @@ export default function Customers() {
                 {formatINR(ledger.data.overdueAmount)} is past due — credit terms exceeded.
               </div>
             )}
-            <TableScrollHint className="rounded-t-lg border border-b-0 border-navy-700/60" />
-            <div className="table-wrap rounded-b-lg border border-t-0 border-navy-700/60">
+            <TableScrollHint className="rounded-t-lg border border-b-0 border-carbon-700/60" />
+            <div className="table-wrap rounded-b-lg border border-t-0 border-carbon-700/60">
               <table className="data-table min-w-[720px]">
                 <thead>
                   <tr><th>Date</th><th>Pump</th><th>Type</th><th>Reference</th><th>Due</th><th className="text-right">Amount</th><th className="text-right">Running</th></tr>
@@ -443,13 +443,13 @@ function VehiclesSection({ customerId, canWrite }: { customerId: string; canWrit
   });
 
   return (
-    <div className="rounded-lg border border-navy-700/75 bg-navy-900/55 p-3.5">
+    <div className="rounded-lg border border-carbon-700/75 bg-carbon-900/55 p-3.5">
       <p className="mb-2 flex items-center gap-1.5 text-xs font-bold text-ink-100">
         <Truck className="h-3.5 w-3.5 text-accent" /> Authorized fleet vehicles (credit slip whitelist)
       </p>
       <div className="flex flex-wrap gap-1.5">
         {(vehicles.data ?? []).map((v) => (
-          <span key={v.id} className="inline-flex items-center gap-1.5 rounded-full border border-navy-700 bg-navy-900 py-1 pl-2.5 pr-1 text-[11px] text-ink-200">
+          <span key={v.id} className="inline-flex items-center gap-1.5 rounded-full border border-carbon-700 bg-carbon-900 py-1 pl-2.5 pr-1 text-[11px] text-ink-200">
             <span className="font-mono font-semibold tracking-wide text-ink-100">{v.vehicleNumber}</span>
             <span className="text-ink-500">{v.vehicleType ?? ''}{v.driverName ? ` · ${v.driverName}` : ''}</span>
             {canWrite && (
@@ -524,8 +524,8 @@ function StatementModal({ open, onClose, customer }: { open: boolean; onClose: (
         ) : statement.isError ? (
           <ErrorState error={statement.error} onRetry={() => void statement.refetch()} />
         ) : data ? (
-          <div className="rounded-xl border border-navy-700 bg-navy-900/60 p-4 print-area">
-            <div className="flex flex-wrap justify-between gap-2 border-b border-navy-700 pb-3">
+          <div className="rounded-xl border border-carbon-700 bg-carbon-900/60 p-4 print-area">
+            <div className="flex flex-wrap justify-between gap-2 border-b border-carbon-700 pb-3">
               <div>
                 <p className="font-display text-lg font-bold text-ink-100">{data.customer.name}</p>
                 <p className="text-[11px] text-ink-500">
@@ -569,7 +569,7 @@ function StatementModal({ open, onClose, customer }: { open: boolean; onClose: (
                 </tbody>
               </table>
             </div>
-            <div className="mt-3 flex flex-wrap justify-end gap-5 border-t border-navy-700 pt-3 text-xs">
+            <div className="mt-3 flex flex-wrap justify-end gap-5 border-t border-carbon-700 pt-3 text-xs">
               <span className="text-ink-400">Total volume: <strong className="num text-ink-100">{formatNumber(data.lines.reduce((acc, line) => acc + Number(line.quantityLitres ?? 0), 0), 1)} L</strong></span>
               <span className="text-ink-400">Monthly credit sales: <strong className="num text-warn">{formatINR(data.totalSales)}</strong></span>
               <span className="text-ink-400">Receipts: <strong className="num text-ok">{formatINR(data.totalPayments)}</strong></span>

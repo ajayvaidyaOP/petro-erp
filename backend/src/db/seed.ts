@@ -260,11 +260,11 @@ export async function runSeed(options: { force?: boolean; legacyTestFixtures?: b
 
     // ---------------------------------------------------------- products ----
     const productSpecs = [
-      { tenant: tenantA, code: 'MS', name: 'Petrol (MS)', category: 'PETROL', color: '#38bdf8', rate: '106.31', prevRate: '105.94' },
-      { tenant: tenantA, code: 'HSD', name: 'Diesel (HSD)', category: 'DIESEL', color: '#34d399', rate: '94.27', prevRate: '93.88' },
-      { tenant: tenantA, code: 'XP95', name: 'Power Petrol XP95', category: 'PETROL', color: '#a78bfa', rate: '112.45', prevRate: '111.80' },
-      { tenant: tenantB, code: 'MS', name: 'Petrol (MS)', category: 'PETROL', color: '#38bdf8', rate: '107.05', prevRate: '106.60' },
-      { tenant: tenantB, code: 'HSD', name: 'Diesel (HSD)', category: 'DIESEL', color: '#34d399', rate: '95.12', prevRate: '94.75' },
+      { tenant: tenantA, code: 'MS', name: 'Petrol (MS)', category: 'PETROL', color: '#ea580c', rate: '106.31', prevRate: '105.94' },
+      { tenant: tenantA, code: 'HSD', name: 'Diesel (HSD)', category: 'DIESEL', color: '#15803d', rate: '94.27', prevRate: '93.88' },
+      { tenant: tenantA, code: 'XP95', name: 'Power Petrol XP95', category: 'PETROL', color: '#ca8a04', rate: '112.45', prevRate: '111.80' },
+      { tenant: tenantB, code: 'MS', name: 'Petrol (MS)', category: 'PETROL', color: '#ea580c', rate: '107.05', prevRate: '106.60' },
+      { tenant: tenantB, code: 'HSD', name: 'Diesel (HSD)', category: 'DIESEL', color: '#15803d', rate: '95.12', prevRate: '94.75' },
     ];
     const productIds: Record<string, string> = {};
     for (const product of productSpecs.filter((p) => legacyTestFixtures || p.tenant === tenantA)) {

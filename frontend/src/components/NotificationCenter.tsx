@@ -81,7 +81,7 @@ export function NotificationCenter() {
           'relative grid h-9.5 w-9.5 shrink-0 place-items-center rounded-xl border shadow-sheen transition-all duration-150',
           open
             ? 'border-accent/45 bg-accent/12 text-accent'
-            : 'border-navy-700/85 bg-navy-900 text-ink-400 hover:border-navy-600 hover:bg-navy-800 hover:text-ink-100',
+            : 'border-carbon-700/85 bg-carbon-900 text-ink-400 hover:border-carbon-600 hover:bg-carbon-800 hover:text-ink-100',
         )}
       >
         <Bell className="h-[17px] w-[17px]" aria-hidden />
@@ -89,8 +89,8 @@ export function NotificationCenter() {
           <span
             aria-hidden
             className={cn(
-              'num absolute -right-1 -top-1 grid h-[18px] min-w-[18px] place-items-center rounded-full border-2 border-navy-900 px-1 text-[10px] font-bold leading-none text-white shadow-sm',
-              hasError ? 'bg-danger' : 'bg-warn',
+              'num absolute -right-1 -top-1 grid h-[18px] min-w-[18px] place-items-center rounded-full border-2 border-carbon-900 px-1 text-[10px] font-bold leading-none shadow-sm',
+              hasError ? 'bg-danger text-ondanger' : 'bg-warn text-onwarn',
             )}
           >
             {count > 9 ? '9+' : count}
@@ -102,9 +102,9 @@ export function NotificationCenter() {
         <div
           role="dialog"
           aria-label="Notifications"
-          className="animate-scale-in absolute right-0 top-12 z-50 w-[min(392px,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-navy-700/90 bg-navy-850 shadow-pop"
+          className="animate-scale-in absolute right-0 top-12 z-50 w-[min(392px,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-carbon-700/90 bg-carbon-850 shadow-pop"
         >
-          <div className="hero-mesh flex items-start justify-between gap-3 border-b border-navy-700/75 bg-navy-900/65 px-4 py-3.5">
+          <div className="hero-mesh flex items-start justify-between gap-3 border-b border-carbon-700/75 bg-carbon-900/65 px-4 py-3.5">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <p className="font-display text-sm font-bold text-ink-100">Operational alerts</p>
@@ -124,7 +124,7 @@ export function NotificationCenter() {
               type="button"
               onClick={() => attention.refetch()}
               aria-label="Refresh notifications"
-              className="grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-navy-700/80 bg-navy-900 text-ink-400 transition hover:border-navy-600 hover:bg-navy-800 hover:text-ink-100"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-carbon-700/80 bg-carbon-900 text-ink-400 transition hover:border-carbon-600 hover:bg-carbon-800 hover:text-ink-100"
             >
               <RefreshCw className={cn('h-3.5 w-3.5', attention.isFetching && 'animate-spin')} aria-hidden />
             </button>
@@ -144,7 +144,7 @@ export function NotificationCenter() {
                 <p className="mt-0.5 text-[11px] text-ink-500">No open shift, tank, device or compliance alerts.</p>
               </div>
             ) : (
-              <ul className="divide-y divide-navy-700/55">
+              <ul className="divide-y divide-carbon-700/55">
                 {attention.items.map((item) => {
                   const style = levelStyle[item.level];
                   const Icon = style.icon;
@@ -177,7 +177,7 @@ export function NotificationCenter() {
                       {item.to ? (
                         <Link
                           to={item.to}
-                          className="group flex items-start gap-3 px-4 py-3.5 transition hover:bg-navy-800/70"
+                          className="group flex items-start gap-3 px-4 py-3.5 transition hover:bg-carbon-800/70"
                         >
                           {body}
                         </Link>
@@ -191,7 +191,7 @@ export function NotificationCenter() {
             )}
           </div>
 
-          <div className="flex items-center justify-between border-t border-navy-700/75 bg-navy-900/55 px-4 py-2.5 text-[10.5px] text-ink-500">
+          <div className="flex items-center justify-between border-t border-carbon-700/75 bg-carbon-900/55 px-4 py-2.5 text-[10.5px] text-ink-500">
             <span>{updated ? `Synced ${timeAgo(updated)}` : 'Live status'}</span>
             <span>Auto-resolves when cleared</span>
           </div>

@@ -149,7 +149,7 @@ const productRouter = makeCrudRouter({
     name: z.string().min(2).max(80),
     category: z.enum(['PETROL', 'DIESEL', 'CNG', 'LUBRICANT']).default('PETROL'),
     unit: z.string().max(6).default('L'),
-    color: z.string().max(20).default('#38bdf8'),
+    color: z.string().max(20).default('#ea580c'),
     isActive: z.boolean().optional(),
   }),
   updateSchema: z.object({

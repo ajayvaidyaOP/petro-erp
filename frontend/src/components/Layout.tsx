@@ -111,7 +111,7 @@ const GROUP_ORDER: NavigationGroup[] = [
 function Brand({ collapsed = false }: { collapsed?: boolean }) {
   return (
     <div className={cn('flex items-center gap-3', collapsed && 'justify-center')}>
-      <span className="brand-gradient relative grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-2xl text-onaccent shadow-glow ring-1 ring-accent/30">
+      <span className="brand-gradient relative grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-2xl text-onbrand shadow-glow ring-1 ring-accent/30">
         <span aria-hidden className="absolute inset-0 bg-[linear-gradient(145deg,rgb(255_255_255/0.32),transparent_55%)]" />
         <Fuel className="relative h-[19px] w-[19px]" strokeWidth={2.3} aria-hidden />
       </span>
@@ -237,7 +237,7 @@ function SectionNav() {
   return (
     <nav
       aria-label={`${section.label} sections`}
-      className="mb-6 flex max-w-full items-center gap-1 overflow-x-auto rounded-2xl border border-navy-700/80 bg-navy-900/90 p-1.5 shadow-card backdrop-blur-md scroll-thin"
+      className="mb-6 flex max-w-full items-center gap-1 overflow-x-auto rounded-2xl border border-carbon-700/80 bg-carbon-900/90 p-1.5 shadow-card backdrop-blur-md scroll-thin"
     >
       {children.map((item) => (
         <NavLink
@@ -248,7 +248,7 @@ function SectionNav() {
               'inline-flex items-center gap-2 whitespace-nowrap rounded-xl px-3.5 py-1.5 text-xs font-semibold transition-all duration-150',
               isActive
                 ? 'border border-accent/30 bg-accent/12 text-accent shadow-sm'
-                : 'border border-transparent text-ink-400 hover:bg-navy-800/85 hover:text-ink-100',
+                : 'border border-transparent text-ink-400 hover:bg-carbon-800/85 hover:text-ink-100',
             )
           }
         >
@@ -271,7 +271,7 @@ function MobileNav({ onMenu }: { onMenu: () => void }) {
   return (
     <nav
       aria-label="Quick navigation"
-      className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-navy-700/80 bg-navy-900/95 px-1 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_-12px_rgb(0_0_0/0.2)] backdrop-blur-xl md:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-carbon-700/80 bg-carbon-900/95 px-1 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_-12px_rgb(0_0_0/0.2)] backdrop-blur-xl md:hidden"
     >
       {items.map((item) => {
         const active = activeSection(pathname)?.to === item.to;
@@ -317,7 +317,7 @@ function ThemeToggle() {
       onClick={toggleTheme}
       title={label}
       aria-label={label}
-      className="grid h-9.5 w-9.5 shrink-0 place-items-center rounded-xl border border-navy-700/85 bg-navy-900 text-ink-400 shadow-sheen transition-all duration-150 hover:border-navy-600 hover:bg-navy-800 hover:text-ink-100"
+      className="grid h-9.5 w-9.5 shrink-0 place-items-center rounded-xl border border-carbon-700/85 bg-carbon-900 text-ink-400 shadow-sheen transition-all duration-150 hover:border-carbon-600 hover:bg-carbon-800 hover:text-ink-100"
     >
       {theme === 'dark' ? <Sun className="h-[17px] w-[17px]" /> : <Moon className="h-[17px] w-[17px]" />}
     </button>
@@ -337,12 +337,12 @@ function HeaderShiftContext() {
   return (
     <Link
       to="/shifts"
-      className="hidden items-center gap-2 rounded-xl border border-navy-700/85 bg-navy-900 px-3 py-1.5 text-xs shadow-sheen transition hover:border-accent/45 hover:bg-navy-800/80 2xl:inline-flex"
+      className="hidden items-center gap-2 rounded-xl border border-carbon-700/85 bg-carbon-900 px-3 py-1.5 text-xs shadow-sheen transition hover:border-accent/45 hover:bg-carbon-800/80 2xl:inline-flex"
       title="Business date (IST) and active forecourt shift"
     >
       <Calendar className="h-3.5 w-3.5 shrink-0 text-ink-500" aria-hidden />
       <span className="num font-medium text-ink-300">{formatDate(businessDate)}</span>
-      <span className="h-3.5 w-px bg-navy-700" aria-hidden />
+      <span className="h-3.5 w-px bg-carbon-700" aria-hidden />
       <span className="flex items-center gap-1.5 font-semibold">
         <span
           className={cn(
@@ -494,7 +494,7 @@ export function Layout() {
           value={station?.id ?? ''}
           onChange={(event) => selectStation(event.target.value)}
           aria-label="Active station"
-          className="select-input min-h-9.5 min-w-0 w-full cursor-pointer appearance-none truncate rounded-xl border border-navy-700/85 bg-navy-900 py-1.5 pl-8 pr-7 text-xs font-semibold text-ink-100 shadow-sheen transition hover:border-navy-600 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/15"
+          className="select-input min-h-9.5 min-w-0 w-full cursor-pointer appearance-none truncate rounded-xl border border-carbon-700/85 bg-carbon-900 py-1.5 pl-8 pr-7 text-xs font-semibold text-ink-100 shadow-sheen transition hover:border-carbon-600 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/15"
         >
           {stations.map((item) => (
             <option key={item.id} value={item.id}>
@@ -506,7 +506,7 @@ export function Layout() {
     ) : null;
 
   return (
-    <div className="flex min-h-dvh bg-navy-950">
+    <div className="flex min-h-dvh bg-carbon-950">
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[70] focus:rounded-xl focus:bg-accent focus:px-4 focus:py-2 focus:text-onaccent"
@@ -517,13 +517,13 @@ export function Layout() {
       {/* Desktop Sidebar */}
       <aside
         className={cn(
-          'sidebar-surface sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-navy-700/60 transition-[width] duration-200 ease-smooth md:flex',
+          'sidebar-surface sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-carbon-700/60 transition-[width] duration-200 ease-smooth md:flex',
           collapsed ? 'w-[74px]' : 'w-[254px] xl:w-[264px]',
         )}
       >
         <div
           className={cn(
-            'flex h-[68px] shrink-0 items-center border-b border-navy-700/65',
+            'flex h-[68px] shrink-0 items-center border-b border-carbon-700/65',
             collapsed ? 'justify-center px-2' : 'justify-between px-4',
           )}
         >
@@ -534,7 +534,7 @@ export function Layout() {
               onClick={toggleCollapsed}
               title="Collapse sidebar"
               aria-label="Collapse sidebar"
-              className="grid h-8 w-8 place-items-center rounded-xl text-ink-500 transition hover:bg-navy-800 hover:text-ink-100"
+              className="grid h-8 w-8 place-items-center rounded-xl text-ink-500 transition hover:bg-carbon-800 hover:text-ink-100"
             >
               <PanelLeftClose className="h-4 w-4" />
             </button>
@@ -564,7 +564,7 @@ export function Layout() {
 
         <div
           className={cn(
-            'flex items-center border-t border-navy-700/65 py-2.5 text-[10.5px] text-ink-500',
+            'flex items-center border-t border-carbon-700/65 py-2.5 text-[10.5px] text-ink-500',
             collapsed ? 'justify-center px-2' : 'justify-between px-4',
           )}
         >
@@ -574,7 +574,7 @@ export function Layout() {
               onClick={toggleCollapsed}
               title="Expand sidebar"
               aria-label="Expand sidebar"
-              className="grid h-8 w-8 place-items-center rounded-xl text-ink-400 transition hover:bg-navy-800 hover:text-ink-100"
+              className="grid h-8 w-8 place-items-center rounded-xl text-ink-400 transition hover:bg-carbon-800 hover:text-ink-100"
             >
               <PanelLeftOpen className="h-4 w-4" />
             </button>
@@ -599,21 +599,21 @@ export function Layout() {
             role="dialog"
             aria-modal="true"
             aria-label="Navigation menu"
-            className="sidebar-surface relative flex h-dvh w-[292px] max-w-[88vw] flex-col border-r border-navy-700 shadow-pop"
+            className="sidebar-surface relative flex h-dvh w-[292px] max-w-[88vw] flex-col border-r border-carbon-700 shadow-pop"
           >
-            <div className="flex items-center justify-between border-b border-navy-700/70 px-4 py-4">
+            <div className="flex items-center justify-between border-b border-carbon-700/70 px-4 py-4">
               <Brand />
               <button
                 onClick={() => setMobileOpen(false)}
                 aria-label="Close menu"
-                className="grid h-9 w-9 place-items-center rounded-xl text-ink-400 hover:bg-navy-800 hover:text-ink-100"
+                className="grid h-9 w-9 place-items-center rounded-xl text-ink-400 hover:bg-carbon-800 hover:text-ink-100"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="border-b border-navy-700/60 px-4 py-3">{stationPicker(true)}</div>
+            <div className="border-b border-carbon-700/60 px-4 py-3">{stationPicker(true)}</div>
             <PrimaryNav onNavigate={() => setMobileOpen(false)} />
-            <div className="border-t border-navy-700/70 bg-navy-850 p-4">
+            <div className="border-t border-carbon-700/70 bg-carbon-850 p-4">
               <p className="font-display text-sm font-bold text-ink-100">{me?.user.name}</p>
               <p className="mt-0.5 text-xs text-ink-500">
                 {me?.user.roleName} · {me?.tenant?.name}
@@ -634,11 +634,11 @@ export function Layout() {
 
       {/* Main Content Shell */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-[62px] items-center gap-2 border-b border-navy-700/75 bg-navy-900/85 px-3 backdrop-blur-xl sm:gap-2.5 sm:px-6 md:h-[68px] lg:px-8">
+        <header className="sticky top-0 z-30 flex h-[62px] items-center gap-2 border-b border-carbon-700/75 bg-carbon-900/85 px-3 backdrop-blur-xl sm:gap-2.5 sm:px-6 md:h-[68px] lg:px-8">
           {/* Organization & Section Context */}
           <div className="min-w-0 flex-1">
             <div className="hidden items-center gap-2 text-xs md:flex">
-              <span className="inline-flex min-w-0 items-center gap-1.5 rounded-lg bg-navy-800/70 px-2 py-1 font-medium text-ink-400">
+              <span className="inline-flex min-w-0 items-center gap-1.5 rounded-lg bg-carbon-800/70 px-2 py-1 font-medium text-ink-400">
                 <Building2 className="h-3.5 w-3.5 shrink-0 text-accent" aria-hidden />
                 <span className="max-w-[165px] truncate lg:max-w-[225px]">
                   {me?.tenant?.name ?? 'Platform Administration'}
@@ -679,7 +679,7 @@ export function Layout() {
             onClick={() => setCommandOpen(true)}
             aria-label="Open command palette"
             title="Quick jump & actions (⌘K)"
-            className="hidden h-9.5 items-center gap-2.5 rounded-xl border border-navy-700/85 bg-navy-900 px-3 text-xs text-ink-400 shadow-sheen transition hover:border-accent/45 hover:bg-navy-800/80 hover:text-ink-100 lg:inline-flex"
+            className="hidden h-9.5 items-center gap-2.5 rounded-xl border border-carbon-700/85 bg-carbon-900 px-3 text-xs text-ink-400 shadow-sheen transition hover:border-accent/45 hover:bg-carbon-800/80 hover:text-ink-100 lg:inline-flex"
           >
             <Search className="h-3.5 w-3.5 text-ink-500" aria-hidden />
             <span className="font-medium">Quick jump…</span>
@@ -698,7 +698,7 @@ export function Layout() {
               type="button"
               onClick={() => setCommandOpen(true)}
               aria-label="Open command palette"
-              className="grid h-9.5 w-9.5 shrink-0 place-items-center rounded-xl border border-navy-700/85 bg-navy-900 text-ink-400 shadow-sheen transition hover:border-navy-600 hover:bg-navy-800 hover:text-ink-100 lg:hidden"
+              className="grid h-9.5 w-9.5 shrink-0 place-items-center rounded-xl border border-carbon-700/85 bg-carbon-900 text-ink-400 shadow-sheen transition hover:border-carbon-600 hover:bg-carbon-800 hover:text-ink-100 lg:hidden"
             >
               <Search className="h-[16px] w-[16px]" aria-hidden />
             </button>
@@ -713,13 +713,13 @@ export function Layout() {
                   'flex h-9.5 items-center gap-2 rounded-xl border px-1.5 shadow-sheen transition-all duration-150',
                   userMenu
                     ? 'border-accent/45 bg-accent/10'
-                    : 'border-navy-700/85 bg-navy-900 hover:border-navy-600 hover:bg-navy-800',
+                    : 'border-carbon-700/85 bg-carbon-900 hover:border-carbon-600 hover:bg-carbon-800',
                 )}
                 aria-haspopup="menu"
                 aria-expanded={userMenu}
                 aria-label="Account menu"
               >
-                <span className="brand-gradient grid h-7 w-7 shrink-0 place-items-center rounded-lg font-display text-[11px] font-extrabold text-onaccent shadow-sm">
+                <span className="brand-gradient grid h-7 w-7 shrink-0 place-items-center rounded-lg font-display text-[11px] font-extrabold text-onbrand shadow-sm">
                   {initials(me?.user.name ?? '')}
                 </span>
                 <span className="hidden text-left xl:block">
@@ -736,9 +736,9 @@ export function Layout() {
               {userMenu && (
                 <div
                   role="menu"
-                  className="animate-scale-in absolute right-0 top-12 z-50 w-64 overflow-hidden rounded-2xl border border-navy-700/90 bg-navy-850 shadow-pop"
+                  className="animate-scale-in absolute right-0 top-12 z-50 w-64 overflow-hidden rounded-2xl border border-carbon-700/90 bg-carbon-850 shadow-pop"
                 >
-                  <div className="hero-mesh border-b border-navy-700/75 bg-navy-900/60 px-4 py-3.5">
+                  <div className="hero-mesh border-b border-carbon-700/75 bg-carbon-900/60 px-4 py-3.5">
                     <div className="flex items-center justify-between gap-2">
                       <p className="truncate font-display text-sm font-bold text-ink-100">{me?.user.name}</p>
                       <span className="rounded-full border border-accent/25 bg-accent/10 px-2 py-0.5 text-[10px] font-bold text-accent">
@@ -783,7 +783,7 @@ export function Layout() {
           </div>
         </main>
 
-        <footer className="hidden items-center justify-between gap-3 border-t border-navy-700/65 bg-navy-900/60 px-8 py-3 text-[11px] text-ink-500 backdrop-blur-md md:flex">
+        <footer className="hidden items-center justify-between gap-3 border-t border-carbon-700/65 bg-carbon-900/60 px-8 py-3 text-[11px] text-ink-500 backdrop-blur-md md:flex">
           <span>
             PetroFlow · Fuel station management
             {isDemoTenant ? ' · Demo workspace' : ''}
@@ -792,7 +792,7 @@ export function Layout() {
             <span className="hidden items-center gap-1 text-ink-400 lg:inline-flex">
               <kbd className="kbd">⌘K</kbd> Quick jump
             </span>
-            <span className="hidden h-3 w-px bg-navy-700 lg:inline-block" aria-hidden />
+            <span className="hidden h-3 w-px bg-carbon-700 lg:inline-block" aria-hidden />
             <span className="flex items-center gap-1.5">
               <span className="h-1.5 w-1.5 rounded-full bg-ok" aria-hidden />
               <span>INR Ledger · Asia/Kolkata (IST)</span>

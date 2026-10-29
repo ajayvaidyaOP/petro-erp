@@ -95,7 +95,7 @@ React 18 + Vite + Tailwind, no component library. Route-level `React.lazy` per s
 `lib/api.ts` client that speaks relative `/api/v1` paths.
 
 **Theming is token-only.** `index.css` declares semantic CSS custom properties
-(`navy-*` surfaces, `ink-*` text, `accent*`, `panel-*` brand ink, `ok/warn/danger/info`)
+(`carbon-*` surfaces, `ink-*` text, `accent*`, `panel-*` brand ink, `ok/warn/danger/info`)
 as space-separated RGB channels so Tailwind's `/opacity` modifiers keep working.
 `tailwind.config.js` maps them to utility classes; components never reference a raw shade.
 Switching `data-theme` on `<html>` re-tints everything, including Recharts (whose palettes

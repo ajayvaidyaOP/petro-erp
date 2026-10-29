@@ -327,7 +327,7 @@ export default function Devices() {
               <p className="col-span-2 text-ink-500">No events received yet.</p>
             ) : (
               Object.entries(diagnostics.data?.eventCounts ?? {}).map(([status, count]) => (
-                <div key={status} className="rounded-lg border border-navy-700/60 bg-navy-900/40 p-3">
+                <div key={status} className="rounded-lg border border-carbon-700/60 bg-carbon-900/40 p-3">
                   <p className="text-[11px] uppercase tracking-wider text-ink-500">{status}</p>
                   <p className="num mt-1 text-lg text-ink-100">{count}</p>
                 </div>
@@ -423,7 +423,7 @@ export default function Devices() {
         footer={<Button onClick={() => setIssuedKey(null)}>I have stored this key</Button>}
       >
         <div className="space-y-3">
-          <div className="rounded-lg border border-navy-700 bg-inset p-3">
+          <div className="rounded-lg border border-carbon-700 bg-inset p-3">
             <p className="text-[11px] uppercase tracking-wider text-ink-500">API key for {issuedKey?.device}</p>
             <code className="mt-1 block break-all font-mono text-sm text-accent">{issuedKey?.apiKey}</code>
           </div>

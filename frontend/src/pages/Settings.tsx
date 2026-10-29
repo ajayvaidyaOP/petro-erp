@@ -111,8 +111,8 @@ export default function Settings() {
           { to: '/audit', label: 'Activity & audit log', text: 'A traceable history of every change', icon: CheckCircle2, permission: 'audit.read' },
         ].filter((item) => can(item.permission)).map((item) => <Link key={item.to} to={item.to} className="quick-action"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent/10 text-accent"><item.icon className="h-4 w-4" /></span><span><span className="block text-xs font-semibold text-ink-100">{item.label}</span><span className="mt-1 block text-[11px] leading-relaxed text-ink-500">{item.text}</span></span><ArrowUpRight className="ml-auto h-3.5 w-3.5 shrink-0 text-ink-500" /></Link>)}
       </div>
-      {can('billing.read') && <Link to="/billing" className="mb-5 flex items-center justify-between rounded-xl border border-navy-700/70 px-4 py-3 text-xs text-ink-400"><span>Subscription & plan details</span><ArrowUpRight className="h-4 w-4 text-accent" /></Link>}
-      <details className="card group mb-5"><summary className="flex min-h-14 cursor-pointer list-none items-center justify-between px-5 py-4 text-sm font-semibold text-ink-200">Advanced settings & diagnostics <ChevronDown className="h-4 w-4 transition group-open:rotate-180" /></summary><div className="border-t border-navy-700/60 p-4">
+      {can('billing.read') && <Link to="/billing" className="mb-5 flex items-center justify-between rounded-xl border border-carbon-700/70 px-4 py-3 text-xs text-ink-400"><span>Subscription & plan details</span><ArrowUpRight className="h-4 w-4 text-accent" /></Link>}
+      <details className="card group mb-5"><summary className="flex min-h-14 cursor-pointer list-none items-center justify-between px-5 py-4 text-sm font-semibold text-ink-200">Advanced settings & diagnostics <ChevronDown className="h-4 w-4 transition group-open:rotate-180" /></summary><div className="border-t border-carbon-700/60 p-4">
       <div className="mb-4 grid gap-3 sm:grid-cols-4">
         <StatCard label="Environment" value={diagnostics.data?.application.environment ?? '—'} icon={<Server className="h-4 w-4" />} />
         <StatCard label="API version" value={diagnostics.data?.application.apiVersion ?? '—'} hint={diagnostics.data?.application.version} />
@@ -137,7 +137,7 @@ export default function Settings() {
             {entries.map(([key, spec]) => {
               const disabled = spec.scope === 'tenant' || !can('settings.write');
               return (
-                <div key={key} className="rounded-lg border border-navy-700/60 bg-navy-900/30 p-3">
+                <div key={key} className="rounded-lg border border-carbon-700/60 bg-carbon-900/30 p-3">
                   <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm font-medium text-ink-100">{spec.label}</p>
                     <div className="flex gap-1">
@@ -209,7 +209,7 @@ export default function Settings() {
               <p>{diagnostics.data?.hardware.note}</p>
               <div className="grid grid-cols-2 gap-2">
                 {Object.entries(diagnostics.data?.hardware.eventStates ?? {}).map(([state, count]) => (
-                  <div key={state} className="rounded border border-navy-700/60 p-2 text-xs">
+                  <div key={state} className="rounded border border-carbon-700/60 p-2 text-xs">
                     <span className="text-ink-500">{state}</span>
                     <p className="num text-ink-200">{count}</p>
                   </div>

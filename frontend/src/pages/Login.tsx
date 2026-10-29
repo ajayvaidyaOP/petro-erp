@@ -20,6 +20,7 @@ import {
   Users,
 } from 'lucide-react';
 import { apiGet } from '../lib/api';
+import { cn } from '../lib/utils';
 import { useAuth } from '../lib/auth';
 import { useTheme } from '../lib/theme';
 import { Button, Input } from '../components/ui';
@@ -37,9 +38,9 @@ interface DemoAccounts {
 }
 
 const PILLARS = [
-  { icon: Activity, label: 'Shifts & readings', detail: 'Every nozzle accounted for' },
-  { icon: Database, label: 'Stock & deliveries', detail: 'Know what’s in every tank' },
-  { icon: Scale, label: 'Sales & settlement', detail: 'Keep every rupee in view' },
+  { icon: Activity, label: 'Shifts & readings', detail: 'Every nozzle accounted for', tone: 'text-panel-energy' },
+  { icon: Database, label: 'Stock & deliveries', detail: 'Know what’s in every tank', tone: 'text-live' },
+  { icon: Scale, label: 'Sales & settlement', detail: 'Keep every rupee in view', tone: 'text-panel-energy' },
 ];
 
 export default function Login() {
@@ -92,15 +93,15 @@ export default function Login() {
   };
 
   return (
-    <div className="grid min-h-dvh bg-navy-950 lg:grid-cols-[1.12fr_1fr]">
+    <div className="grid min-h-dvh bg-carbon-950 lg:grid-cols-[1.12fr_1fr]">
       {/* Brand illustration is decorative; no sample figures are presented as live data. */}
       <section className="relative hidden min-h-dvh flex-col overflow-hidden bg-panel px-10 py-9 text-panel-text lg:flex xl:px-14 xl:py-11">
-        <div aria-hidden className="pointer-events-none absolute -right-32 -top-40 h-[430px] w-[430px] rounded-full bg-blue-500/20 blur-[100px]" />
-        <div aria-hidden className="pointer-events-none absolute -bottom-48 -left-20 h-[380px] w-[380px] rounded-full bg-orange-500/10 blur-[110px]" />
+        <div aria-hidden className="pointer-events-none absolute -right-32 -top-40 h-[430px] w-[430px] rounded-full bg-orange-500/25 blur-[100px]" />
+        <div aria-hidden className="pointer-events-none absolute -bottom-48 -left-20 h-[380px] w-[380px] rounded-full bg-emerald-500/12 blur-[110px]" />
 
         <div className="relative flex items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
-            <span className="brand-gradient grid h-11 w-11 place-items-center rounded-2xl text-onaccent shadow-glow">
+            <span className="brand-gradient grid h-11 w-11 place-items-center rounded-2xl text-onbrand shadow-glow">
               <Fuel className="h-5 w-5" strokeWidth={2.3} aria-hidden />
             </span>
             <div>
@@ -110,7 +111,8 @@ export default function Login() {
               <p className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-panel-dim">Fuel station ERP</p>
             </div>
           </div>
-          <span className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-panel-muted">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-panel-muted">
+            <span className="h-1.5 w-1.5 rounded-full bg-live" aria-hidden />
             Made for fuel retail
           </span>
         </div>
@@ -143,7 +145,7 @@ export default function Login() {
           <div className="mt-5 grid grid-cols-3 gap-2.5">
             {PILLARS.map((item) => (
               <div key={item.label} className="rounded-xl border border-white/10 bg-white/5 px-3 py-3">
-                <item.icon className="h-4 w-4 text-panel-energy" aria-hidden />
+                <item.icon className={cn('h-4 w-4', item.tone)} aria-hidden />
                 <p className="mt-2 text-xs font-bold text-panel-text">{item.label}</p>
                 <p className="mt-1 text-[10.5px] leading-snug text-panel-muted">{item.detail}</p>
               </div>
@@ -153,7 +155,7 @@ export default function Login() {
 
         <div className="relative flex items-center justify-between gap-4 border-t border-white/10 pt-4 text-xs text-panel-muted">
           <span className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 shrink-0 text-panel-energy" aria-hidden />
+            <ShieldCheck className="h-4 w-4 shrink-0 text-live" aria-hidden />
             Thoughtfully built for Indian fuel retailers
           </span>
           <span className="font-mono text-[10px] font-semibold text-panel-dim">IST · INR</span>
@@ -168,7 +170,7 @@ export default function Login() {
             onClick={toggleTheme}
             title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
             aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-            className="grid h-9.5 w-9.5 place-items-center rounded-xl border border-navy-700/85 bg-navy-900 text-ink-400 shadow-sheen transition hover:border-navy-600 hover:bg-navy-800 hover:text-ink-100"
+            className="grid h-9.5 w-9.5 place-items-center rounded-xl border border-carbon-700/85 bg-carbon-900 text-ink-400 shadow-sheen transition hover:border-carbon-600 hover:bg-carbon-800 hover:text-ink-100"
           >
             {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>
@@ -176,7 +178,7 @@ export default function Login() {
 
         <div className="mx-auto w-full max-w-[430px]">
           <div className="mb-8 flex items-center gap-3 lg:hidden">
-            <span className="brand-gradient relative grid h-11 w-11 place-items-center overflow-hidden rounded-2xl text-onaccent shadow-glow">
+            <span className="brand-gradient relative grid h-11 w-11 place-items-center overflow-hidden rounded-2xl text-onbrand shadow-glow">
               <Fuel className="h-5 w-5" />
             </span>
             <div>
@@ -246,7 +248,7 @@ export default function Login() {
                     type="button"
                     onClick={() => setShowPassword((value) => !value)}
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    className="absolute right-1.5 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-lg text-ink-500 transition hover:bg-navy-800 hover:text-ink-100"
+                    className="absolute right-1.5 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-lg text-ink-500 transition hover:bg-carbon-800 hover:text-ink-100"
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -295,7 +297,7 @@ export default function Login() {
                     type="button"
                     disabled={busy}
                     onClick={() => void signInAs(account)}
-                    className="group relative overflow-hidden rounded-xl border border-navy-700/85 bg-navy-900/75 p-3.5 text-left shadow-sheen transition-all duration-150 hover:-translate-y-0.5 hover:border-accent/55 hover:bg-accent/6 disabled:cursor-wait disabled:opacity-60"
+                    className="group relative overflow-hidden rounded-xl border border-carbon-700/85 bg-carbon-900/75 p-3.5 text-left shadow-sheen transition-all duration-150 hover:-translate-y-0.5 hover:border-accent/55 hover:bg-accent/6 disabled:cursor-wait disabled:opacity-60"
                   >
                     <span className="mb-2.5 flex items-center justify-between">
                       <span className="grid h-7.5 w-7.5 place-items-center rounded-lg border border-accent/25 bg-accent/10 p-1.5 text-accent transition group-hover:bg-accent group-hover:text-onaccent">

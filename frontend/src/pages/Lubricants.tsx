@@ -560,7 +560,7 @@ export default function Lubricants() {
             <Input value={moveForm.note} onChange={(e) => setMoveForm({ ...moveForm, note: e.target.value })} />
           </Field>
           {moveForm.quantity && moveForm.rate && (
-            <p className="rounded-lg border border-navy-700/75 bg-navy-900/55 px-3 py-2 text-sm text-ink-300">
+            <p className="rounded-lg border border-carbon-700/75 bg-carbon-900/55 px-3 py-2 text-sm text-ink-300">
               Total amount:{' '}
               <strong className="num font-semibold text-ink-100">
                 {formatINR(Number(moveForm.quantity) * Number(moveForm.rate))}

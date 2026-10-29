@@ -73,7 +73,7 @@ export function AttendancePanel({ canWrite }: { canWrite: boolean }) {
     status === 'PRESENT' ? 'bg-ok/12 text-ok border-ok/35'
       : status === 'ABSENT' ? 'bg-danger/12 text-danger border-danger/35'
       : status === 'HALF_DAY' ? 'bg-warn/12 text-warn border-warn/35'
-      : 'bg-navy-800 text-ink-200 border-navy-600';
+      : 'bg-carbon-800 text-ink-200 border-carbon-600';
 
   return (
     <Card className="mt-4">
@@ -98,7 +98,7 @@ export function AttendancePanel({ canWrite }: { canWrite: boolean }) {
       ) : sheet.isError ? (
         <div className="p-4"><ErrorState error={sheet.error} onRetry={() => void sheet.refetch()} /></div>
       ) : (
-        <div className="divide-y divide-navy-700/60">
+        <div className="divide-y divide-carbon-700/60">
           {rows.map((row) => (
             <div key={row.userId} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
               <div>
@@ -114,7 +114,7 @@ export function AttendancePanel({ canWrite }: { canWrite: boolean }) {
                     onClick={() => setMarks({ ...marks, [row.userId]: status })}
                     aria-pressed={statusOf(row) === status}
                     className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition ${
-                      statusOf(row) === status ? toneFor(status) : 'border-navy-700 bg-navy-900/60 text-ink-500 hover:border-navy-600 hover:text-ink-100'
+                      statusOf(row) === status ? toneFor(status) : 'border-carbon-700 bg-carbon-900/60 text-ink-500 hover:border-carbon-600 hover:text-ink-100'
                     } ${canWrite ? '' : 'cursor-not-allowed opacity-70'}`}
                   >
                     {status === 'PRESENT' ? 'Present' : status === 'ABSENT' ? 'Absent' : status === 'HALF_DAY' ? 'Half day' : status === 'WEEK_OFF' ? 'Weekly off' : 'Leave'}
@@ -126,7 +126,7 @@ export function AttendancePanel({ canWrite }: { canWrite: boolean }) {
         </div>
       )}
 
-      <div className="border-t border-navy-700/70 bg-navy-900/40 px-5 py-4">
+      <div className="border-t border-carbon-700/70 bg-carbon-900/40 px-5 py-4">
         <div className="mb-3 flex items-center justify-between">
           <p className="text-xs font-bold text-ink-100">Monthly payroll summary</p>
           <Field label="Month" className="mb-0 w-40">

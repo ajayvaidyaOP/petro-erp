@@ -35,17 +35,17 @@ type ButtonSize = 'sm' | 'md' | 'lg';
 
 const buttonVariants: Record<ButtonVariant, string> = {
   primary:
-    'brand-gradient text-onaccent font-semibold shadow-glow border border-accent/60 hover:brightness-[1.07] active:scale-[.985]',
+    'brand-gradient text-onbrand font-semibold shadow-glow border border-fuel/40 hover:brightness-[1.06] active:scale-[.985]',
   secondary:
-    'bg-navy-800/90 text-ink-100 font-semibold border border-navy-600/75 shadow-sheen hover:bg-navy-750/80 hover:border-accent/45 active:scale-[.985]',
+    'bg-carbon-800/90 text-ink-100 font-semibold border border-carbon-600/75 shadow-sheen hover:bg-carbon-750/80 hover:border-accent/45 active:scale-[.985]',
   ghost:
-    'text-ink-300 font-medium hover:bg-navy-800/85 hover:text-ink-100 border border-transparent',
+    'text-ink-300 font-medium hover:bg-carbon-800/85 hover:text-ink-100 border border-transparent',
   danger:
     'bg-danger text-ondanger font-semibold border border-danger shadow-[inset_0_1px_0_rgb(255_255_255/0.2)] hover:brightness-110 active:scale-[.985]',
   success:
     'bg-ok text-onok font-semibold border border-ok shadow-[inset_0_1px_0_rgb(255_255_255/0.2)] hover:brightness-110 active:scale-[.985]',
   outline:
-    'bg-navy-900/80 border border-navy-600/80 text-ink-200 font-semibold shadow-sheen hover:bg-navy-800/70 hover:border-accent/55 hover:text-ink-100 active:scale-[.985]',
+    'bg-carbon-900/80 border border-carbon-600/80 text-ink-200 font-semibold shadow-sheen hover:bg-carbon-800/70 hover:border-accent/55 hover:text-ink-100 active:scale-[.985]',
 };
 
 const buttonSizes: Record<ButtonSize, string> = {
@@ -112,7 +112,7 @@ export function CardHeader({
   return (
     <div
       className={cn(
-        'flex flex-wrap items-center justify-between gap-3 border-b border-navy-700/60 px-4 py-3.5 sm:px-5 sm:py-4',
+        'flex flex-wrap items-center justify-between gap-3 border-b border-carbon-700/60 px-4 py-3.5 sm:px-5 sm:py-4',
         className,
       )}
     >
@@ -133,13 +133,13 @@ export function CardBody({ className, children }: { className?: string; children
 export type BadgeTone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger' | 'info' | 'muted';
 
 const toneClasses: Record<BadgeTone, string> = {
-  neutral: 'bg-navy-800/90 text-ink-200 border-navy-600/70',
+  neutral: 'bg-carbon-800/90 text-ink-200 border-carbon-600/70',
   accent: 'bg-accent/12 text-accent border-accent/25',
   success: 'bg-ok/12 text-ok border-ok/25',
   warning: 'bg-warn/12 text-warn border-warn/25',
   danger: 'bg-danger/12 text-danger border-danger/25',
   info: 'bg-info/12 text-info border-info/25',
-  muted: 'bg-navy-800/65 text-ink-500 border-navy-700/80',
+  muted: 'bg-carbon-800/65 text-ink-500 border-carbon-700/80',
 };
 
 export function Badge({
@@ -262,7 +262,7 @@ export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElem
 
 export function Select({ className, children, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
-    <select className={cn('input select-input appearance-none bg-navy-900', className)} {...props}>
+    <select className={cn('input select-input appearance-none bg-carbon-900', className)} {...props}>
       {children}
     </select>
   );
@@ -290,7 +290,7 @@ export function Checkbox({
         checked={checked}
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
-        className="h-4 w-4 rounded border-navy-600 bg-navy-900 accent-accent focus:ring-accent/40"
+        className="h-4 w-4 rounded border-carbon-600 bg-carbon-900 accent-accent focus:ring-accent/40"
       />
       <span>{label}</span>
     </label>
@@ -355,7 +355,7 @@ export function MeterBar({
       aria-valuemin={label ? 0 : undefined}
       aria-valuemax={label ? 100 : undefined}
       className={cn(
-        'w-full overflow-hidden rounded-full bg-navy-800 ring-1 ring-inset ring-navy-700/65',
+        'w-full overflow-hidden rounded-full bg-carbon-800 ring-1 ring-inset ring-carbon-700/65',
         heights[height],
         className,
       )}
@@ -379,13 +379,13 @@ export function Spinner({ className }: { className?: string }) {
 /** Full-page splash used while a lazily-loaded screen or the session resolves. */
 export function PageLoader({ label = 'Loading…' }: { label?: string }) {
   return (
-    <div role="status" aria-live="polite" className="grid min-h-dvh place-items-center bg-navy-950 px-6">
+    <div role="status" aria-live="polite" className="grid min-h-dvh place-items-center bg-carbon-950 px-6">
       <div className="flex flex-col items-center gap-4">
-        <div className="brand-gradient relative grid h-12 w-12 place-items-center overflow-hidden rounded-2xl text-onaccent shadow-glow ring-1 ring-accent/30">
+        <div className="brand-gradient relative grid h-12 w-12 place-items-center overflow-hidden rounded-2xl text-onbrand shadow-glow ring-1 ring-accent/30">
           <span aria-hidden className="absolute inset-0 bg-[linear-gradient(145deg,rgb(255_255_255/0.26),transparent_55%)]" />
           <Fuel className="relative h-5 w-5" strokeWidth={2.3} />
         </div>
-        <div className="flex items-center gap-2 rounded-full border border-navy-700/75 bg-navy-900/80 px-3.5 py-1.5 shadow-card">
+        <div className="flex items-center gap-2 rounded-full border border-carbon-700/75 bg-carbon-900/80 px-3.5 py-1.5 shadow-card">
           <Spinner className="h-3.5 w-3.5" />
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-400">{label}</p>
         </div>
@@ -552,11 +552,11 @@ export function Modal({
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
         className={cn(
-          'animate-scale-in my-auto flex max-h-[92dvh] w-full flex-col rounded-t-3xl border border-navy-700/85 bg-navy-850 shadow-pop ring-1 ring-white/5 outline-none sm:max-h-[88dvh] sm:rounded-2.5xl',
+          'animate-scale-in my-auto flex max-h-[92dvh] w-full flex-col rounded-t-3xl border border-carbon-700/85 bg-carbon-850 shadow-pop ring-1 ring-white/5 outline-none sm:max-h-[88dvh] sm:rounded-2.5xl',
           widths[size],
         )}
       >
-        <div className="hero-mesh flex shrink-0 items-start justify-between gap-4 border-b border-navy-700/65 bg-navy-900/60 px-4 py-4 sm:rounded-t-2.5xl sm:px-6">
+        <div className="hero-mesh flex shrink-0 items-start justify-between gap-4 border-b border-carbon-700/65 bg-carbon-900/60 px-4 py-4 sm:rounded-t-2.5xl sm:px-6">
           <div className="min-w-0">
             <h2 id={titleId} className="font-display text-[17px] font-extrabold tracking-[-0.02em] text-ink-100">
               {title}
@@ -571,7 +571,7 @@ export function Modal({
             type="button"
             data-close
             onClick={onClose}
-            className="btn-touch -mr-1 grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-transparent text-ink-400 transition hover:border-navy-700 hover:bg-navy-800 hover:text-ink-100"
+            className="btn-touch -mr-1 grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-transparent text-ink-400 transition hover:border-carbon-700 hover:bg-carbon-800 hover:text-ink-100"
             aria-label="Close dialog"
           >
             <X className="h-4 w-4" />
@@ -579,7 +579,7 @@ export function Modal({
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 scroll-thin sm:px-6 sm:py-5">{children}</div>
         {footer && (
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-navy-700/65 bg-navy-800/35 px-4 py-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] sm:rounded-b-2.5xl sm:px-6 sm:pb-3.5">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-carbon-700/65 bg-carbon-800/35 px-4 py-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] sm:rounded-b-2.5xl sm:px-6 sm:pb-3.5">
             {footer}
           </div>
         )}
@@ -697,7 +697,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {toasts.map((t) => (
           <div
             key={t.id}
-            className="animate-slide-in pointer-events-auto relative flex items-start gap-3 overflow-hidden rounded-2xl border border-navy-600/75 bg-navy-850/95 p-3.5 pl-4 shadow-pop backdrop-blur-xl"
+            className="animate-slide-in pointer-events-auto relative flex items-start gap-3 overflow-hidden rounded-2xl border border-carbon-600/75 bg-carbon-850/95 p-3.5 pl-4 shadow-pop backdrop-blur-xl"
           >
             <span
               aria-hidden
@@ -716,7 +716,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             </div>
             <button
               onClick={() => dismiss(t.id)}
-              className="rounded-lg p-1 text-ink-500 transition hover:bg-navy-800 hover:text-ink-200"
+              className="rounded-lg p-1 text-ink-500 transition hover:bg-carbon-800 hover:text-ink-200"
               aria-label="Dismiss"
             >
               <X className="h-3.5 w-3.5" />
@@ -751,7 +751,7 @@ export function Pagination({
   const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const to = Math.min(total, page * pageSize);
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-navy-700/70 bg-navy-800/35 px-4 py-3 sm:px-5">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-carbon-700/70 bg-carbon-800/35 px-4 py-3 sm:px-5">
       <p className="num text-xs text-ink-500">
         Showing <span className="font-semibold text-ink-200">{from}</span>–
         <span className="font-semibold text-ink-200">{to}</span> of{' '}
@@ -768,7 +768,7 @@ export function Pagination({
         >
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <span className="num rounded-lg border border-navy-700/80 bg-navy-900 px-2.5 py-1 text-xs font-semibold text-ink-300">
+        <span className="num rounded-lg border border-carbon-700/80 bg-carbon-900 px-2.5 py-1 text-xs font-semibold text-ink-300">
           Page {page} / {totalPages}
         </span>
         <Button
@@ -799,7 +799,7 @@ export function PageHeader({
   breadcrumb?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-4 border-b border-navy-700/65 pb-4">
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-4 border-b border-carbon-700/65 pb-4">
       <div className="min-w-0">
         {breadcrumb && (
           <div className="mb-1.5 inline-flex items-center gap-1.5 rounded-full border border-accent/20 bg-accent/10 px-2.5 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-accent">
@@ -840,10 +840,10 @@ export function StatCard({
   };
   const surfaces = {
     default: '',
-    accent: 'border-accent/20 bg-gradient-to-br from-accent/[0.09] via-navy-850 to-navy-850',
-    success: 'border-ok/20 bg-gradient-to-br from-ok/[0.08] via-navy-850 to-navy-850',
-    warning: 'border-warn/20 bg-gradient-to-br from-warn/[0.09] via-navy-850 to-navy-850',
-    danger: 'border-danger/20 bg-gradient-to-br from-danger/[0.08] via-navy-850 to-navy-850',
+    accent: 'border-accent/20 bg-gradient-to-br from-accent/[0.09] via-carbon-850 to-carbon-850',
+    success: 'border-ok/20 bg-gradient-to-br from-ok/[0.08] via-carbon-850 to-carbon-850',
+    warning: 'border-warn/20 bg-gradient-to-br from-warn/[0.09] via-carbon-850 to-carbon-850',
+    danger: 'border-danger/20 bg-gradient-to-br from-danger/[0.08] via-carbon-850 to-carbon-850',
   };
   return (
     <div className={cn('card relative h-full overflow-hidden p-4 sm:p-5', surfaces[tone])}>
@@ -859,7 +859,7 @@ export function StatCard({
         {value}
       </p>
       {hint && <p className="mt-1.5 text-[11.5px] leading-snug text-ink-500">{hint}</p>}
-      {footer && <div className="mt-3 border-t border-navy-700/60 pt-2.5 text-xs text-ink-500">{footer}</div>}
+      {footer && <div className="mt-3 border-t border-carbon-700/60 pt-2.5 text-xs text-ink-500">{footer}</div>}
     </div>
   );
 }
@@ -876,7 +876,7 @@ export function Tabs({
   return (
     <div
       role="tablist"
-      className="inline-flex max-w-full gap-1 overflow-x-auto rounded-2xl border border-navy-700/80 bg-navy-800/75 p-1 shadow-sheen scroll-thin"
+      className="inline-flex max-w-full gap-1 overflow-x-auto rounded-2xl border border-carbon-700/80 bg-carbon-800/75 p-1 shadow-sheen scroll-thin"
     >
       {tabs.map((tab) => {
         const isSelected = active === tab.key;
@@ -890,8 +890,8 @@ export function Tabs({
             className={cn(
               'whitespace-nowrap rounded-xl px-3.5 py-1.5 text-xs font-semibold transition-all duration-150 sm:text-[13px]',
               isSelected
-                ? 'border border-accent/25 bg-navy-900 text-accent shadow-[var(--shadow-card),var(--card-sheen)]'
-                : 'border border-transparent text-ink-400 hover:bg-navy-750/60 hover:text-ink-100',
+                ? 'border border-accent/25 bg-carbon-900 text-accent shadow-[var(--shadow-card),var(--card-sheen)]'
+                : 'border border-transparent text-ink-400 hover:bg-carbon-750/60 hover:text-ink-100',
             )}
           >
             {tab.label}
@@ -899,7 +899,7 @@ export function Tabs({
               <span
                 className={cn(
                   'num ml-1.5 rounded-md px-1.5 py-0.5 text-[10px] font-bold',
-                  isSelected ? 'bg-accent/14 text-accent' : 'bg-navy-750 text-ink-400',
+                  isSelected ? 'bg-accent/14 text-accent' : 'bg-carbon-750 text-ink-400',
                 )}
               >
                 {tab.count}
@@ -916,7 +916,7 @@ export function TableScrollHint({ className }: { className?: string }) {
   return (
     <p
       className={cn(
-        'flex items-center justify-between gap-2 border-b border-navy-700/70 bg-navy-800/45 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-500 sm:hidden',
+        'flex items-center justify-between gap-2 border-b border-carbon-700/70 bg-carbon-800/45 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-500 sm:hidden',
         className,
       )}
     >
@@ -942,7 +942,7 @@ export function KeyValue({ items }: { items: { label: string; value: ReactNode }
   return (
     <dl className="grid grid-cols-1 gap-x-6 gap-y-3.5 sm:grid-cols-2">
       {items.map((item) => (
-        <div key={item.label} className="border-b border-navy-700/45 pb-2.5 last:border-b-0 sm:border-b-0 sm:pb-0">
+        <div key={item.label} className="border-b border-carbon-700/45 pb-2.5 last:border-b-0 sm:border-b-0 sm:pb-0">
           <dt className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">{item.label}</dt>
           <dd className="mt-0.5 text-sm font-medium text-ink-100">{item.value}</dd>
         </div>

@@ -57,12 +57,12 @@ export default function Employees() {
               className={
                 employee.roleKey === 'OWNER'
                   ? 'brand-gradient absolute inset-x-0 top-0 h-[2.5px] opacity-90'
-                  : 'absolute inset-x-0 top-0 h-[2.5px] bg-navy-600/70'
+                  : 'absolute inset-x-0 top-0 h-[2.5px] bg-carbon-600/70'
               }
             />
-            <div className="hero-mesh border-b border-navy-700/60 p-6">
+            <div className="hero-mesh border-b border-carbon-700/60 p-6">
               <div className="flex items-start justify-between">
-                <span className="brand-gradient grid h-14 w-14 place-items-center rounded-2xl font-display text-lg font-extrabold text-onaccent shadow-glow">
+                <span className="brand-gradient grid h-14 w-14 place-items-center rounded-2xl font-display text-lg font-extrabold text-onbrand shadow-glow">
                   {initials(employee.name)}
                 </span>
                 <Badge tone={employee.roleKey === 'OWNER' ? 'accent' : 'neutral'} dot>
@@ -93,7 +93,7 @@ export default function Employees() {
                   </li>
                 ))}
               </ul>
-              <div className="mt-5 rounded-xl border border-navy-700/65 bg-navy-800/45 p-3">
+              <div className="mt-5 rounded-xl border border-carbon-700/65 bg-carbon-800/45 p-3">
                 <p className="text-[10.5px] font-bold uppercase tracking-wider text-ink-500">Pump access</p>
                 <p className="mt-1 text-xs font-semibold text-ink-100">
                   {employee.roleKey === 'OWNER'
@@ -123,10 +123,10 @@ export default function Employees() {
         );
       })}</div>
       <div className="mt-5 flex items-start gap-3 rounded-xl border border-accent/15 bg-accent/[0.04] p-4"><ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-accent" /><div><p className="text-xs font-semibold text-ink-200">Less complexity. The same accountability.</p><p className="mt-1 text-xs leading-relaxed text-ink-500">Roles are fixed and permissions are checked by the server. The owner controls setup and prices; the manager handles the day-to-day. Every change stays in the audit log.</p></div></div>
-      <details className="card mt-6 group"><summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-semibold text-ink-200">Attendance & monthly summary <ChevronDown className="h-4 w-4 transition group-open:rotate-180" /></summary><div className="border-t border-navy-700/60 p-4"><AttendancePanel canWrite /></div></details>
+      <details className="card mt-6 group"><summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-semibold text-ink-200">Attendance & monthly summary <ChevronDown className="h-4 w-4 transition group-open:rotate-180" /></summary><div className="border-t border-carbon-700/60 p-4"><AttendancePanel canWrite /></div></details>
     </>}
     <Modal open={Boolean(edit) || create} onClose={() => { setEdit(null); setCreate(false); }} title={create ? 'Set up your manager' : edit?.roleKey === 'OWNER' ? 'Edit owner profile' : 'Edit manager access'} description="A fixed role with clearly defined access. No extra role selection needed." footer={<><Button variant="ghost" onClick={() => { setEdit(null); setCreate(false); }}>Cancel</Button><Button variant="primary" loading={save.isPending} disabled={!form.name.trim() || (create && (!form.email || form.password.length < 10)) || (!create && edit?.roleKey === 'MANAGER' && form.stationIds.length === 0)} onClick={() => save.mutate()}>{create ? 'Create manager' : 'Save changes'}</Button></>}>
-      <div className="space-y-4"><Field label="Full name" required><Input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></Field>{create && <><Field label="Email address" required><Input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></Field><Field label="Temporary password" required hint="At least 10 characters, with upper- and lowercase letters and a number."><Input type="password" autoComplete="new-password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /></Field></>}<Field label="Phone"><Input type="tel" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></Field>{(create || edit?.roleKey === 'MANAGER') && <fieldset><legend className="label">Assigned pumps</legend><div className="space-y-2">{stations.map((station) => <label key={station.id} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border border-navy-700/70 p-3 text-sm text-ink-200"><input type="checkbox" checked={form.stationIds.includes(station.id)} onChange={() => toggleStation(station.id)} className="h-4 w-4 accent-accent" />{station.name}</label>)}</div><p className="mt-2 text-xs text-ink-500">Choose at least one pump. The manager cannot access unassigned pumps.</p></fieldset>}</div>
+      <div className="space-y-4"><Field label="Full name" required><Input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></Field>{create && <><Field label="Email address" required><Input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></Field><Field label="Temporary password" required hint="At least 10 characters, with upper- and lowercase letters and a number."><Input type="password" autoComplete="new-password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /></Field></>}<Field label="Phone"><Input type="tel" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></Field>{(create || edit?.roleKey === 'MANAGER') && <fieldset><legend className="label">Assigned pumps</legend><div className="space-y-2">{stations.map((station) => <label key={station.id} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border border-carbon-700/70 p-3 text-sm text-ink-200"><input type="checkbox" checked={form.stationIds.includes(station.id)} onChange={() => toggleStation(station.id)} className="h-4 w-4 accent-accent" />{station.name}</label>)}</div><p className="mt-2 text-xs text-ink-500">Choose at least one pump. The manager cannot access unassigned pumps.</p></fieldset>}</div>
     </Modal>
     <Modal open={Boolean(resetFor)} onClose={() => setResetFor(null)} title={`Reset password · ${resetFor?.name ?? ''}`} description="All existing sessions for this account will be signed out." size="sm" footer={<><Button variant="ghost" onClick={() => setResetFor(null)}>Cancel</Button><Button variant="primary" loading={reset.isPending} disabled={newPassword.length < 10} onClick={() => reset.mutate()}>Reset password</Button></>}><Field label="New password" required hint="At least 10 characters, with upper- and lowercase letters and a number."><Input type="password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></Field></Modal>
   </>;

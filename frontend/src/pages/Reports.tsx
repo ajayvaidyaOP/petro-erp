@@ -136,7 +136,7 @@ export default function Reports() {
         <div className="space-y-5">
           <Card className="relative overflow-hidden print:border-0">
             <span aria-hidden className="brand-gradient absolute inset-x-0 top-0 h-[2.5px] opacity-90 print:hidden" />
-            <div className="hero-mesh flex flex-wrap items-start justify-between gap-3 border-b border-navy-700/60 p-5">
+            <div className="hero-mesh flex flex-wrap items-start justify-between gap-3 border-b border-carbon-700/60 p-5">
               <div>
                 <div className="flex items-center gap-2">
                   <span className="rounded-md border border-accent/25 bg-accent/10 px-2 py-0.5 font-mono text-[10.5px] font-bold text-accent">
@@ -170,7 +170,7 @@ export default function Reports() {
           <div className="grid gap-5 lg:grid-cols-2">
             <Card>
               <CardHeader title="Payment mix (recorded)" subtitle="Only transaction-level sales carry a payment mode" />
-              <div className="divide-y divide-navy-800/80">
+              <div className="divide-y divide-carbon-800/80">
                 {Object.keys(dsr.data.paymentMix).length === 0 ? (
                   <p className="px-4 py-6 text-center text-xs text-ink-500">No transaction-level payments recorded.</p>
                 ) : (
@@ -182,7 +182,7 @@ export default function Reports() {
                   ))
                 )}
               </div>
-              <div className="border-t border-navy-700/60 px-4 py-2 text-[11px] text-ink-500">
+              <div className="border-t border-carbon-700/60 px-4 py-2 text-[11px] text-ink-500">
                 Customer receipts: {formatINR(dsr.data.totals.receipts)}
               </div>
             </Card>
@@ -271,7 +271,7 @@ export default function Reports() {
                 {dsr.data.deliveries.length === 0 && dsr.data.expenses.length === 0 ? (
                   <p className="px-4 py-6 text-center text-xs text-ink-500">No deliveries or expenses recorded.</p>
                 ) : (
-                  <div className="divide-y divide-navy-800/80">
+                  <div className="divide-y divide-carbon-800/80">
                     {dsr.data.deliveries.map((d) => (
                       <div key={String(d.id)} className="flex items-start justify-between gap-3 px-4 py-2.5">
                         <div>
@@ -423,7 +423,7 @@ function StockLossCard({ stationId, stations }: { stationId: string; stations: {
           </table>
         </div>
       )}
-      <p className="border-t border-navy-700/70 px-4 py-2.5 text-[11px] text-ink-500">
+      <p className="border-t border-carbon-700/70 px-4 py-2.5 text-[11px] text-ink-500">
         When loss exceeds OMC evaporation norms, inspect nozzle calibration (5L measure), TT decantation dip records, and underground line integrity.
       </p>
     </Card>
@@ -501,7 +501,7 @@ function AgeingCard({ stationId }: { stationId: string }) {
                 </tr>
               ))}
               {report.data && (
-                <tr className="border-t-2 border-navy-600 bg-navy-900/50">
+                <tr className="border-t-2 border-carbon-600 bg-carbon-900/50">
                   <td className="font-bold text-ink-100">Total</td>
                   <td className="num text-right font-bold text-ink-100">{formatINR(report.data.totals.outstanding)}</td>
                   <td className="num text-right font-semibold">{formatINR(report.data.totals.bucket0To30)}</td>
@@ -561,7 +561,7 @@ function ExportsCard({ stationId }: { stationId: string }) {
             type="button"
             disabled={busy === item.slug}
             onClick={() => void download(item.slug, filenameOf(item.slug))}
-            className="group flex items-start gap-3 rounded-xl border border-navy-700/80 bg-navy-900/60 p-3.5 text-left transition hover:border-accent/45 hover:bg-navy-800/80 disabled:opacity-60"
+            className="group flex items-start gap-3 rounded-xl border border-carbon-700/80 bg-carbon-900/60 p-3.5 text-left transition hover:border-accent/45 hover:bg-carbon-800/80 disabled:opacity-60"
           >
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-accent/25 bg-accent/10 text-accent transition group-hover:bg-accent group-hover:text-onaccent"><Download className="h-4 w-4" /></span>
             <span>
