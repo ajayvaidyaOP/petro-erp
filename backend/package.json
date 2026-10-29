@@ -10,7 +10,10 @@
     "typecheck": "tsc --noEmit",
     "db:reset": "tsx src/db/reset.ts",
     "db:seed": "tsx src/db/seed.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "db:backup": "tsx src/db/ops.ts backup",
+    "db:restore": "tsx src/db/ops.ts restore",
+    "db:integrity": "tsx src/db/ops.ts integrity"
   },
   "dependencies": {
     "@petroflow/shared": "*",

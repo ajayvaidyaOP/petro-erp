@@ -95,7 +95,7 @@ export function NotificationCenter() {
             aria-hidden
             className={cn(
               'num absolute -right-1 -top-1 grid h-[18px] min-w-[18px] place-items-center rounded-full border-2 border-navy-900 px-1 text-[10px] font-bold leading-none text-white',
-              hasError ? 'bg-[#d62436]' : 'bg-[#d97706]',
+              hasError ? 'bg-danger' : 'bg-warn',
             )}
           >
             {count > 9 ? '9+' : count}

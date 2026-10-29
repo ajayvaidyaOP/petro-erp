@@ -1,9 +1,9 @@
 /** @type {import('tailwindcss').Config} */
 
-// Colours resolve through CSS custom properties so both themes share one source
-// of truth: toggling `data-theme` on <html> re-tints the entire app without
-// touching a single component. Each variable holds space-separated RGB channels,
-// which keeps Tailwind's `/opacity` modifiers (e.g. `bg-accent/12`) working.
+// Colours resolve through CSS custom properties (see frontend/src/index.css) so both
+// themes share one source of truth: toggling `data-theme` on <html> re-tints the entire
+// app without touching a single component. Each variable holds space-separated RGB
+// channels, which keeps Tailwind's `/opacity` modifiers (e.g. `bg-accent/12`) working.
 const channel = (name) => `rgb(var(${name}) / <alpha-value>)`;
 
 export default {
@@ -12,7 +12,8 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Surface ramp: 950 = page canvas … 600 = strongest steel-blue border.
+        // Surface ramp: 950 = page canvas … 600 = strongest border.
+        // (Names stay `navy-*` for continuity; the hue is now green-graphite, not blue.)
         navy: {
           950: channel('--navy-950'),
           900: channel('--navy-900'),
@@ -35,10 +36,18 @@ export default {
           DEFAULT: channel('--accent'),
           soft: channel('--accent-soft'),
           teal: channel('--accent-teal'),
+          // Amber-gold "fuel / energy / money-in" highlight. Use sparingly: rates,
+          // litres, positive revenue moments — never for whole surfaces.
+          energy: channel('--accent-energy'),
           muted: channel('--accent'),
         },
-        // Foreground for text sitting on a brand-coloured surface.
+        energy: channel('--accent-energy'),
+        // Foreground for text sitting on a brand- or status-coloured surface.
         onaccent: channel('--on-accent'),
+        onok: channel('--on-ok'),
+        onwarn: channel('--on-warn'),
+        ondanger: channel('--on-danger'),
+        onenergy: channel('--on-energy'),
         // Modal / drawer backdrop — always dark in both themes.
         scrim: channel('--scrim'),
         // Recessed surface for telemetry readouts, code blocks and inset wells.
@@ -48,8 +57,29 @@ export default {
         warn: channel('--warn'),
         danger: channel('--danger'),
         info: channel('--info'),
+        // Brand ink panel — always dark in both themes (login split, marketing blocks).
+        panel: {
+          DEFAULT: channel('--panel-ink'),
+          deep: channel('--panel-deep'),
+          raised: channel('--panel-raised'),
+          line: channel('--panel-line'),
+          text: channel('--panel-text'),
+          muted: channel('--panel-muted'),
+          dim: channel('--panel-dim'),
+          accent: channel('--panel-accent'),
+          energy: channel('--panel-energy'),
+        },
+        // Chart series (also mirrored in lib/theme.tsx for Recharts SVG attributes).
+        chart: {
+          1: channel('--accent'),
+          2: channel('--accent-teal'),
+          3: channel('--accent-energy'),
+          4: channel('--info'),
+          5: channel('--danger'),
+        },
       },
       opacity: {
+        4: '0.04',
         6: '0.06',
         8: '0.08',
         12: '0.12',
@@ -77,13 +107,22 @@ export default {
         ],
         mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
       },
+      fontSize: {
+        // Display sizes for KPI values: tighter tracking the bigger it gets.
+        'stat-sm': ['1.0625rem', { lineHeight: '1.45rem', letterSpacing: '-0.02em' }],
+        stat: ['1.375rem', { lineHeight: '1.75rem', letterSpacing: '-0.025em' }],
+        'stat-lg': ['1.75rem', { lineHeight: '2.1rem', letterSpacing: '-0.03em' }],
+      },
       boxShadow: {
         card: 'var(--shadow-card)',
         focus: 'var(--shadow-focus)',
         pop: 'var(--shadow-pop)',
         glow: 'var(--shadow-glow)',
+        'card-hover': 'var(--shadow-card-hover)',
+        sheen: 'var(--card-sheen)',
       },
       borderRadius: {
+        '2.5xl': '1.25rem',
         '4xl': '1.75rem',
       },
       keyframes: {
@@ -106,6 +145,10 @@ export default {
         shimmer: {
           '100%': { transform: 'translateX(100%)' },
         },
+        'pulse-soft': {
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0.55' },
+        },
       },
       animation: {
         'fade-in': 'fade-in 140ms ease-out',
@@ -113,6 +156,10 @@ export default {
         'scale-in': 'scale-in 130ms ease-out',
         'slide-up': 'slide-up 180ms ease-out',
         shimmer: 'shimmer 1.6s infinite',
+        'pulse-soft': 'pulse-soft 2.4s ease-in-out infinite',
+      },
+      transitionTimingFunction: {
+        smooth: 'cubic-bezier(0.22, 1, 0.36, 1)',
       },
     },
   },

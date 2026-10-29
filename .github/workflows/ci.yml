@@ -1,0 +1,86 @@
+name: CI
+
+# Everything in this repo is verified locally with these four commands; CI runs the
+# same ones so a green badge means the same thing as a green laptop.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      # The backend uses Node's built-in node:sqlite, which requires 22.13+.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+          cache: npm
+
+      - name: Install (clean, from the lockfile)
+        run: npm ci
+
+      - name: Typecheck (shared, backend, frontend, gateway)
+        run: npm run typecheck
+
+      - name: Unit + API tests
+        run: npm test
+
+      - name: Build (frontend assets + backend compile)
+        run: npm run build
+
+      - name: Database backup tooling smoke test
+        run: |
+          npm run db:seed
+          npm run db:backup
+          npm run db:integrity
+
+      - name: Dependency audit (production tree)
+        continue-on-error: true
+        run: npm audit --omit=dev
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # Browser suites need a downloaded Chromium and are slower; they run on demand and
+  # on PRs so a flaky browser download can never block a docs-only change.
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: verify
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+          cache: npm
+      - run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Browser workflows
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+          retention-days: 7

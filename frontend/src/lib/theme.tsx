@@ -36,7 +36,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     root.style.colorScheme = theme;
     // Paints native widgets (date pickers, selects, scrollbars) to match.
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', theme === 'dark' ? '#0a101d' : '#f3f6fa');
+    if (meta) meta.setAttribute('content', theme === 'dark' ? '#070d0c' : '#f2f6f3');
   }, [theme]);
 
   const setTheme = useCallback((next: Theme) => {
@@ -74,36 +74,41 @@ export interface ChartPalette {
   accent: string;
   teal: string;
   secondary: string;
+  energy: string;
   warn: string;
   danger: string;
 }
 
 // Recharts paints through SVG attributes, which do not resolve CSS custom
-// properties, so chart colours are supplied per theme from here.
+// properties, so chart colours are supplied per theme from here. These hexes are
+// the literal values of the matching `--*` tokens in frontend/src/index.css — keep
+// the two files in step when the palette changes.
 const CHART_DARK: ChartPalette = {
-  grid: '#243554',
-  axis: '#8fa2c0',
-  tooltipBg: '#0f182b',
-  tooltipBorder: '#354d77',
-  tooltipLabel: '#f1f5f9',
-  accent: '#10b981',
-  teal: '#14b8a6',
-  secondary: '#38bdf8',
-  warn: '#fbbf24',
-  danger: '#f87171',
+  grid: '#26382f',
+  axis: '#8c9e96',
+  tooltipBg: '#0f1816',
+  tooltipBorder: '#38483f',
+  tooltipLabel: '#ecf4f0',
+  accent: '#22c598',
+  teal: '#2dd4be',
+  secondary: '#42b6f0',
+  energy: '#faba3e',
+  warn: '#fabe3c',
+  danger: '#f66e74',
 };
 
 const CHART_LIGHT: ChartPalette = {
-  grid: '#e2e9f2',
-  axis: '#64748b',
+  grid: '#e2e9e4',
+  axis: '#64796f',
   tooltipBg: '#ffffff',
-  tooltipBorder: '#cfdbe9',
-  tooltipLabel: '#0f172a',
-  accent: '#058760',
-  teal: '#0d9488',
-  secondary: '#0369a1',
-  warn: '#d97706',
-  danger: '#d62436',
+  tooltipBorder: '#cdd8d0',
+  tooltipLabel: '#0b1915',
+  accent: '#046a54',
+  teal: '#0b897a',
+  secondary: '#0b659c',
+  energy: '#ad540b',
+  warn: '#a85a0a',
+  danger: '#c1203a',
 };
 
 export function useChartPalette(): ChartPalette {

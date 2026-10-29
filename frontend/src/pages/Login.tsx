@@ -94,88 +94,92 @@ export default function Login() {
   return (
     <div className="grid min-h-dvh bg-navy-950 lg:grid-cols-[1.08fr_1fr]">
       {/* Left Fuel-Tech Showcase Panel */}
-      <section className="relative hidden flex-col justify-between overflow-hidden border-r border-[#1e2f4d] bg-[#0a1222] p-11 text-slate-100 lg:flex xl:p-14">
-        {/* Subtle technical grid */}
+      <section className="relative hidden flex-col justify-between overflow-hidden border-r border-panel-line bg-panel p-11 text-panel-text lg:flex xl:p-14">
+        {/* Subtle technical grid + two brand glows (ink panel is always dark, by design) */}
         <div
-          className="pointer-events-none absolute inset-0 opacity-[0.07]"
+          className="pointer-events-none absolute inset-0 opacity-[0.06]"
           style={{
             backgroundImage:
-              'linear-gradient(to right, #64748b 1px, transparent 1px), linear-gradient(to bottom, #64748b 1px, transparent 1px)',
-            backgroundSize: '36px 36px',
+              'linear-gradient(to right, rgb(var(--panel-line)) 1px, transparent 1px), linear-gradient(to bottom, rgb(var(--panel-line)) 1px, transparent 1px)',
+            backgroundSize: '38px 38px',
           }}
           aria-hidden
         />
         <div
-          className="pointer-events-none absolute -top-28 right-0 h-80 w-80 rounded-full bg-emerald-500/10 blur-3xl"
+          className="pointer-events-none absolute -top-32 right-[-4rem] h-96 w-96 rounded-full bg-panel-accent/12 blur-[110px]"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute -bottom-32 left-[-6rem] h-96 w-96 rounded-full bg-panel-energy/10 blur-[120px]"
           aria-hidden
         />
 
         {/* Brand */}
         <div className="relative flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-xl border border-emerald-400/30 bg-emerald-500/15 text-emerald-400">
+            <span className="brand-gradient grid h-10 w-10 place-items-center rounded-xl text-onaccent shadow-glow ring-1 ring-panel-accent/30">
               <Fuel className="h-5 w-5" strokeWidth={2.25} />
             </span>
             <div>
-              <p className="font-display text-xl font-extrabold tracking-tight text-white">
-                Petro<span className="text-emerald-400">Flow</span>
+              <p className="font-display text-xl font-extrabold tracking-[-0.03em] text-panel-text">
+                Petro<span className="text-panel-accent">Flow</span>
               </p>
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+              <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-panel-dim">
                 Forecourt Operations ERP
               </p>
             </div>
           </div>
-          <span className="rounded-md border border-[#243759] bg-[#101c33] px-2.5 py-1 font-mono text-[10px] font-semibold text-slate-300">
+          <span className="rounded-full border border-panel-line bg-panel-raised/70 px-2.5 py-1 font-mono text-[10px] font-semibold tracking-wide text-panel-muted backdrop-blur-sm">
             MULTI-OUTLET · INDIA
           </span>
         </div>
 
         {/* Center Pitch + Instrument Preview */}
         <div className="relative my-auto py-10">
-          <span className="inline-flex items-center gap-2 rounded-md border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-300">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+          <span className="inline-flex items-center gap-2 rounded-full border border-panel-accent/25 bg-panel-accent/10 px-3 py-1 text-[11px] font-semibold text-panel-accent backdrop-blur-sm">
+            <span className="h-1.5 w-1.5 animate-pulse-soft rounded-full bg-panel-accent" />
             Purpose-built for retail fuel stations
           </span>
 
-          <h1 className="mt-5 max-w-xl font-display text-[38px] font-extrabold leading-[1.14] tracking-tight text-white xl:text-[44px]">
-            Every nozzle, tank and rupee — reconciled with precision.
+          <h1 className="mt-5 max-w-xl font-display text-[38px] font-extrabold leading-[1.12] tracking-[-0.035em] text-panel-text xl:text-[44px]">
+            Every nozzle, tank and rupee — <span className="text-panel-accent">reconciled</span> with precision.
           </h1>
-          <p className="mt-4 max-w-md text-sm leading-relaxed text-slate-400">
+          <p className="mt-4 max-w-md text-sm leading-relaxed text-panel-muted">
             Run single or multi-outlet petrol pumps from one auditable command workspace: totalizer shifts, TT
             decantation, 15°C density checks, and fleet credit control.
           </p>
 
           {/* Compact Forecourt Telemetry Preview */}
-          <div className="mt-7 rounded-xl border border-[#243759] bg-[#0f1b31]/90 p-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-[#1f3150] pb-2.5 text-[11px]">
-              <span className="font-semibold text-slate-200">Forecourt Telemetry · Outlet Snapshot</span>
-              <span className="inline-flex items-center gap-1.5 font-mono text-[10px] text-emerald-400">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> SHIFT #2 ACTIVE
+          <div className="mt-7 rounded-2xl border border-panel-line bg-panel-raised/70 p-4 shadow-[0_24px_60px_-24px_rgb(0_0_0/0.7),inset_0_1px_0_rgb(255_255_255/0.05)] backdrop-blur-sm">
+            <div className="flex items-center justify-between border-b border-panel-line/80 pb-2.5 text-[11px]">
+              <span className="font-semibold text-panel-text">Forecourt Telemetry · Outlet Snapshot</span>
+              <span className="inline-flex items-center gap-1.5 font-mono text-[10px] text-panel-accent">
+                <span className="h-1.5 w-1.5 animate-pulse-soft rounded-full bg-panel-accent" /> SHIFT #2 ACTIVE
               </span>
             </div>
             <div className="mt-3 grid grid-cols-3 gap-3">
-              <div className="rounded-lg border border-[#1f3150] bg-[#0b1426] p-2.5">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Nozzle MS-N1</p>
-                <p className="num mt-1 font-mono text-xs font-bold text-white">58,342.750 L</p>
-                <p className="mt-0.5 text-[10px] text-emerald-400">Delta verified</p>
+              <div className="rounded-xl border border-panel-line/80 bg-panel-deep/60 p-2.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-panel-dim">Nozzle MS-N1</p>
+                <p className="num mt-1 font-mono text-xs font-bold text-panel-text">58,342.750 L</p>
+                <p className="mt-0.5 text-[10px] text-panel-accent">Delta verified</p>
               </div>
-              <div className="rounded-lg border border-[#1f3150] bg-[#0b1426] p-2.5">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">HSD Tank 01</p>
-                <p className="num mt-1 font-mono text-xs font-bold text-white">15,600 L · 78%</p>
-                <p className="mt-0.5 text-[10px] text-sky-400">Ullage 4,400 L</p>
+              <div className="rounded-xl border border-panel-line/80 bg-panel-deep/60 p-2.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-panel-dim">HSD Tank 01</p>
+                <p className="num mt-1 font-mono text-xs font-bold text-panel-text">15,600 L · 78%</p>
+                <p className="mt-0.5 text-[10px] text-panel-energy">Ullage 4,400 L</p>
               </div>
-              <div className="rounded-lg border border-[#1f3150] bg-[#0b1426] p-2.5">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Settlement</p>
-                <p className="num mt-1 font-mono text-xs font-bold text-white">Cash + UPI</p>
-                <p className="mt-0.5 text-[10px] text-emerald-400">Balanced · ₹0 diff</p>
+              <div className="rounded-xl border border-panel-line/80 bg-panel-deep/60 p-2.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-panel-dim">Settlement</p>
+                <p className="num mt-1 font-mono text-xs font-bold text-panel-text">Cash + UPI</p>
+                <p className="mt-0.5 text-[10px] text-panel-accent">Balanced · ₹0 diff</p>
               </div>
             </div>
           </div>
 
           <div className="mt-6 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
             {PILLARS.map((item) => (
-              <div key={item.label} className="flex items-center gap-2.5 text-xs text-slate-300">
-                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md border border-[#243759] bg-[#12203a] text-emerald-400">
+              <div key={item.label} className="flex items-center gap-2.5 text-xs text-panel-muted">
+                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-lg border border-panel-line bg-panel-raised text-panel-accent">
                   <item.icon className="h-3.5 w-3.5" />
                 </span>
                 <span>{item.label}</span>
@@ -185,12 +189,12 @@ export default function Login() {
         </div>
 
         {/* Footer governance note */}
-        <div className="relative flex items-center justify-between gap-4 border-t border-[#1e2f4d] pt-5 text-xs text-slate-400">
+        <div className="relative flex items-center justify-between gap-4 border-t border-panel-line/80 pt-5 text-xs text-panel-muted">
           <div className="flex items-center gap-2.5">
-            <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-400" />
+            <ShieldCheck className="h-4 w-4 shrink-0 text-panel-accent" />
             <span>Two-role governance: Owner &amp; Station Manager with full server-side audit logs.</span>
           </div>
-          <span className="font-mono text-[10px] text-slate-500">IST · INR</span>
+          <span className="font-mono text-[10px] text-panel-dim">IST · INR</span>
         </div>
       </section>
 
