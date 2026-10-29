@@ -314,11 +314,11 @@ export default function Shifts() {
       </div>
 
       {(alertsQuery.data?.alerts ?? []).length > 0 && (
-        <div className="mt-3 space-y-2">
+        <div className="mt-4 space-y-2">
           {(alertsQuery.data?.alerts ?? []).slice(0, 3).map((alert) => (
-            <div key={alert.id} className="flex items-center gap-2 rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs text-warn/90">
-              <CalendarDays className="h-3.5 w-3.5 shrink-0" />
-              {unclosedShiftMessage(alert)}
+            <div key={alert.id} className="callout-warn flex items-center gap-2.5">
+              <CalendarDays className="h-4 w-4 shrink-0 text-warn" />
+              <span>{unclosedShiftMessage(alert)}</span>
             </div>
           ))}
         </div>
@@ -326,8 +326,8 @@ export default function Shifts() {
 
       <DayClosingCard stationId={stationId} canManage={can('dayclose.manage')} />
 
-      <Card className="mt-3">
-        <div className="flex flex-wrap items-end gap-2 border-b border-navy-700/60 p-3">
+      <Card className="mt-4">
+        <div className="flex flex-wrap items-end gap-2.5 border-b border-navy-700/70 bg-navy-900/40 p-4">
           <Field label="Status" className="w-full sm:w-40">
             <Select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}>
               <option value="">All statuses</option>
@@ -448,41 +448,41 @@ export default function Shifts() {
             </div>
 
             {shift.nozzles.some((nozzle) => nozzle.note && (nozzle.status === 'FLAGGED' || !nozzle.openingReading)) && (
-              <div className="space-y-1.5 rounded-lg border border-amber-400/20 bg-amber-400/5 p-3">
+              <div className="callout-warn space-y-1.5">
                 {shift.nozzles.filter((nozzle) => nozzle.note && (nozzle.status === 'FLAGGED' || !nozzle.openingReading)).map((nozzle) => (
-                  <p key={nozzle.id} className="text-xs text-warn/90">• {nozzle.nozzleLabel}: {nozzle.note}</p>
+                  <p key={nozzle.id} className="text-xs">• <strong>{nozzle.nozzleLabel}:</strong> {nozzle.note}</p>
                 ))}
               </div>
             )}
 
             {capturePreview?.shiftId === shift.id && (
-              <div className="space-y-1.5 rounded-lg border border-navy-700/60 bg-navy-800/30 p-3">
-                <p className="text-xs font-medium text-ink-200">Closing preview</p>
+              <div className="space-y-1.5 rounded-lg border border-navy-700/75 bg-navy-900/60 p-3.5">
+                <p className="text-xs font-semibold text-ink-100">Closing preview</p>
                 <p className="text-[11px] text-ink-500">{capturePreview.note}</p>
                 {capturePreview.preview.map((item) => (
                   <p key={item.nozzleId} className="text-xs text-ink-300">
                     {item.nozzle}: closing {item.closing ?? 'missing'} · {item.litres === null ? 'no volume' : `${item.litres} L net`}
                     {(item as { testingLitres?: string }).testingLitres && Number((item as { testingLitres?: string }).testingLitres) > 0
-                      ? ` (testing ${(item as { testingLitres?: string }).testingLitres} L kata)` : ''} · {item.status}
+                      ? ` (testing ${(item as { testingLitres?: string }).testingLitres} L deducted)` : ''} · {item.status}
                     {item.note ? ` — ${item.note}` : ''}
                   </p>
                 ))}
               </div>
             )}
 
-            <div className="grid gap-2 sm:grid-cols-4">
+            <div className="grid gap-2.5 sm:grid-cols-4">
               {[
-                { label: 'Net litres (bikri)', value: `${formatNumber(shift.totals.litres, 3)} L` },
-                { label: 'Testing litres (wapas tank me)', value: `${formatNumber(shift.totals.testingLitres ?? '0', 3)} L` },
+                { label: 'Net litres sold', value: `${formatNumber(shift.totals.litres, 3)} L` },
+                { label: 'Testing litres (returned)', value: `${formatNumber(shift.totals.testingLitres ?? '0', 3)} L` },
                 { label: 'Aggregate estimate', value: formatINR(shift.totals.value) },
                 {
                   label: 'Cash short / excess',
                   value: shift.shortExcess === null ? '—' : `${Number(shift.shortExcess) >= 0 ? '+' : ''}${formatINR(shift.shortExcess)}`,
                 },
               ].map((item) => (
-                <div key={item.label} className="rounded-lg border border-navy-700/60 bg-navy-800/30 p-2.5">
-                  <p className="text-[10px] uppercase tracking-wider text-ink-500">{item.label}</p>
-                  <p className="num mt-0.5 text-sm text-ink-100">{item.value}</p>
+                <div key={item.label} className="rounded-lg border border-navy-700/75 bg-navy-900/55 p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-ink-500">{item.label}</p>
+                  <p className="num mt-1 font-display text-sm font-bold text-ink-100">{item.value}</p>
                 </div>
               ))}
             </div>
@@ -543,9 +543,9 @@ export default function Shifts() {
               </table>
             </div>
             {(shift.settlements ?? []).length > 0 && (
-              <div className="rounded-lg border border-navy-700/60">
-                <p className="border-b border-navy-700/60 px-3 py-2 text-xs font-semibold text-ink-200">
-                  Paise ka milaan — expected (system) vs received (galla)
+              <div className="rounded-lg border border-navy-700/75 overflow-hidden">
+                <p className="border-b border-navy-700/70 bg-navy-900/50 px-3.5 py-2.5 text-xs font-bold text-ink-100">
+                  Shift settlement — expected (system) vs received (tendered)
                 </p>
                 <div className="table-wrap">
                   <table className="data-table">
@@ -567,17 +567,16 @@ export default function Shifts() {
                   </table>
                 </div>
                 {(shift.denominations ?? []).length > 0 && (
-                  <p className="border-t border-navy-700/60 px-3 py-2 text-[11px] text-ink-400">
-                    Cash ginti: {(shift.denominations ?? []).map((d) => `₹${d.denomination}×${d.count}`).join(' · ')}
-                    {' = '}<span className="num text-ink-100">{formatINR(shift.cashCounted ?? 0)}</span>
+                  <p className="border-t border-navy-700/70 bg-navy-900/40 px-3.5 py-2 text-[11px] text-ink-400">
+                    Cash denomination count: {(shift.denominations ?? []).map((d) => `₹${d.denomination}×${d.count}`).join(' · ')}
+                    {' = '}<span className="num font-semibold text-ink-100">{formatINR(shift.cashCounted ?? 0)}</span>
                   </p>
                 )}
               </div>
             )}
             <p className="text-[11px] leading-relaxed text-ink-500">
-              Net litres = closing totalizer − opening totalizer + approved adjustment − testing (testing fuel tank me
-              wapas jata hai, sale nahi hota). Totalizer-only shifts produce an
-              <span className="text-ink-300"> aggregate estimated sales value</span>, not per-vehicle invoices.
+              Net litres = closing totalizer − opening totalizer + approved adjustment − testing (calibration fuel returned to tank is excluded from sales). Totalizer-only shifts produce an
+              <span className="text-ink-200"> aggregate estimated sales value</span>, not per-vehicle invoices.
             </p>
             {shift.closeNotes && <p className="text-xs text-ink-400">Close note: {shift.closeNotes}</p>}
           </div>
@@ -762,7 +761,7 @@ function CloseShiftModal({
       open={open}
       onClose={onClose}
       title={`Close shift #${shift.shiftNumber}`}
-      description="Pehle galla gino (note-wise), phir UPI/Card machine ke totals daalo — system khud short/excess nikal dega."
+      description="Count drawer notes by denomination, then enter UPI, Card, Bank and Credit slip totals to compute cash variance."
       size="lg"
       footer={
         <>
@@ -775,10 +774,10 @@ function CloseShiftModal({
     >
       <div className="space-y-4">
         <div>
-          <p className="label">Cash ginti — note-wise (galla gin ke)</p>
+          <p className="label">Note-wise cash count (drawer denominations)</p>
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
             {CASH_DENOMINATIONS.map((d) => (
-              <label key={d} className="rounded-xl border border-navy-700/60 bg-navy-800/30 p-2">
+              <label key={d} className="rounded-lg border border-navy-700/75 bg-navy-900/55 p-2.5">
                 <span className="num block text-[11px] font-semibold text-ink-300">₹{d} ×</span>
                 <input
                   inputMode="numeric"
@@ -795,38 +794,38 @@ function CloseShiftModal({
             ))}
           </div>
           <p className="mt-2 text-sm text-ink-300">
-            Ginti total: <span className="num font-display text-base font-bold text-ink-100">{formatINR(denomTotal)}</span>
-            {denomUsed && <span className="text-[11px] text-ink-500"> · yahi received cash mana jayega</span>}
+            Counted cash: <span className="num font-display text-base font-bold text-ink-100">{formatINR(denomTotal)}</span>
+            {denomUsed && <span className="text-[11px] text-ink-500"> · auto-applied as closing cash</span>}
           </p>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Closing cash (INR)" hint={denomUsed ? 'Ginti se auto bhara gaya' : 'Ginti nahi ki to seedha cash daalo'}>
+          <Field label="Closing cash (INR)" hint={denomUsed ? 'Auto-filled from denomination count' : 'Or enter total drawer cash directly'}>
             <Input inputMode="decimal" value={effectiveCash} readOnly={denomUsed} onChange={(e) => setClosingCash(e.target.value)} />
           </Field>
-          <Field label="UPI mila (INR)" hint="UPI app/machine ka total">
+          <Field label="UPI received (INR)" hint="QR / terminal settlement batch total">
             <Input inputMode="decimal" value={modes.UPI} onChange={(e) => setModes({ ...modes, UPI: e.target.value })} placeholder="0" />
           </Field>
-          <Field label="Card mila (INR)" hint="Swipe machine batch total">
+          <Field label="Card received (INR)" hint="POS swipe terminal batch total">
             <Input inputMode="decimal" value={modes.CARD} onChange={(e) => setModes({ ...modes, CARD: e.target.value })} placeholder="0" />
           </Field>
-          <Field label="Bank / Fleet mila (INR)">
+          <Field label="Bank / Fleet card (INR)">
             <Input inputMode="decimal" value={modes.BANK} onChange={(e) => setModes({ ...modes, BANK: e.target.value })} placeholder="0" />
           </Field>
-          <Field label="Credit slips ka total (INR)" hint="Is shift ki udhaar p-slips ka jog">
+          <Field label="Credit slips total (INR)" hint="Sum of authorized fleet credit slips">
             <Input inputMode="decimal" value={modes.CREDIT} onChange={(e) => setModes({ ...modes, CREDIT: e.target.value })} placeholder="0" />
           </Field>
           <Field label="Close notes">
-            <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Cash handover, short/excess ka karan…" />
+            <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Handover remarks or variance explanation…" />
           </Field>
         </div>
 
-        <div className="rounded-lg border border-navy-700/60 bg-navy-800/30 p-3 text-xs text-ink-400">
-          <p className="mb-1 font-medium text-ink-200">Band karne se pehle</p>
+        <div className="rounded-lg border border-navy-700/75 bg-navy-900/55 p-3 text-xs text-ink-400">
+          <p className="mb-1 font-semibold text-ink-200">Pre-close checklist</p>
           <ul className="list-inside list-disc space-y-0.5">
-            <li>Har nozzle ki opening/closing reading aur testing litres check kar lo.</li>
-            <li>Expected paisa shift ki record hui bikri se banta hai; bachi hui rakam cash mani jati hai.</li>
-            <li>Band shift chup-chaap edit nahi hoti — adjustment ya reversal use karo.</li>
+            <li>Verify opening/closing totalizers and 5L calibration testing fuel for each nozzle.</li>
+            <li>Expected non-cash modes follow recorded transactions; remaining shift value settles against cash.</li>
+            <li>Closed shifts are immutable — corrections require an audited adjustment or shift reversal.</li>
           </ul>
         </div>
       </div>
@@ -854,49 +853,49 @@ function DayClosingCard({ stationId, canManage }: { stationId: string; canManage
   const invalidate = () => void queryClient.invalidateQueries({ queryKey: ['day-closings'] });
   const closeDay = useMutation({
     mutationFn: () => apiPost('/shifts/day-close', { stationId, businessDate: date }),
-    onSuccess: () => { toast('Din band ho gaya', { description: `${date} ki entries ab lock hain.` }); invalidate(); },
-    onError: (error: Error) => toast('Din band nahi hua', { tone: 'danger', description: error.message }),
+    onSuccess: () => { toast('Business day closed', { description: `Entries for ${date} are now locked.` }); invalidate(); },
+    onError: (error: Error) => toast('Could not close day', { tone: 'danger', description: error.message }),
   });
   const reopenDay = useMutation({
     mutationFn: () => apiPost('/shifts/day-close/reopen', { stationId, businessDate: reopenFor?.businessDate, reason: reason.trim() }),
-    onSuccess: () => { toast('Din dobara khul gaya'); setReopenFor(null); setReason(''); invalidate(); },
-    onError: (error: Error) => toast('Reopen nahi hua', { tone: 'danger', description: error.message }),
+    onSuccess: () => { toast('Business day reopened'); setReopenFor(null); setReason(''); invalidate(); },
+    onError: (error: Error) => toast('Could not reopen day', { tone: 'danger', description: error.message }),
   });
 
   const recent = (closings.data ?? []).slice(0, 5);
 
   return (
-    <Card className="mt-3">
+    <Card className="mt-4">
       <CardHeader
-        title="Day closing — Roznamcha"
-        subtitle="Din band karne ke baad us date ki shift, bikri, kharcha aur dip entries lock ho jati hain."
+        title="Business day lock (Day-close)"
+        subtitle="Locking a business date freezes shifts, sales, expenses and dip entries against retrospective edits."
         action={canManage ? (
           <div className="flex items-center gap-2">
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-auto" aria-label="Day closing date" />
             <Button size="sm" variant="primary" loading={closeDay.isPending} onClick={() => closeDay.mutate()}>
-              Din band karo
+              Lock day
             </Button>
           </div>
-        ) : <Badge tone="muted">Sirf manager/owner din band kar sakte hain</Badge>}
+        ) : <Badge tone="muted">Manager / Owner permission required</Badge>}
       />
       <CardBody>
         {closings.isLoading ? (
           <LoadingBlock rows={2} />
         ) : recent.length === 0 ? (
-          <p className="py-2 text-center text-xs text-ink-500">Abhi tak koi din band nahi hua. Kal ka hisaab pakka ho jaye to upar se din band kar do.</p>
+          <p className="py-2 text-center text-xs text-ink-500">No business days locked yet. Lock completed dates once shifts and cash settlements are reconciled.</p>
         ) : (
-          <div className="divide-y divide-navy-800/70">
+          <div className="divide-y divide-navy-700/60">
             {recent.map((row) => (
               <div key={row.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
                 <div>
-                  <p className="num text-sm font-medium text-ink-100">{row.businessDate}</p>
+                  <p className="num text-sm font-semibold text-ink-100">{row.businessDate}</p>
                   <p className="text-[11px] text-ink-500">
-                    Band kiya: {row.closedByName ?? '—'} · {formatDateTime(row.closedAt)}
-                    {row.status === 'REOPENED' && row.reopenReason ? ` · Reopen karan: ${row.reopenReason}` : ''}
+                    Locked by: {row.closedByName ?? '—'} · {formatDateTime(row.closedAt)}
+                    {row.status === 'REOPENED' && row.reopenReason ? ` · Reopen reason: ${row.reopenReason}` : ''}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <StatusBadge status={row.status} label={row.status === 'CLOSED' ? 'DIN BAND' : 'REOPENED'} />
+                  <StatusBadge status={row.status} label={row.status === 'CLOSED' ? 'LOCKED' : 'REOPENED'} />
                   {canManage && row.status === 'CLOSED' && (
                     <Button size="sm" variant="outline" onClick={() => setReopenFor(row)}>Reopen</Button>
                   )}
@@ -909,20 +908,20 @@ function DayClosingCard({ stationId, canManage }: { stationId: string; canManage
       <Modal
         open={reopenFor !== null}
         onClose={() => setReopenFor(null)}
-        title={`Din dobara kholo — ${reopenFor?.businessDate ?? ''}`}
-        description="Reopen ka karan audit me hamesha rahega. Sudhar karke din phir se band kar dena."
+        title={`Reopen business day — ${reopenFor?.businessDate ?? ''}`}
+        description="The reopen reason is permanently recorded in the audit log. Re-lock the date once corrections are complete."
         size="sm"
         footer={
           <>
             <Button variant="ghost" onClick={() => setReopenFor(null)}>Cancel</Button>
             <Button variant="primary" loading={reopenDay.isPending} disabled={reason.trim().length < 10} onClick={() => reopenDay.mutate()}>
-              Reopen karo
+              Reopen day
             </Button>
           </>
         }
       >
-        <Field label="Reopen ka karan (kam se kam 10 akshar)" required>
-          <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Ek credit slip galat customer par chadh gayi thi" />
+        <Field label="Reason for reopening (minimum 10 characters)" required>
+          <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Posted credit slip to wrong fleet account" />
         </Field>
       </Modal>
     </Card>
@@ -1022,12 +1021,12 @@ function EditNozzleModal({
         <Field label="Closing totalizer">
           <Input value={closing} onChange={(e) => setClosing(e.target.value)} />
         </Field>
-        <Field label="Testing litres" hint="5L calibration/sample jo tank me wapas gaya — bikri se katega">
+        <Field label="Testing litres" hint="5L calibration sample returned to tank — deducted from net sales">
           <Input inputMode="decimal" value={testing} onChange={(e) => setTesting(e.target.value)} />
         </Field>
-        <Field label="Is nozzle ka filler" hint="Is nozzle ka cash isi ke hisaab me">
+        <Field label="Nozzle attendant" hint="Assigns this nozzle's collection responsibility">
           <Select value={operatorId} onChange={(e) => setOperatorId(e.target.value)}>
-            <option value="">Shift operator hi</option>
+            <option value="">Default shift operator</option>
             {employees.map((employee) => (
               <option key={employee.id} value={employee.id}>{employee.name} · {employee.roleKey}</option>
             ))}

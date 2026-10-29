@@ -231,10 +231,10 @@ export default function Customers() {
                         <td className={`num text-right ${balance > 0 ? 'text-warn' : 'text-ink-300'}`}>{formatINR(customer.balance)}</td>
                         <td className="w-36">
                           <div className="flex items-center gap-2">
-                            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-navy-700">
-                              <div className={`h-full rounded-full ${util > 90 ? 'bg-rose-400' : util > 70 ? 'bg-amber-400' : 'bg-accent'}`} style={{ width: `${util}%` }} />
+                            <div className="h-2 flex-1 overflow-hidden rounded-full bg-navy-800 ring-1 ring-inset ring-navy-700/60">
+                              <div className={`h-full rounded-full ${util > 90 ? 'bg-danger' : util > 70 ? 'bg-warn' : 'bg-accent'}`} style={{ width: `${util}%` }} />
                             </div>
-                            <span className="text-[10px] text-ink-500">{formatNumber(util, 0)}%</span>
+                            <span className="num text-[10px] font-medium text-ink-500">{formatNumber(util, 0)}%</span>
                           </div>
                         </td>
                         <td className="text-right">
@@ -332,7 +332,7 @@ export default function Customers() {
                 <Button size="sm" variant="primary" onClick={() => setReceiptOpen(true)}>Record receipt</Button>
               )}
               <Button size="sm" variant="outline" icon={<Printer className="h-3.5 w-3.5" />} onClick={() => setStatementOpen(true)}>
-                Mahine ki statement
+                Monthly statement
               </Button>
             </div>
             <Button size="sm" variant="ghost" onClick={() => setLedgerCustomer(null)}>Close</Button>
@@ -347,8 +347,8 @@ export default function Customers() {
           <div className="space-y-3">
             {ledgerCustomer && <VehiclesSection customerId={ledgerCustomer.id} canWrite={can('customers.write')} />}
             {Number(ledger.data.overdueAmount) > 0 && (
-              <div className="rounded-lg border border-rose-500/25 bg-rose-500/5 px-3 py-2 text-xs text-danger">
-                {formatINR(ledger.data.overdueAmount)} overdue hai — credit period paar ho gaya hai.
+              <div className="callout-danger">
+                {formatINR(ledger.data.overdueAmount)} is past due — credit terms exceeded.
               </div>
             )}
             <TableScrollHint className="rounded-t-lg border border-b-0 border-navy-700/60" />
@@ -359,7 +359,7 @@ export default function Customers() {
                 </thead>
                 <tbody>
                   {ledger.data.ledger.length === 0 ? (
-                    <tr><td colSpan={6} className="py-8 text-center text-xs text-ink-500">No ledger entries yet.</td></tr>
+                    <tr><td colSpan={7} className="py-8 text-center text-xs text-ink-500">No ledger entries yet.</td></tr>
                   ) : (
                     ledger.data.ledger.map((entry) => (
                       <tr key={entry.id}>
@@ -433,24 +433,24 @@ function VehiclesSection({ customerId, canWrite }: { customerId: string; canWrit
   const invalidate = () => void queryClient.invalidateQueries({ queryKey: ['customer-vehicles', customerId] });
   const add = useMutation({
     mutationFn: () => apiPost(`/catalog/customers/${customerId}/vehicles`, form),
-    onSuccess: () => { toast('Gaadi register ho gayi'); setForm({ vehicleNumber: '', vehicleType: 'Truck', driverName: '' }); invalidate(); },
-    onError: (error: Error) => toast('Gaadi add nahi hui', { tone: 'danger', description: error.message }),
+    onSuccess: () => { toast('Vehicle registered'); setForm({ vehicleNumber: '', vehicleType: 'Truck', driverName: '' }); invalidate(); },
+    onError: (error: Error) => toast('Could not register vehicle', { tone: 'danger', description: error.message }),
   });
   const remove = useMutation({
     mutationFn: (id: string) => apiDelete(`/catalog/customers/${customerId}/vehicles/${id}`),
     onSuccess: invalidate,
-    onError: (error: Error) => toast('Delete nahi hua', { tone: 'danger', description: error.message }),
+    onError: (error: Error) => toast('Could not remove vehicle', { tone: 'danger', description: error.message }),
   });
 
   return (
-    <div className="rounded-lg border border-navy-700/60 bg-navy-800/30 p-3">
-      <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-ink-200">
-        <Truck className="h-3.5 w-3.5 text-teal-300" /> Registered gaadiyan — sirf in par udhaar dena hai
+    <div className="rounded-lg border border-navy-700/75 bg-navy-900/55 p-3.5">
+      <p className="mb-2 flex items-center gap-1.5 text-xs font-bold text-ink-100">
+        <Truck className="h-3.5 w-3.5 text-accent" /> Authorized fleet vehicles (credit slip whitelist)
       </p>
       <div className="flex flex-wrap gap-1.5">
         {(vehicles.data ?? []).map((v) => (
-          <span key={v.id} className="inline-flex items-center gap-1.5 rounded-full border border-navy-700 bg-navy-900/60 py-1 pl-2.5 pr-1 text-[11px] text-ink-200">
-            <span className="font-semibold tracking-wide">{v.vehicleNumber}</span>
+          <span key={v.id} className="inline-flex items-center gap-1.5 rounded-full border border-navy-700 bg-navy-900 py-1 pl-2.5 pr-1 text-[11px] text-ink-200">
+            <span className="font-mono font-semibold tracking-wide text-ink-100">{v.vehicleNumber}</span>
             <span className="text-ink-500">{v.vehicleType ?? ''}{v.driverName ? ` · ${v.driverName}` : ''}</span>
             {canWrite && (
               <button type="button" aria-label={`Remove ${v.vehicleNumber}`} className="rounded-full p-0.5 text-ink-500 hover:text-danger" onClick={() => remove.mutate(v.id)}>
@@ -460,7 +460,7 @@ function VehiclesSection({ customerId, canWrite }: { customerId: string; canWrit
           </span>
         ))}
         {(vehicles.data ?? []).length === 0 && !vehicles.isLoading && (
-          <span className="text-[11px] text-ink-500">Koi gaadi register nahi — gaadi-wise p-slip ke liye number add karo.</span>
+          <span className="text-[11px] text-ink-500">No fleet vehicles registered yet — add vehicle numbers for vehicle-wise indent slips.</span>
         )}
       </div>
       {canWrite && (
@@ -469,8 +469,8 @@ function VehiclesSection({ customerId, canWrite }: { customerId: string; canWrit
           <Select value={form.vehicleType} onChange={(e) => setForm({ ...form, vehicleType: e.target.value })} className="py-1.5 text-xs" aria-label="Vehicle type">
             {['Truck', 'Tempo', 'Tractor', 'Car', 'Bus', 'Two-wheeler', 'Other'].map((t) => <option key={t} value={t}>{t}</option>)}
           </Select>
-          <Input placeholder="Driver ka naam" aria-label="Driver name" value={form.driverName} onChange={(e) => setForm({ ...form, driverName: e.target.value })} className="py-1.5 text-xs" />
-          <Button size="sm" variant="secondary" disabled={!form.vehicleNumber} loading={add.isPending} onClick={() => add.mutate()}>Gaadi jodo</Button>
+          <Input placeholder="Driver name" aria-label="Driver name" value={form.driverName} onChange={(e) => setForm({ ...form, driverName: e.target.value })} className="py-1.5 text-xs" />
+          <Button size="sm" variant="secondary" disabled={!form.vehicleNumber} loading={add.isPending} onClick={() => add.mutate()}>Add vehicle</Button>
         </div>
       )}
     </div>
@@ -506,7 +506,7 @@ function StatementModal({ open, onClose, customer }: { open: boolean; onClose: (
       open={open}
       onClose={onClose}
       title={`Statement — ${customer.name}`}
-      description="Party ko bhejine wali mahine-bhar ki p-slip-wise statement. Print karke ya PDF banakar do."
+      description="Itemized monthly credit-slip statement ready for print or PDF export."
       size="xl"
       footer={
         <>
@@ -516,7 +516,7 @@ function StatementModal({ open, onClose, customer }: { open: boolean; onClose: (
       }
     >
       <div className="space-y-3">
-        <Field label="Mahina" className="w-full sm:w-52">
+        <Field label="Month" className="w-full sm:w-52">
           <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
         </Field>
         {statement.isLoading ? (
@@ -538,21 +538,21 @@ function StatementModal({ open, onClose, customer }: { open: boolean; onClose: (
               </div>
             </div>
             <p className="mt-3 text-xs text-ink-300">
-              Pichla bakaya (opening): <strong className="num">{formatINR(data.openingBalance)}</strong>
+              Opening balance: <strong className="num">{formatINR(data.openingBalance)}</strong>
             </p>
             <TableScrollHint />
             <div className="table-wrap mt-2">
               <table className="data-table min-w-[760px]">
                 <thead>
                   <tr>
-                    <th>Tarikh</th><th>Pump</th><th>Slip no.</th><th>Gaadi</th><th>Product</th>
-                    <th className="text-right">Litre</th><th className="text-right">Rate</th>
-                    <th className="text-right">Udhaar (Dr)</th><th className="text-right">Vasuli (Cr)</th><th className="text-right">Balance</th>
+                    <th>Date</th><th>Pump</th><th>Slip no.</th><th>Vehicle</th><th>Product</th>
+                    <th className="text-right">Litres</th><th className="text-right">Rate</th>
+                    <th className="text-right">Debit (Dr)</th><th className="text-right">Credit (Cr)</th><th className="text-right">Balance</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.lines.length === 0 ? (
-                    <tr><td colSpan={9} className="py-6 text-center text-xs text-ink-500">Is mahine koi lena-dena nahi.</td></tr>
+                    <tr><td colSpan={10} className="py-6 text-center text-xs text-ink-500">No credit activity in this month.</td></tr>
                   ) : data.lines.map((entry) => (
                     <tr key={entry.id}>
                       <td className="whitespace-nowrap text-xs">{formatDate(entry.occurredAt)}</td><td className="text-xs">{entry.stationName ?? '—'}</td>
@@ -570,12 +570,12 @@ function StatementModal({ open, onClose, customer }: { open: boolean; onClose: (
               </table>
             </div>
             <div className="mt-3 flex flex-wrap justify-end gap-5 border-t border-navy-700 pt-3 text-xs">
-              <span className="text-ink-400">Kul tel: <strong className="num text-ink-100">{formatNumber(data.lines.reduce((acc, line) => acc + Number(line.quantityLitres ?? 0), 0), 1)} L</strong></span>
-              <span className="text-ink-400">Mahine ka udhaar: <strong className="num text-warn">{formatINR(data.totalSales)}</strong></span>
-              <span className="text-ink-400">Vasuli: <strong className="num text-ok">{formatINR(data.totalPayments)}</strong></span>
-              <span className="text-ink-200">Aakhir me bakaya: <strong className="num font-display text-base text-ink-100">{formatINR(data.closingBalance)}</strong></span>
+              <span className="text-ink-400">Total volume: <strong className="num text-ink-100">{formatNumber(data.lines.reduce((acc, line) => acc + Number(line.quantityLitres ?? 0), 0), 1)} L</strong></span>
+              <span className="text-ink-400">Monthly credit sales: <strong className="num text-warn">{formatINR(data.totalSales)}</strong></span>
+              <span className="text-ink-400">Receipts: <strong className="num text-ok">{formatINR(data.totalPayments)}</strong></span>
+              <span className="text-ink-200">Closing balance: <strong className="num font-display text-base text-ink-100">{formatINR(data.closingBalance)}</strong></span>
             </div>
-            <p className="mt-2 text-[10px] text-ink-600">Please pay within the agreed credit period. Kishi slip me galti lage to 7 din ke andar jankari dein.</p>
+            <p className="mt-2 text-[10px] text-ink-600">Please remit payment within the agreed credit period. Report any slip discrepancy within 7 days.</p>
           </div>
         ) : null}
       </div>
@@ -678,7 +678,7 @@ function CreditSaleModal({
         <Field label="Due date">
           <Input type="date" value={dueDate} min={todayIst()} onChange={(e) => setDueDate(e.target.value)} />
         </Field>
-        <Field label="Gaadi number" hint="Registered gaadi chuno ya number type karo">
+        <Field label="Vehicle number" hint="Pick a registered fleet vehicle or type registration">
           <Input
             list={`vehicles-${customer.id}`}
             value={vehicleNumber}
@@ -689,10 +689,10 @@ function CreditSaleModal({
             {(vehicles.data ?? []).map((v) => <option key={v.id} value={v.vehicleNumber}>{v.vehicleType ?? ''}</option>)}
           </datalist>
         </Field>
-        <Field label="Driver ka naam">
-          <Input value={driverName} onChange={(e) => setDriverName(e.target.value)} placeholder="P-slip par jisne sign kiya" />
+        <Field label="Driver name">
+          <Input value={driverName} onChange={(e) => setDriverName(e.target.value)} placeholder="Signed on indent slip" />
         </Field>
-        <Field label="P-slip number" hint="Khaali rakha to system khud number de dega">
+        <Field label="Indent / P-slip number" hint="Leave blank to auto-generate slip sequence">
           <Input value={slipNumber} onChange={(e) => setSlipNumber(e.target.value)} placeholder="auto-generated" />
         </Field>
       </div>

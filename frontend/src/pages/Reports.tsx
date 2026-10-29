@@ -360,15 +360,15 @@ function StockLossCard({ stationId, stations }: { stationId: string; stations: {
   });
   const rows = report.data?.rows ?? [];
   const tone = (status: StockLossRow['status']) => (status === 'BEYOND_NORM' ? 'danger' : status === 'GAIN_CHECK' ? 'warning' : status === 'NO_DIP' ? 'neutral' : 'success');
-  const label = (status: StockLossRow['status']) => ({ WITHIN_NORM: 'Norm ke andar', BEYOND_NORM: 'Loss norm se zyada!', GAIN_CHECK: 'Gain zyada — check karo', NO_DIP: 'Dip nahi mila' })[status];
+  const label = (status: StockLossRow['status']) => ({ WITHIN_NORM: 'Within OMC norm', BEYOND_NORM: 'Exceeds loss norm', GAIN_CHECK: 'Excess gain — verify', NO_DIP: 'No closing dip' })[status];
 
   return (
-    <Card className="mt-3">
+    <Card className="mt-4">
       <CardHeader
-        title="Mahine ka Stock Loss / Gain"
-        subtitle="Book stock vs actual dip — oil-company norm: MS 0.75% · HSD 0.25% (bikri par). Yahi report chori/leakage pakadti hai."
+        title="Monthly stock loss / gain analysis"
+        subtitle="Book stock vs physical dip — OMC evaporation norms: MS 0.75% · HSD 0.25% of dispensed volume."
         action={(
-          <Field label="Mahina" className="mb-0 w-44">
+          <Field label="Month" className="mb-0 w-44">
             <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
           </Field>
         )}
@@ -379,7 +379,7 @@ function StockLossCard({ stationId, stations }: { stationId: string; stations: {
       ) : report.isError ? (
         <div className="p-4"><ErrorState error={report.error} onRetry={() => void report.refetch()} /></div>
       ) : rows.length === 0 ? (
-        <EmptyState title="Koi product data nahi" description="Is mahine ke liye stock movement nahi mila." />
+        <EmptyState title="No product stock movements" description="No tank movements recorded for the selected month." />
       ) : (
         <div className="table-wrap">
           <table className="data-table min-w-[880px]">
@@ -387,19 +387,19 @@ function StockLossCard({ stationId, stations }: { stationId: string; stations: {
               <tr>
                 <th>Product</th>
                 <th className="text-right">Opening (L)</th>
-                <th className="text-right">Aaya (L)</th>
-                <th className="text-right">Bika (L)</th>
-                <th className="text-right">Kitabi closing (L)</th>
-                <th className="text-right">Dip closing (L)</th>
+                <th className="text-right">Receipts (L)</th>
+                <th className="text-right">Dispensed (L)</th>
+                <th className="text-right">Book closing (L)</th>
+                <th className="text-right">Physical dip (L)</th>
                 <th className="text-right">Loss / Gain (L)</th>
                 <th className="text-right">% of sale</th>
-                <th>Haalat</th>
+                <th>Status</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => (
                 <tr key={`${row.stationName ?? stationId}-${row.productCode}`}>
-                  <td className="font-medium text-ink-100">{row.productName}{row.stationName && <span className="block text-xs text-ink-500">{row.stationName}</span>}</td>
+                  <td className="font-semibold text-ink-100">{row.productName}{row.stationName && <span className="block text-xs font-normal text-ink-500">{row.stationName}</span>}</td>
                   <td className="num text-right">{formatNumber(row.openingLitres, 0)}</td>
                   <td className="num text-right">{formatNumber(row.receiptsLitres, 0)}</td>
                   <td className="num text-right">{formatNumber(row.dispensedLitres, 0)}</td>
@@ -410,16 +410,16 @@ function StockLossCard({ stationId, stations }: { stationId: string; stations: {
                       ? `${Number(row.lossGainLitres) >= 0 ? '+' : ''}${formatNumber(row.lossGainLitres, 0)}${Number(row.lossGainLitres) >= 0 ? ' gain' : ' loss'}`
                       : '—'}
                   </td>
-                  <td className="num text-right">{row.lossGainPctOfSales ? `${formatNumber(row.lossGainPctOfSales, 2)}%` : '—'}<span className="block text-[9px] text-ink-600">norm ±{row.normPct}%</span></td>
-                  <td><Badge tone={tone(row.status)}>{label(row.status)}</Badge></td>
+                  <td className="num text-right">{row.lossGainPctOfSales ? `${formatNumber(row.lossGainPctOfSales, 2)}%` : '—'}<span className="block text-[10px] text-ink-500">norm ±{row.normPct}%</span></td>
+                  <td><Badge tone={tone(row.status)} dot>{label(row.status)}</Badge></td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
-      <p className="border-t border-navy-700/60 px-4 py-2 text-[11px] text-ink-500">
-        Loss norm se zyada aaye to: nozzle calibration test karo, decantation ki dip milao, aur shift-wise variance check karo — leakage ka sabse pehla saket yahi hai.
+      <p className="border-t border-navy-700/70 px-4 py-2.5 text-[11px] text-ink-500">
+        When loss exceeds OMC evaporation norms, inspect nozzle calibration (5L measure), TT decantation dip records, and underground line integrity.
       </p>
     </Card>
   );
@@ -455,10 +455,10 @@ function AgeingCard({ stationId }: { stationId: string }) {
   );
 
   return (
-    <Card className="mt-3">
+    <Card className="mt-4">
       <CardHeader
-        title="Udhaar ki umar — Ageing report"
-        subtitle="Kaun kitna purana udhaar (purani sale pehle — FIFO) dabaye baitha hai. 90+ wala sabse pehle call karo."
+        title="Customer receivables ageing (FIFO)"
+        subtitle="Outstanding fleet credit bucketed by invoice age (oldest unpaid slips settled first)."
       />
       <TableScrollHint />
       {report.isLoading ? (
@@ -466,29 +466,29 @@ function AgeingCard({ stationId }: { stationId: string }) {
       ) : report.isError ? (
         <div className="p-4"><ErrorState error={report.error} onRetry={() => void report.refetch()} /></div>
       ) : rows.length === 0 ? (
-        <EmptyState title="Kisi par bakaya nahi" description="Saara udhaar clear hai — shaleen!" />
+        <EmptyState title="No outstanding receivables" description="All customer credit balances are currently settled." />
       ) : (
         <div className="table-wrap">
           <table className="data-table min-w-[780px]">
             <thead>
               <tr>
-                <th>Party</th>
-                <th className="text-right">Kul bakaya</th>
-                <th className="text-right">0–30 din</th>
-                <th className="text-right">31–60 din</th>
-                <th className="text-right">61–90 din</th>
-                <th className="text-right">90+ din</th>
+                <th>Customer</th>
+                <th className="text-right">Total outstanding</th>
+                <th className="text-right">0–30 days</th>
+                <th className="text-right">31–60 days</th>
+                <th className="text-right">61–90 days</th>
+                <th className="text-right">90+ days</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => (
                 <tr key={row.customerId}>
                   <td>
-                    <span className="font-medium text-ink-100">{row.name}</span>
-                    {row.overLimit && <Badge tone="danger" className="ml-2">Limit paar</Badge>}
-                    <span className="block text-[10px] text-ink-500">{row.code} · limit {formatINR(row.creditLimit)}{row.oldestUnpaidAt ? ` · Sabse purani unpaid ${formatDate(row.oldestUnpaidAt)}` : ''}</span>
+                    <span className="font-semibold text-ink-100">{row.name}</span>
+                    {row.overLimit && <Badge tone="danger" className="ml-2">Over limit</Badge>}
+                    <span className="block text-[10px] text-ink-500">{row.code} · limit {formatINR(row.creditLimit)}{row.oldestUnpaidAt ? ` · Oldest unpaid ${formatDate(row.oldestUnpaidAt)}` : ''}</span>
                   </td>
-                  <td className="num text-right font-medium text-ink-100">{formatINR(row.outstanding)}</td>
+                  <td className="num text-right font-semibold text-ink-100">{formatINR(row.outstanding)}</td>
                   <td className="num text-right">{bucketCell(row.bucket0To30)}</td>
                   <td className="num text-right">{bucketCell(row.bucket31To60)}</td>
                   <td className="num text-right">{bucketCell(row.bucket61To90, true)}</td>
@@ -496,13 +496,13 @@ function AgeingCard({ stationId }: { stationId: string }) {
                 </tr>
               ))}
               {report.data && (
-                <tr className="border-t border-navy-600">
-                  <td className="font-semibold text-ink-100">Kul</td>
-                  <td className="num text-right font-semibold text-ink-100">{formatINR(report.data.totals.outstanding)}</td>
+                <tr className="border-t-2 border-navy-600 bg-navy-900/50">
+                  <td className="font-bold text-ink-100">Total</td>
+                  <td className="num text-right font-bold text-ink-100">{formatINR(report.data.totals.outstanding)}</td>
                   <td className="num text-right font-semibold">{formatINR(report.data.totals.bucket0To30)}</td>
                   <td className="num text-right font-semibold">{formatINR(report.data.totals.bucket31To60)}</td>
                   <td className="num text-right font-semibold">{formatINR(report.data.totals.bucket61To90)}</td>
-                  <td className="num text-right font-semibold text-danger">{formatINR(report.data.totals.bucket90Plus)}</td>
+                  <td className="num text-right font-bold text-danger">{formatINR(report.data.totals.bucket90Plus)}</td>
                 </tr>
               )}
             </tbody>
@@ -532,36 +532,36 @@ function ExportsCard({ stationId }: { stationId: string }) {
   };
 
   const items = [
-    { slug: 'sales-register', name: 'Sales Register', detail: 'Mahine ki sahi bikri — product, mode wise (CA ke liye)' },
-    { slug: 'stock-statement', name: 'Stock Statement', detail: 'Tank-wise opening/aavak/bikri/closing — oil company format' },
-    { slug: 'ageing', name: 'Udhaar Ageing', detail: 'Party-wise purana bakaya buckets me' },
-    ...(stationId === 'all' ? [] : [{ slug: 'lubricants-gst', name: 'Lubricants GST Register', detail: 'Oil bikri GST alag karke — GSTR filing ready' }]),
+    { slug: 'sales-register', name: 'Sales Register', detail: 'Monthly product & payment-mode sales ledger (CA / Tally ready)' },
+    { slug: 'stock-statement', name: 'Stock Statement', detail: 'Tank-wise opening, receipts, dispensed & closing stock (OMC format)' },
+    { slug: 'ageing', name: 'Credit Ageing Schedule', detail: 'Customer-wise FIFO ageing buckets & credit limits' },
+    ...(stationId === 'all' ? [] : [{ slug: 'lubricants-gst', name: 'Lubricants GST Register', detail: 'Taxable value & GST split for packaged oils (GSTR-ready)' }]),
   ];
 
   return (
-    <Card className="mt-3">
+    <Card className="mt-4">
       <CardHeader
-        title="Exports — CA ko dene ke liye"
-        subtitle="Mahina chuno aur ek-click me CSV lo (Excel me seedha khulti hai)."
+        title="Accounting & statutory CSV exports"
+        subtitle="Select a month to download formatted CSV schedules for your CA, Tally or Excel workbooks."
         action={(
-          <Field label="Mahina" className="mb-0 w-44">
+          <Field label="Month" className="mb-0 w-44">
             <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
           </Field>
         )}
       />
-      <div className="grid gap-2 p-4 sm:grid-cols-2">
+      <div className="grid gap-3 p-5 sm:grid-cols-2">
         {items.map((item) => (
           <button
             key={item.slug}
             type="button"
             disabled={busy === item.slug}
             onClick={() => void download(item.slug, filenameOf(item.slug))}
-            className="flex items-start gap-3 rounded-2xl border border-navy-700/70 bg-navy-800/40 p-3 text-left transition hover:border-teal-400/40 hover:bg-navy-800 disabled:opacity-60"
+            className="group flex items-start gap-3 rounded-xl border border-navy-700/80 bg-navy-900/60 p-3.5 text-left transition hover:border-accent/45 hover:bg-navy-800/80 disabled:opacity-60"
           >
-            <span className="rounded-xl bg-teal-400/10 p-2 text-teal-300"><Download className="h-4 w-4" /></span>
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-accent/25 bg-accent/10 text-accent transition group-hover:bg-accent group-hover:text-onaccent"><Download className="h-4 w-4" /></span>
             <span>
-              <span className="block text-sm font-semibold text-ink-100">{item.name}</span>
-              <span className="mt-0.5 block text-[11px] text-ink-500">{item.detail}</span>
+              <span className="block text-sm font-bold text-ink-100">{item.name}</span>
+              <span className="mt-0.5 block text-xs text-ink-500">{item.detail}</span>
             </span>
           </button>
         ))}

@@ -149,7 +149,7 @@ export default function Reconciliation() {
                     <Input inputMode="decimal" value={digitalSettled} onChange={(e) => setDigitalSettled(e.target.value)} placeholder="0.00" />
                   </Field>
                 </div>
-                <div className={`rounded-lg border px-3 py-2 text-xs ${Math.abs(variance) <= 1 ? 'border-emerald-500/25 bg-emerald-500/5 text-ok' : 'border-amber-500/25 bg-amber-500/5 text-warn'}`}>
+                <div className={Math.abs(variance) <= 1 ? 'callout-ok' : 'callout-warn'}>
                   Cash variance against expectation: <span className="num font-semibold">{formatINR(variance)}</span>
                   {Math.abs(variance) > 1 && ' · requires approval'}
                 </div>

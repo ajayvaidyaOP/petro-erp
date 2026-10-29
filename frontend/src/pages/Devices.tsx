@@ -333,8 +333,8 @@ export default function Devices() {
                 </div>
               ))
             )}
-            <div className="col-span-2 rounded-lg border border-amber-400/20 bg-amber-400/5 p-3 text-xs text-warn/90">
-              <TriangleAlert className="mr-1 inline h-3.5 w-3.5" />
+            <div className="callout-warn col-span-2">
+              <TriangleAlert className="mr-1.5 inline h-3.5 w-3.5" />
               {diagnostics.data?.disclaimer ?? 'Real hardware has not been verified.'}
             </div>
           </div>

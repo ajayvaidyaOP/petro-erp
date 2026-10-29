@@ -61,33 +61,33 @@ export function AttendancePanel({ canWrite }: { canWrite: boolean }) {
           .map((row) => ({ userId: row.userId, status: statusOf(row), inTime: row.inTime ?? undefined, outTime: row.outTime ?? undefined })),
       }),
     onSuccess: () => {
-      toast('Attendance lag gayi', { description: `${date} ki Haziri save ho gayi.` });
+      toast('Attendance saved', { description: `Attendance sheet for ${date} recorded.` });
       setMarks({});
       void queryClient.invalidateQueries({ queryKey: ['attendance'] });
       void queryClient.invalidateQueries({ queryKey: ['attendance-summary'] });
     },
-    onError: (error: Error) => toast('Attendance nahi lagi', { tone: 'danger', description: error.message }),
+    onError: (error: Error) => toast('Could not save attendance', { tone: 'danger', description: error.message }),
   });
 
   const toneFor = (status: string) =>
-    status === 'PRESENT' ? 'bg-emerald-400/15 text-ok border-emerald-400/40'
-      : status === 'ABSENT' ? 'bg-rose-500/10 text-danger border-rose-500/40'
-      : status === 'HALF_DAY' ? 'bg-amber-400/10 text-warn border-amber-400/40'
-      : 'bg-navy-800 text-ink-300 border-navy-600';
+    status === 'PRESENT' ? 'bg-ok/12 text-ok border-ok/35'
+      : status === 'ABSENT' ? 'bg-danger/12 text-danger border-danger/35'
+      : status === 'HALF_DAY' ? 'bg-warn/12 text-warn border-warn/35'
+      : 'bg-navy-800 text-ink-200 border-navy-600';
 
   return (
     <Card className="mt-4">
       <CardHeader
-        title={<span className="flex items-center gap-2"><CalendarCheck2 className="h-4 w-4 text-accent" /> Attendance — Haziri</span>}
-        subtitle="Roz ki Haziri lagao; mahine ke aakhir me payable days se salary banti hai."
+        title={<span className="flex items-center gap-2"><CalendarCheck2 className="h-4 w-4 text-accent" /> Daily crew attendance</span>}
+        subtitle="Mark daily shift roster presence; monthly payable days drive payroll computation."
         action={(
           <div className="flex items-end gap-2">
-            <Field label="Tarikh" className="mb-0 w-40">
+            <Field label="Date" className="mb-0 w-40">
               <Input type="date" value={date} onChange={(e) => { setDate(e.target.value); setMarks({}); }} />
             </Field>
             {canWrite && (
               <Button size="sm" variant="primary" loading={save.isPending} disabled={rows.length === 0} onClick={() => save.mutate()}>
-                Haziri save karo
+                Save attendance
               </Button>
             )}
           </div>
@@ -98,12 +98,12 @@ export function AttendancePanel({ canWrite }: { canWrite: boolean }) {
       ) : sheet.isError ? (
         <div className="p-4"><ErrorState error={sheet.error} onRetry={() => void sheet.refetch()} /></div>
       ) : (
-        <div className="divide-y divide-navy-800/70">
+        <div className="divide-y divide-navy-700/60">
           {rows.map((row) => (
-            <div key={row.userId} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
+            <div key={row.userId} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
               <div>
-                <p className="text-sm font-medium text-ink-100">{row.name}</p>
-                <p className="text-[10px] text-ink-500">{row.roleKey.replace(/_/g, ' ')} · {row.email}</p>
+                <p className="text-sm font-semibold text-ink-100">{row.name}</p>
+                <p className="text-[11px] text-ink-500">{row.roleKey.replace(/_/g, ' ')} · {row.email}</p>
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {ATTENDANCE_STATUSES.map((status) => (
@@ -113,11 +113,11 @@ export function AttendancePanel({ canWrite }: { canWrite: boolean }) {
                     disabled={!canWrite}
                     onClick={() => setMarks({ ...marks, [row.userId]: status })}
                     aria-pressed={statusOf(row) === status}
-                    className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${
-                      statusOf(row) === status ? toneFor(status) : 'border-navy-700 bg-navy-900/50 text-ink-500 hover:text-ink-200'
+                    className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition ${
+                      statusOf(row) === status ? toneFor(status) : 'border-navy-700 bg-navy-900/60 text-ink-500 hover:border-navy-600 hover:text-ink-100'
                     } ${canWrite ? '' : 'cursor-not-allowed opacity-70'}`}
                   >
-                    {status === 'PRESENT' ? 'Present' : status === 'ABSENT' ? 'Absent' : status === 'HALF_DAY' ? 'Aadha din' : status === 'WEEK_OFF' ? 'Chhutti din' : 'Leave'}
+                    {status === 'PRESENT' ? 'Present' : status === 'ABSENT' ? 'Absent' : status === 'HALF_DAY' ? 'Half day' : status === 'WEEK_OFF' ? 'Weekly off' : 'Leave'}
                   </button>
                 ))}
               </div>
@@ -126,10 +126,10 @@ export function AttendancePanel({ canWrite }: { canWrite: boolean }) {
         </div>
       )}
 
-      <div className="border-t border-navy-700/60 px-4 py-3">
-        <div className="mb-2 flex items-center justify-between">
-          <p className="text-xs font-semibold text-ink-200">Mahine ka hisaab (salary ke liye)</p>
-          <Field label="Mahina" className="mb-0 w-40">
+      <div className="border-t border-navy-700/70 bg-navy-900/40 px-5 py-4">
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-xs font-bold text-ink-100">Monthly payroll summary</p>
+          <Field label="Month" className="mb-0 w-40">
             <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
           </Field>
         </div>
@@ -144,16 +144,16 @@ export function AttendancePanel({ canWrite }: { canWrite: boolean }) {
                 <tr>
                   <th>Staff</th>
                   <th className="text-right">Present</th>
-                  <th className="text-right">Aadha din</th>
+                  <th className="text-right">Half day</th>
                   <th className="text-right">Absent</th>
-                  <th className="text-right">Chhutti/Leave</th>
+                  <th className="text-right">Off / Leave</th>
                   <th className="text-right">Payable days</th>
                 </tr>
               </thead>
               <tbody>
                 {(summary.data?.employees ?? []).map((row) => (
                   <tr key={row.userId}>
-                    <td className="text-ink-200">{row.name}<span className="block text-[10px] text-ink-500">{row.roleKey.replace(/_/g, ' ')}</span></td>
+                    <td className="font-medium text-ink-100">{row.name}<span className="block text-[10px] font-normal text-ink-500">{row.roleKey.replace(/_/g, ' ')}</span></td>
                     <td className="num text-right">{row.present}</td>
                     <td className="num text-right">{row.halfDay}</td>
                     <td className="num text-right text-danger">{row.absent}</td>
@@ -165,7 +165,7 @@ export function AttendancePanel({ canWrite }: { canWrite: boolean }) {
             </table>
           </div>
         )}
-        <p className="mt-2 text-[11px] text-ink-500">Payable days = Present + aadha din × 0.5 + weekly off. Salary = (mahine ki tankhwah ÷ 30) × payable days.</p>
+        <p className="mt-2.5 text-[11px] text-ink-500">Payable days = Present + Half day × 0.5 + Weekly off.</p>
       </div>
     </Card>
   );

@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#f6f8f7" />
-    <meta name="description" content="PetroFlow ERP — Simple petrol pump management — one owner, one manager" />
+    <meta name="theme-color" content="#f3f6fa" />
+    <meta name="description" content="PetroFlow ERP — Multi-outlet petrol pump operations, stock, shift reconciliation and credit control" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
@@ -16,10 +16,7 @@
       (function () {
         try {
           var saved = localStorage.getItem('petroflow.theme');
-          var theme =
-            saved === 'light' || saved === 'dark'
-              ? saved
-              : 'light';
+          var theme = saved === 'light' || saved === 'dark' ? saved : 'light';
           document.documentElement.dataset.theme = theme;
           document.documentElement.style.colorScheme = theme;
         } catch (error) {
@@ -28,7 +25,7 @@
       })();
     </script>
 
-    <title>PetroFlow ERP</title>
+    <title>PetroFlow ERP — Fuel Station Operations Platform</title>
   </head>
   <body class="h-full">
     <div id="root" class="h-full"></div>

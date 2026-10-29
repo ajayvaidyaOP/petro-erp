@@ -95,7 +95,7 @@ export default function Compliance() {
       setFormOpen(false); setEditing(null); setForm({ ...emptyForm });
       invalidate();
     },
-    onError: (error: Error) => toast('Save nahi hua', { tone: 'danger', description: error.message }),
+    onError: (error: Error) => toast('Could not save document', { tone: 'danger', description: error.message }),
   });
 
   const remove = useMutation({
@@ -107,8 +107,8 @@ export default function Compliance() {
   if (!can('compliance.read')) {
     return (
       <>
-        <PageHeader title="Licences & Compliance" />
-        <Card><EmptyState title="Compliance access required" description="Is screen ke liye compliance permission chahiye." icon={<ShieldCheck className="h-4 w-4" />} /></Card>
+        <PageHeader title="Licences & statutory compliance" />
+        <Card><EmptyState title="Compliance access required" description="Ask your organization owner for compliance access." icon={<ShieldCheck className="h-4 w-4" />} /></Card>
       </>
     );
   }
@@ -128,36 +128,36 @@ export default function Compliance() {
   return (
     <>
       <PageHeader
-        title="Licences & Compliance"
-        description={`${station?.name ?? ''} ke saare licence, stamping aur NOC — expiry se pehle yaad dilana system ka kaam hai, bhulna tumhara nahi.`}
+        title="Licences & statutory compliance"
+        description={`${station?.name ?? 'Station'} · PESO storage licence, Legal Metrology nozzle stamping, Fire NOC & pollution renewals`}
         actions={can('compliance.write') ? (
           <Button variant="primary" size="sm" icon={<Plus className="h-4 w-4" />} onClick={openCreate}>Add document</Button>
         ) : undefined}
       />
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <StatCard label="Expired — turant renew karo" value={data?.summary.expired ?? '—'} icon={<ShieldAlert className="h-4 w-4" />} tone={(data?.summary.expired ?? 0) > 0 ? 'danger' : 'default'} />
-        <StatCard label="Jald expire hone wale" value={data?.summary.expiring ?? '—'} icon={<CalendarClock className="h-4 w-4" />} tone={(data?.summary.expiring ?? 0) > 0 ? 'warning' : 'default'} />
-        <StatCard label="Sab theek hai" value={data?.summary.ok ?? '—'} icon={<ShieldCheck className="h-4 w-4" />} tone="success" />
+        <StatCard label="Expired — renew immediately" value={data?.summary.expired ?? '—'} icon={<ShieldAlert className="h-4 w-4" />} tone={(data?.summary.expired ?? 0) > 0 ? 'danger' : 'default'} />
+        <StatCard label="Expiring soon" value={data?.summary.expiring ?? '—'} icon={<CalendarClock className="h-4 w-4" />} tone={(data?.summary.expiring ?? 0) > 0 ? 'warning' : 'default'} />
+        <StatCard label="Active & valid" value={data?.summary.ok ?? '—'} icon={<ShieldCheck className="h-4 w-4" />} tone="success" />
       </div>
 
-      <Card className="mt-3">
-        <CardHeader title="Documents" subtitle="Sabse pehle expire hone wala sabse upar." />
+      <Card className="mt-4">
+        <CardHeader title="Compliance register" subtitle="Ordered by nearest expiry date; upcoming renewals trigger automatic dashboard alerts." />
         {docs.isLoading ? (
           <LoadingBlock rows={4} />
         ) : docs.isError ? (
           <div className="p-4"><ErrorState error={docs.error} onRetry={() => void docs.refetch()} /></div>
         ) : !data || data.documents.length === 0 ? (
           <EmptyState
-            title="Koi compliance document nahi hai"
-            description="PESO licence, W&M stamping, Fire NOC — ek ek karke add karo. Expiry najdeek aate hi dashboard par alert aayega."
+            title="No compliance documents registered"
+            description="Track PESO storage licences, Legal Metrology dispenser stampings and Fire NOCs with proactive expiry alerts."
             icon={<FileBadge2 className="h-4 w-4" />}
-            action={can('compliance.write') ? <Button size="sm" variant="primary" onClick={openCreate}>Pehla document add karo</Button> : undefined}
+            action={can('compliance.write') ? <Button size="sm" variant="primary" onClick={openCreate}>Add first document</Button> : undefined}
           />
         ) : (
-          <CardBody className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <CardBody className="grid gap-3.5 md:grid-cols-2 xl:grid-cols-3">
             {data.documents.map((doc) => (
-              <div key={doc.id} className="min-w-0 break-words rounded-2xl border border-navy-700/50 bg-navy-800/30 p-4">
+              <div key={doc.id} className="min-w-0 break-words rounded-xl border border-navy-700/80 bg-navy-900/55 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate font-display text-sm font-bold text-ink-100">{doc.title}</p>
@@ -168,17 +168,17 @@ export default function Compliance() {
                     </p>
                   </div>
                   {doc.status === 'EXPIRED' && <Badge tone="danger" dot>Expired</Badge>}
-                  {doc.status === 'EXPIRING' && <Badge tone="warning" dot>{doc.daysLeft} din bache</Badge>}
+                  {doc.status === 'EXPIRING' && <Badge tone="warning" dot>{doc.daysLeft}d left</Badge>}
                   {doc.status === 'OK' && <Badge tone="success" dot>Valid</Badge>}
                 </div>
-                <dl className="mt-3 space-y-1 text-xs text-ink-400">
-                  <div className="flex justify-between"><dt>Doc no.</dt><dd className="num text-ink-200">{doc.docNumber ?? '—'}</dd></div>
-                  <div className="flex justify-between"><dt>Authority</dt><dd>{doc.authority ?? '—'}</dd></div>
-                  <div className="flex justify-between"><dt>Issued</dt><dd>{doc.issuedOn ? formatDate(doc.issuedOn) : '—'}</dd></div>
-                  <div className="flex justify-between"><dt>Expires</dt><dd className={doc.status === 'EXPIRED' ? 'font-semibold text-danger' : 'text-ink-200'}>{formatDate(doc.expiresOn)}</dd></div>
+                <dl className="mt-3 space-y-1.5 text-xs text-ink-400">
+                  <div className="flex justify-between"><dt>Document no.</dt><dd className="num font-medium text-ink-200">{doc.docNumber ?? '—'}</dd></div>
+                  <div className="flex justify-between"><dt>Issuing authority</dt><dd className="text-ink-200">{doc.authority ?? '—'}</dd></div>
+                  <div className="flex justify-between"><dt>Issued on</dt><dd className="num">{doc.issuedOn ? formatDate(doc.issuedOn) : '—'}</dd></div>
+                  <div className="flex justify-between"><dt>Expires on</dt><dd className={`num ${doc.status === 'EXPIRED' ? 'font-semibold text-danger' : 'font-medium text-ink-200'}`}>{formatDate(doc.expiresOn)}</dd></div>
                 </dl>
                 {can('compliance.write') && (
-                  <div className="mt-3 flex gap-1 border-t border-navy-700/50 pt-2.5">
+                  <div className="mt-3.5 flex gap-1.5 border-t border-navy-700/70 pt-3">
                     <Button size="sm" variant="ghost" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => openEdit(doc)}>Renew / Edit</Button>
                     <Button size="sm" variant="ghost" aria-label="Delete document" onClick={() => setDeleteId(doc.id)}>
                       <Trash2 className="h-3.5 w-3.5 text-danger" />
@@ -195,7 +195,7 @@ export default function Compliance() {
         open={formOpen}
         onClose={() => setFormOpen(false)}
         title={editing ? 'Renew / edit document' : 'Add compliance document'}
-        description="Renewal ho jaye to nayi expiry date daal kar save karo — purana record audit me rahega."
+        description="Upon renewal, update the expiry date and certificate number — prior state remains in the audit log."
         footer={
           <>
             <Button variant="ghost" onClick={() => setFormOpen(false)}>Cancel</Button>
@@ -226,19 +226,19 @@ export default function Compliance() {
           <Field label="Expires on" required>
             <Input type="date" value={form.expiresOn} onChange={(e) => setForm({ ...form, expiresOn: e.target.value })} />
           </Field>
-          <Field label="Dispenser (sirf stamping ke liye)">
+          <Field label="Dispenser (for W&M stamping)">
             <Select value={form.dispenserId} onChange={(e) => setForm({ ...form, dispenserId: e.target.value })}>
-              <option value="">Poora pump</option>
+              <option value="">Station-wide</option>
               {(dispensers.data?.data ?? []).map((d) => <option key={d.id} value={d.id}>{d.code} · {d.name}</option>)}
             </Select>
           </Field>
-          <Field label="Tank (sirf tank testing ke liye)">
+          <Field label="Tank (for hydro / calibration test)">
             <Select value={form.tankId} onChange={(e) => setForm({ ...form, tankId: e.target.value })}>
-              <option value="">Poora pump</option>
+              <option value="">Station-wide</option>
               {(tanks.data?.data ?? []).map((t) => <option key={t.id} value={t.id}>{t.code} · {t.name}</option>)}
             </Select>
           </Field>
-          <Field label="Kitne din pehle yaad dilau?">
+          <Field label="Renewal reminder lead days">
             <Input inputMode="numeric" value={form.renewalLeadDays} onChange={(e) => setForm({ ...form, renewalLeadDays: e.target.value })} />
           </Field>
           <Field label="Notes">
@@ -251,8 +251,8 @@ export default function Compliance() {
         open={deleteId !== null}
         onClose={() => setDeleteId(null)}
         onConfirm={() => remove.mutate()}
-        title="Document delete karu?"
-        message="Ye record hat jayega. Renewal hua hai to delete ki jagah nayi expiry date ke saath edit karo."
+        title="Delete compliance document?"
+        message="This removes the document from active tracking. For renewals, edit the expiry date instead of deleting."
         confirmLabel="Delete"
         danger
         loading={remove.isPending}

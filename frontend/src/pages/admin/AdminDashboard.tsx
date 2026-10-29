@@ -202,10 +202,10 @@ export default function AdminDashboard() {
           ) : (
             <div className="space-y-2 p-4">
               {data.errors.recent.map((error) => (
-                <div key={error.id} className="flex items-start gap-2 rounded-lg border border-rose-400/20 bg-rose-400/5 p-3">
+                <div key={error.id} className="callout-danger flex items-start gap-2.5">
                   <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
                   <div className="min-w-0">
-                    <p className="truncate text-sm text-ink-200">{error.message}</p>
+                    <p className="truncate text-sm font-medium text-ink-100">{error.message}</p>
                     <p className="text-xs text-ink-500">{error.path} · {formatDateTime(error.createdAt)}</p>
                   </div>
                 </div>

@@ -13,11 +13,11 @@ export interface OperationalAlert {
   to?: string;
 }
 
-/** The subset of the owner-dashboard payload used for attention items. */
+/** The subset of the owner-dashboard payload used for attention items and live shift context. */
 export interface AttentionSource {
   alerts: OperationalAlert[];
   flaggedShifts: number;
-  openShifts: unknown[];
+  openShifts: Record<string, unknown>[];
 }
 
 /** One item in "Needs attention" and the notification centre. */
@@ -29,7 +29,10 @@ export interface AttentionItem extends OperationalAlert {
  * Merges the dashboard alerts with unclosed-shift alerts into one ordered list.
  * Errors come first, then warnings, then information, so the most urgent item is at the top.
  */
-export function buildAttentionItems(dashboard: AttentionSource | undefined, shiftAlerts: ShiftAlertsResponse | undefined): AttentionItem[] {
+export function buildAttentionItems(
+  dashboard: AttentionSource | undefined,
+  shiftAlerts: ShiftAlertsResponse | undefined,
+): AttentionItem[] {
   const items: AttentionItem[] = [
     ...(dashboard?.alerts ?? []).map((alert, index) => ({ ...alert, id: `dash-${index}` })),
     ...(shiftAlerts?.alerts ?? []).map((alert) => ({
@@ -44,8 +47,8 @@ export function buildAttentionItems(dashboard: AttentionSource | undefined, shif
 }
 
 /**
- * Live attention data for the signed-in user's selected pump. It reuses the same query keys as
- * the Overview screen, so when both are mounted only one request is made.
+ * Live attention and shift context for the signed-in user's selected pump. It reuses the same
+ * query keys as the Overview screen, so when both are mounted only one request is made.
  */
 export function useAttentionItems(stationId: string | null | undefined) {
   const { can } = useAuth();
@@ -64,9 +67,16 @@ export function useAttentionItems(stationId: string | null | undefined) {
   });
   return {
     items: buildAttentionItems(dashboard.data, shiftAlerts.data),
+    openShifts: dashboard.data?.openShifts ?? [],
+    flaggedShifts: dashboard.data?.flaggedShifts ?? 0,
+    businessDate: today,
     isLoading: dashboard.isLoading || shiftAlerts.isLoading,
+    isFetching: dashboard.isFetching || shiftAlerts.isFetching,
     isError: dashboard.isError && shiftAlerts.isError,
     dataUpdatedAt: Math.max(dashboard.dataUpdatedAt, shiftAlerts.dataUpdatedAt),
-    refetch: () => { void dashboard.refetch(); void shiftAlerts.refetch(); },
+    refetch: () => {
+      void dashboard.refetch();
+      void shiftAlerts.refetch();
+    },
   };
 }
