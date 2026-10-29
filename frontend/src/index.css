@@ -3,125 +3,130 @@
 @tailwind utilities;
 
 /* ============================================================================
-   PetroFlow — Forecourt Blue
-   A clear, energetic palette for busy fuel stations: confident cobalt,
-   midnight navy, fuel-orange highlights and highly legible work surfaces.
+   PetroFlow — Ember & Forecourt Green
+   A warm, high-contrast operating system for a fuel station: charcoal shell,
+   ember-orange action, forecourt-green assurance, and paper-bright work
+   surfaces. Orange means "your move", green means "all clear", never both.
    ========================================================================== */
 @layer base {
   :root,
   [data-theme='light'] {
     color-scheme: light;
-    /* Surfaces and type */
-    --navy-950: 243 246 252;
-    --navy-900: 255 255 255;
-    --navy-850: 255 255 255;
-    --navy-800: 241 245 251;
-    --navy-750: 231 237 247;
-    --navy-700: 218 227 240;
-    --navy-600: 190 203 222;
-    --ink-100: 20 36 66;
-    --ink-200: 40 58 86;
-    --ink-300: 62 81 109;
-    --ink-400: 80 101 128;
-    --ink-500: 91 111 138;
-    --ink-600: 95 113 138;
-    /* Cobalt = navigation & action; orange = fuel / energy */
-    --accent: 36 85 221;
-    --accent-soft: 28 70 185;
-    --accent-teal: 10 127 130;
-    --accent-energy: 195 84 18;
-    --fuel: 249 124 44;
-    --plum: 111 70 179;
-    --on-fuel: 40 26 17;
-    --brand-start: 36 85 221;
-    --brand-end: 36 106 204;
+    /* Surfaces and type: warm paper canvas, true-white work surfaces. */
+    --carbon-950: 246 242 236;
+    --carbon-900: 255 255 255;
+    --carbon-850: 255 255 255;
+    --carbon-800: 243 239 232;
+    --carbon-750: 236 231 223;
+    --carbon-700: 227 220 210;
+    --carbon-600: 203 194 181;
+    --ink-100: 26 22 19;
+    --ink-200: 51 45 40;
+    --ink-300: 77 69 61;
+    --ink-400: 103 94 84;
+    --ink-500: 114 106 95;
+    --ink-600: 124 114 103;
+    /* Ember = navigation & action; forecourt green = healthy & settled. */
+    --accent: 194 65 12;
+    --accent-soft: 154 52 18;
+    --accent-green: 6 118 71;
+    --accent-energy: 180 83 9;
+    --fuel: 249 115 22;
+    --graphite: 82 72 62;
+    --on-fuel: 30 17 6;
+    --brand-start: 249 115 22;
+    --brand-end: 226 82 5;
     --on-accent: 255 255 255;
+    --on-brand: 30 17 6;
     --on-ok: 255 255 255;
     --on-warn: 255 255 255;
     --on-danger: 255 255 255;
     --on-energy: 255 255 255;
-    --scrim: 9 18 40;
-    --inset: 241 245 251;
+    --scrim: 24 16 11;
+    --inset: 243 239 232;
     /* Showcase is deliberately dark in both themes. */
-    --panel-ink: 11 23 57;
-    --panel-deep: 8 17 43;
-    --panel-raised: 20 38 79;
-    --panel-line: 54 77 126;
-    --panel-text: 247 250 255;
-    --panel-muted: 188 203 231;
-    --panel-dim: 142 162 200;
-    --panel-accent: 145 190 255;
-    --panel-energy: 255 159 85;
-    --ok: 12 130 86;
-    --warn: 180 80 13;
-    --danger: 198 43 65;
-    --info: 35 97 198;
-    --shadow-card: 0 1px 2px rgb(23 43 83 / 0.035), 0 8px 24px -14px rgb(23 43 83 / 0.14);
-    --shadow-card-hover: 0 5px 20px -8px rgb(36 85 221 / 0.18), 0 12px 28px -18px rgb(23 43 83 / 0.16);
-    --shadow-focus: 0 0 0 3px rgb(36 85 221 / 0.17);
-    --shadow-pop: 0 24px 65px -16px rgb(20 36 66 / 0.24), 0 6px 18px -6px rgb(20 36 66 / 0.12);
-    --shadow-glow: inset 0 1px 0 rgb(255 255 255 / 0.2), 0 8px 20px -8px rgb(36 85 221 / 0.48);
-    --card-sheen: inset 0 1px 0 rgb(255 255 255 / 0.92);
-    --canvas-glow-1: rgb(36 85 221 / 0.045);
-    --canvas-glow-2: rgb(249 124 44 / 0.045);
-    --canvas-glow-3: rgb(18 147 151 / 0.035);
-    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235a6d88' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    --panel-ink: 18 16 14;
+    --panel-deep: 10 9 8;
+    --panel-raised: 33 29 25;
+    --panel-line: 58 51 45;
+    --panel-text: 251 248 244;
+    --panel-muted: 208 199 190;
+    --panel-dim: 168 157 145;
+    --panel-accent: 253 186 116;
+    --panel-energy: 255 154 77;
+    --ok: 6 118 71;
+    --warn: 180 83 9;
+    --danger: 190 18 60;
+    --info: 14 105 96;
+    --shadow-card: 0 1px 2px rgb(46 34 22 / 0.04), 0 10px 26px -18px rgb(46 34 22 / 0.22);
+    --shadow-card-hover: 0 6px 22px -10px rgb(194 65 12 / 0.16), 0 14px 30px -20px rgb(46 34 22 / 0.22);
+    --shadow-focus: 0 0 0 3px rgb(249 115 22 / 0.22);
+    --shadow-pop: 0 26px 66px -18px rgb(32 22 14 / 0.26), 0 6px 18px -6px rgb(32 22 14 / 0.13);
+    --shadow-glow: inset 0 1px 0 rgb(255 255 255 / 0.28), 0 10px 22px -10px rgb(234 88 12 / 0.5);
+    --card-sheen: inset 0 1px 0 rgb(255 255 255 / 0.9);
+    --canvas-glow-1: rgb(249 115 22 / 0.055);
+    --canvas-glow-2: rgb(6 118 71 / 0.05);
+    --canvas-glow-3: rgb(234 179 8 / 0.04);
+    --hero-live: 91 227 155;
+    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23675e54' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   }
 
   [data-theme='dark'] {
     color-scheme: dark;
-    --navy-950: 10 18 35;
-    --navy-900: 16 28 49;
-    --navy-850: 20 33 56;
-    --navy-800: 28 44 70;
-    --navy-750: 37 55 84;
-    --navy-700: 48 68 100;
-    --navy-600: 74 95 128;
-    --ink-100: 244 248 255;
-    --ink-200: 222 231 246;
-    --ink-300: 193 207 228;
-    --ink-400: 168 185 210;
-    --ink-500: 149 168 194;
-    --ink-600: 132 148 172;
-    --accent: 151 181 255;
-    --accent-soft: 184 204 255;
-    --accent-teal: 92 218 203;
-    --accent-energy: 255 185 115;
-    --fuel: 255 157 82;
-    --plum: 199 166 255;
-    --on-fuel: 37 24 14;
-    --brand-start: 151 181 255;
-    --brand-end: 112 207 238;
-    --on-accent: 10 24 52;
-    --on-ok: 5 35 26;
-    --on-warn: 43 25 8;
-    --on-danger: 48 9 18;
-    --on-energy: 43 25 8;
-    --scrim: 3 7 18;
-    --inset: 12 23 42;
-    --panel-ink: 11 23 57;
-    --panel-deep: 8 17 43;
-    --panel-raised: 20 38 79;
-    --panel-line: 54 77 126;
-    --panel-text: 247 250 255;
-    --panel-muted: 188 203 231;
-    --panel-dim: 142 162 200;
-    --panel-accent: 145 190 255;
-    --panel-energy: 255 159 85;
-    --ok: 91 218 164;
-    --warn: 255 185 104;
-    --danger: 255 123 141;
-    --info: 132 183 255;
-    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 28px -16px rgb(0 0 0 / 0.55);
-    --shadow-card-hover: 0 8px 28px -12px rgb(0 0 0 / 0.6), 0 0 24px -12px rgb(151 181 255 / 0.2);
-    --shadow-focus: 0 0 0 3px rgb(151 181 255 / 0.28);
-    --shadow-pop: 0 28px 72px -18px rgb(0 0 0 / 0.8), 0 6px 20px rgb(0 0 0 / 0.45);
-    --shadow-glow: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 6px 20px -6px rgb(92 151 255 / 0.35);
-    --card-sheen: inset 0 1px 0 rgb(255 255 255 / 0.06);
-    --canvas-glow-1: rgb(73 117 225 / 0.1);
-    --canvas-glow-2: rgb(255 157 82 / 0.045);
-    --canvas-glow-3: rgb(92 218 203 / 0.045);
-    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a8b9d2' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    --carbon-950: 12 11 10;
+    --carbon-900: 20 18 16;
+    --carbon-850: 25 22 19;
+    --carbon-800: 33 29 25;
+    --carbon-750: 44 39 33;
+    --carbon-700: 58 51 44;
+    --carbon-600: 84 76 66;
+    --ink-100: 250 246 241;
+    --ink-200: 231 223 213;
+    --ink-300: 205 196 185;
+    --ink-400: 178 168 156;
+    --ink-500: 156 146 134;
+    --ink-600: 134 124 112;
+    --accent: 251 146 60;
+    --accent-soft: 253 186 116;
+    --accent-green: 74 222 128;
+    --accent-energy: 251 191 36;
+    --fuel: 251 146 60;
+    --graphite: 205 196 185;
+    --on-fuel: 31 18 6;
+    --brand-start: 251 146 60;
+    --brand-end: 234 88 12;
+    --on-accent: 31 18 6;
+    --on-brand: 31 18 6;
+    --on-ok: 4 38 22;
+    --on-warn: 42 27 2;
+    --on-danger: 61 7 19;
+    --on-energy: 42 27 2;
+    --scrim: 5 4 3;
+    --inset: 16 14 12;
+    --panel-ink: 18 16 14;
+    --panel-deep: 10 9 8;
+    --panel-raised: 33 29 25;
+    --panel-line: 58 51 45;
+    --panel-text: 251 248 244;
+    --panel-muted: 208 199 190;
+    --panel-dim: 168 157 145;
+    --panel-accent: 253 186 116;
+    --panel-energy: 255 154 77;
+    --ok: 74 222 128;
+    --warn: 251 191 36;
+    --danger: 251 113 133;
+    --info: 94 234 212;
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 14px 30px -18px rgb(0 0 0 / 0.7);
+    --shadow-card-hover: 0 10px 30px -14px rgb(0 0 0 / 0.7), 0 0 26px -14px rgb(251 146 60 / 0.22);
+    --shadow-focus: 0 0 0 3px rgb(251 146 60 / 0.3);
+    --shadow-pop: 0 30px 74px -20px rgb(0 0 0 / 0.85), 0 6px 20px rgb(0 0 0 / 0.5);
+    --shadow-glow: inset 0 1px 0 rgb(255 255 255 / 0.22), 0 8px 22px -8px rgb(249 115 22 / 0.42);
+    --card-sheen: inset 0 1px 0 rgb(255 255 255 / 0.05);
+    --canvas-glow-1: rgb(249 115 22 / 0.1);
+    --canvas-glow-2: rgb(74 222 128 / 0.055);
+    --canvas-glow-3: rgb(251 191 36 / 0.045);
+    --hero-live: 91 227 155;
+    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23b2a89c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   }
 
   html,
@@ -131,7 +136,7 @@
   }
 
   body {
-    @apply bg-navy-950 font-sans text-ink-200 antialiased;
+    @apply bg-carbon-950 font-sans text-ink-200 antialiased;
     overflow-x: clip;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'ss01';
     background-image: radial-gradient(960px 540px at 6% -8%, var(--canvas-glow-1), transparent 60%),
@@ -149,7 +154,7 @@
   }
 
   * {
-    @apply border-navy-700/75;
+    @apply border-carbon-700/75;
   }
 
   ::selection {
@@ -157,7 +162,7 @@
   }
 
   :focus-visible {
-    @apply outline-none ring-2 ring-accent/60 ring-offset-2 ring-offset-navy-950;
+    @apply outline-none ring-2 ring-accent/60 ring-offset-2 ring-offset-carbon-950;
   }
 
   input[type='number']::-webkit-outer-spin-button,
@@ -172,7 +177,7 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply rounded-full border-2 border-transparent bg-navy-600/55 bg-clip-padding;
+    @apply rounded-full border-2 border-transparent bg-carbon-600/55 bg-clip-padding;
   }
 
   ::-webkit-scrollbar-thumb:hover {
@@ -188,7 +193,7 @@
 @layer components {
   /* --------------------------------------------------------------- cards */
   .card {
-    @apply min-w-0 rounded-2xl border border-navy-700/75 bg-navy-850 shadow-card;
+    @apply min-w-0 rounded-2xl border border-carbon-700/75 bg-carbon-850 shadow-card;
     box-shadow: var(--shadow-card), var(--card-sheen);
     transition: border-color 180ms ease, box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1), transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
   }
@@ -205,7 +210,7 @@
   }
 
   .brand-gradient-soft {
-    background-image: linear-gradient(145deg, rgb(var(--accent) / 0.13) 0%, rgb(var(--accent-teal) / 0.05) 48%, transparent 80%);
+    background-image: linear-gradient(145deg, rgb(var(--accent) / 0.13) 0%, rgb(var(--accent-green) / 0.05) 48%, transparent 80%);
   }
 
   .energy-gradient-soft {
@@ -217,29 +222,40 @@
       radial-gradient(360px 160px at 100% 0%, rgb(var(--fuel) / 0.08), transparent 70%);
   }
 
-  /* Always-dark navigation creates a stable frame around either workspace theme. */
+  /* Always-dark navigation frame: warm charcoal around either workspace theme. */
   .sidebar-surface {
-    --navy-950: 11 22 49;
-    --navy-900: 15 31 65;
-    --navy-850: 21 39 76;
-    --navy-800: 28 47 87;
-    --navy-750: 37 58 100;
-    --navy-700: 53 75 116;
-    --navy-600: 79 100 142;
-    --ink-100: 248 250 255;
-    --ink-200: 224 233 249;
-    --ink-300: 203 216 239;
-    --ink-400: 173 192 223;
-    --ink-500: 146 166 200;
-    --ink-600: 113 135 174;
-    --accent: 145 190 255;
-    --accent-soft: 185 213 255;
-    --accent-teal: 86 207 212;
-    --brand-start: 39 100 239;
-    --brand-end: 39 125 221;
-    --on-accent: 255 255 255;
-    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23adc0df' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-    background: linear-gradient(175deg, #132b5d 0%, #101f43 57%, #0b1732 100%);
+    --carbon-950: 9 8 7;
+    --carbon-900: 17 14 12;
+    --carbon-850: 23 19 16;
+    --carbon-800: 32 27 22;
+    --carbon-750: 43 37 31;
+    --carbon-700: 59 52 44;
+    --carbon-600: 86 78 68;
+    --ink-100: 250 247 242;
+    --ink-200: 232 225 216;
+    --ink-300: 208 199 188;
+    --ink-400: 174 164 152;
+    --ink-500: 148 138 126;
+    --ink-600: 116 107 96;
+    --accent: 253 186 116;
+    --accent-soft: 254 215 170;
+    --accent-green: 74 222 128;
+    --accent-energy: 251 191 36;
+    --fuel: 251 146 60;
+    --graphite: 208 199 188;
+    --ok: 74 222 128;
+    --warn: 251 191 36;
+    --danger: 251 113 133;
+    --info: 94 234 212;
+    --brand-start: 249 115 22;
+    --brand-end: 226 82 5;
+    --on-accent: 28 16 6;
+    --on-brand: 28 16 6;
+    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23b0a294' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background:
+      radial-gradient(420px 320px at 14% -6%, rgb(249 115 22 / 0.12), transparent 68%),
+      linear-gradient(178deg, #171310 0%, #110e0c 56%, #0a0807 100%);
+    box-shadow: inset -1px 0 0 rgb(255 255 255 / 0.04);
   }
 
   .sidebar-surface .nav-item {
@@ -247,34 +263,46 @@
   }
 
   .sidebar-surface .nav-item:hover {
-    background: rgb(255 255 255 / 0.07);
-    color: white;
+    background: rgb(255 255 255 / 0.06);
+    color: rgb(var(--ink-100));
   }
 
   .sidebar-surface .nav-icon {
     color: rgb(var(--ink-400));
   }
 
+  /* The active pill is the strongest brand statement in the shell. */
   .sidebar-surface .nav-item-active,
   .sidebar-surface .nav-item-active:hover {
-    color: white;
-    background: linear-gradient(100deg, #285be1, #2d72d5);
-    box-shadow: 0 6px 18px rgb(0 0 0 / 0.15), inset 0 1px 0 rgb(255 255 255 / 0.16);
+    color: #1e1106;
+    background: linear-gradient(100deg, #fda05a 0%, #f97316 48%, #ea580c 100%);
+    box-shadow: 0 10px 22px -14px rgb(249 115 22 / 0.9), inset 0 1px 0 rgb(255 255 255 / 0.34);
   }
 
   .sidebar-surface .nav-item-active .nav-icon,
   .sidebar-surface .nav-item-active:hover .nav-icon {
-    color: white;
+    color: #1e1106;
   }
 
   .sidebar-surface .nav-item-active::before {
-    background: #ff9b58;
-    box-shadow: none;
+    display: none;
   }
 
+  /* Near-black hero with an ember wash — the one loud surface on the page. */
   .dashboard-hero {
-    background: linear-gradient(112deg, #112755 0%, #193b85 52%, #245fc5 100%);
-    box-shadow: 0 14px 32px -20px rgb(20 54 131 / 0.65);
+    background:
+      radial-gradient(660px 320px at 88% -34%, rgb(249 115 22 / 0.4), transparent 62%),
+      radial-gradient(520px 300px at 2% 118%, rgb(6 118 71 / 0.3), transparent 64%),
+      linear-gradient(112deg, #1a1512 0%, #201812 52%, #2a1a10 100%);
+    box-shadow: 0 22px 48px -32px rgb(28 16 6 / 0.85), inset 0 1px 0 rgb(255 255 255 / 0.08);
+  }
+
+  .dashboard-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: linear-gradient(115deg, transparent 0%, rgb(255 255 255 / 0.035) 44%, transparent 62%);
+    pointer-events: none;
   }
 
   .dashboard-hero::after {
@@ -284,9 +312,9 @@
     top: -9rem;
     width: 24rem;
     height: 24rem;
-    border: 1px solid rgb(255 255 255 / 0.10);
+    border: 1px solid rgb(255 255 255 / 0.08);
     border-radius: 9999px;
-    box-shadow: 0 0 0 3rem rgb(255 255 255 / 0.025), 0 0 0 6rem rgb(255 255 255 / 0.02);
+    box-shadow: 0 0 0 3rem rgb(255 255 255 / 0.022), 0 0 0 6rem rgb(255 255 255 / 0.016);
     pointer-events: none;
   }
 
@@ -296,7 +324,7 @@
   }
 
   .input {
-    @apply min-h-10 w-full rounded-xl border border-navy-600/75 bg-navy-900 px-3.5 py-2 text-sm text-ink-100 shadow-[inset_0_1px_2px_rgb(15_23_42/0.035)] transition-all duration-150 placeholder:text-ink-500 hover:border-navy-600 focus:border-accent focus:outline-none disabled:cursor-not-allowed disabled:opacity-60;
+    @apply min-h-10 w-full rounded-xl border border-carbon-600/75 bg-carbon-900 px-3.5 py-2 text-sm text-ink-100 shadow-[inset_0_1px_2px_rgb(15_23_42/0.035)] transition-all duration-150 placeholder:text-ink-500 hover:border-carbon-600 focus:border-accent focus:outline-none disabled:cursor-not-allowed disabled:opacity-60;
   }
 
   .input:focus {
@@ -313,24 +341,24 @@
 
   /* ------------------------------------------------------------ sidebar */
   .nav-item {
-    @apply relative flex min-h-11 items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-medium text-ink-400 transition-all duration-150 hover:bg-navy-800/85 hover:text-ink-100;
+    @apply relative flex min-h-11 items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-medium text-ink-400 transition-all duration-150 hover:bg-carbon-800/85 hover:text-ink-100;
   }
 
   .nav-item-active {
     @apply font-semibold text-accent;
-    background-image: linear-gradient(90deg, rgb(var(--accent) / 0.14), rgb(var(--accent-teal) / 0.05) 68%, transparent);
+    background-image: linear-gradient(90deg, rgb(var(--accent) / 0.14), rgb(var(--accent-green) / 0.05) 68%, transparent);
     box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), inset 0 0 0 1px rgb(var(--accent) / 0.18);
   }
 
   .nav-item-active:hover {
-    background-image: linear-gradient(90deg, rgb(var(--accent) / 0.19), rgb(var(--accent-teal) / 0.08) 68%, transparent);
+    background-image: linear-gradient(90deg, rgb(var(--accent) / 0.19), rgb(var(--accent-green) / 0.08) 68%, transparent);
     color: rgb(var(--accent));
   }
 
   .nav-item-active::before {
     content: '';
     @apply absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full;
-    background-image: linear-gradient(180deg, rgb(var(--accent-teal)), rgb(var(--accent)));
+    background-image: linear-gradient(180deg, rgb(var(--accent-green)), rgb(var(--accent)));
     box-shadow: 0 0 12px rgb(var(--accent) / 0.55);
   }
 
@@ -348,7 +376,7 @@
   }
 
   .menu-item {
-    @apply flex min-h-9 w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-medium text-ink-300 transition hover:bg-navy-800 hover:text-ink-100;
+    @apply flex min-h-9 w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-medium text-ink-300 transition hover:bg-carbon-800 hover:text-ink-100;
   }
 
   /* -------------------------------------------------------------- tables */
@@ -363,12 +391,12 @@
   }
 
   .data-table thead th {
-    @apply sticky top-0 z-[1] whitespace-nowrap border-b border-navy-700/80 px-4 py-3 text-left text-[10.5px] font-bold uppercase tracking-[0.075em] text-ink-400 backdrop-blur-md;
-    background-color: rgb(var(--navy-800) / 0.85);
+    @apply sticky top-0 z-[1] whitespace-nowrap border-b border-carbon-700/80 px-4 py-3 text-left text-[10.5px] font-bold uppercase tracking-[0.075em] text-ink-400 backdrop-blur-md;
+    background-color: rgb(var(--carbon-800) / 0.85);
   }
 
   .data-table tbody td {
-    @apply border-b border-navy-700/50 px-4 py-3.5 align-middle text-ink-200;
+    @apply border-b border-carbon-700/50 px-4 py-3.5 align-middle text-ink-200;
   }
 
   .data-table tbody tr {
@@ -391,7 +419,7 @@
   }
 
   .mono-code {
-    @apply rounded-md border border-navy-700/80 bg-inset px-1.5 py-0.5 font-mono text-[11px] font-medium text-ink-300;
+    @apply rounded-md border border-carbon-700/80 bg-inset px-1.5 py-0.5 font-mono text-[11px] font-medium text-ink-300;
   }
 
   .link {
@@ -404,7 +432,7 @@
 
   /* --------------------------------------------------------------- states */
   .skeleton {
-    @apply relative overflow-hidden rounded-xl bg-navy-800/85;
+    @apply relative overflow-hidden rounded-xl bg-carbon-800/85;
   }
 
   .skeleton::after {
@@ -418,15 +446,15 @@
   }
 
   .chip {
-    @apply inline-flex min-h-7 items-center gap-1.5 rounded-full border border-navy-700/80 bg-navy-900/80 px-2.5 py-1 text-[11px] font-semibold text-ink-300 shadow-[var(--card-sheen)];
+    @apply inline-flex min-h-7 items-center gap-1.5 rounded-full border border-carbon-700/80 bg-carbon-900/80 px-2.5 py-1 text-[11px] font-semibold text-ink-300 shadow-[var(--card-sheen)];
   }
 
   .kbd {
-    @apply rounded-md border border-navy-600/75 bg-navy-900 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-ink-400 shadow-[inset_0_-1px_0_rgb(0_0_0/0.08)];
+    @apply rounded-md border border-carbon-600/75 bg-carbon-900 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-ink-400 shadow-[inset_0_-1px_0_rgb(0_0_0/0.08)];
   }
 
   .quick-action {
-    @apply relative flex min-h-[76px] items-center gap-3.5 overflow-hidden rounded-2xl border border-navy-700/80 bg-navy-850 p-4 text-left shadow-card transition-all duration-200 ease-smooth hover:-translate-y-0.5 hover:border-accent/50;
+    @apply relative flex min-h-[76px] items-center gap-3.5 overflow-hidden rounded-2xl border border-carbon-700/80 bg-carbon-850 p-4 text-left shadow-card transition-all duration-200 ease-smooth hover:-translate-y-0.5 hover:border-accent/50;
     box-shadow: var(--shadow-card), var(--card-sheen);
   }
 

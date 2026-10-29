@@ -327,7 +327,7 @@ export default function Shifts() {
       <DayClosingCard stationId={stationId} canManage={can('dayclose.manage')} />
 
       <Card className="mt-4">
-        <div className="flex flex-wrap items-end gap-2.5 border-b border-navy-700/70 bg-navy-900/40 p-4">
+        <div className="flex flex-wrap items-end gap-2.5 border-b border-carbon-700/70 bg-carbon-900/40 p-4">
           <Field label="Status" className="w-full sm:w-40">
             <Select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}>
               <option value="">All statuses</option>
@@ -456,7 +456,7 @@ export default function Shifts() {
             )}
 
             {capturePreview?.shiftId === shift.id && (
-              <div className="space-y-1.5 rounded-lg border border-navy-700/75 bg-navy-900/60 p-3.5">
+              <div className="space-y-1.5 rounded-lg border border-carbon-700/75 bg-carbon-900/60 p-3.5">
                 <p className="text-xs font-semibold text-ink-100">Closing preview</p>
                 <p className="text-[11px] text-ink-500">{capturePreview.note}</p>
                 {capturePreview.preview.map((item) => (
@@ -480,14 +480,14 @@ export default function Shifts() {
                   value: shift.shortExcess === null ? '—' : `${Number(shift.shortExcess) >= 0 ? '+' : ''}${formatINR(shift.shortExcess)}`,
                 },
               ].map((item) => (
-                <div key={item.label} className="rounded-lg border border-navy-700/75 bg-navy-900/55 p-3">
+                <div key={item.label} className="rounded-lg border border-carbon-700/75 bg-carbon-900/55 p-3">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-ink-500">{item.label}</p>
                   <p className="num mt-1 font-display text-sm font-bold text-ink-100">{item.value}</p>
                 </div>
               ))}
             </div>
 
-            <div className="table-wrap rounded-lg border border-navy-700/60">
+            <div className="table-wrap rounded-lg border border-carbon-700/60">
               <table className="data-table min-w-[880px]">
                 <thead>
                   <tr>
@@ -543,8 +543,8 @@ export default function Shifts() {
               </table>
             </div>
             {(shift.settlements ?? []).length > 0 && (
-              <div className="rounded-lg border border-navy-700/75 overflow-hidden">
-                <p className="border-b border-navy-700/70 bg-navy-900/50 px-3.5 py-2.5 text-xs font-bold text-ink-100">
+              <div className="rounded-lg border border-carbon-700/75 overflow-hidden">
+                <p className="border-b border-carbon-700/70 bg-carbon-900/50 px-3.5 py-2.5 text-xs font-bold text-ink-100">
                   Shift settlement — expected (system) vs received (tendered)
                 </p>
                 <div className="table-wrap">
@@ -567,7 +567,7 @@ export default function Shifts() {
                   </table>
                 </div>
                 {(shift.denominations ?? []).length > 0 && (
-                  <p className="border-t border-navy-700/70 bg-navy-900/40 px-3.5 py-2 text-[11px] text-ink-400">
+                  <p className="border-t border-carbon-700/70 bg-carbon-900/40 px-3.5 py-2 text-[11px] text-ink-400">
                     Cash denomination count: {(shift.denominations ?? []).map((d) => `₹${d.denomination}×${d.count}`).join(' · ')}
                     {' = '}<span className="num font-semibold text-ink-100">{formatINR(shift.cashCounted ?? 0)}</span>
                   </p>
@@ -777,7 +777,7 @@ function CloseShiftModal({
           <p className="label">Note-wise cash count (drawer denominations)</p>
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
             {CASH_DENOMINATIONS.map((d) => (
-              <label key={d} className="rounded-lg border border-navy-700/75 bg-navy-900/55 p-2.5">
+              <label key={d} className="rounded-lg border border-carbon-700/75 bg-carbon-900/55 p-2.5">
                 <span className="num block text-[11px] font-semibold text-ink-300">₹{d} ×</span>
                 <input
                   inputMode="numeric"
@@ -820,7 +820,7 @@ function CloseShiftModal({
           </Field>
         </div>
 
-        <div className="rounded-lg border border-navy-700/75 bg-navy-900/55 p-3 text-xs text-ink-400">
+        <div className="rounded-lg border border-carbon-700/75 bg-carbon-900/55 p-3 text-xs text-ink-400">
           <p className="mb-1 font-semibold text-ink-200">Pre-close checklist</p>
           <ul className="list-inside list-disc space-y-0.5">
             <li>Verify opening/closing totalizers and 5L calibration testing fuel for each nozzle.</li>
@@ -884,7 +884,7 @@ function DayClosingCard({ stationId, canManage }: { stationId: string; canManage
         ) : recent.length === 0 ? (
           <p className="py-2 text-center text-xs text-ink-500">No business days locked yet. Lock completed dates once shifts and cash settlements are reconciled.</p>
         ) : (
-          <div className="divide-y divide-navy-700/60">
+          <div className="divide-y divide-carbon-700/60">
             {recent.map((row) => (
               <div key={row.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
                 <div>

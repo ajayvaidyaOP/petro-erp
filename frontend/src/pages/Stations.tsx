@@ -263,7 +263,7 @@ export default function Stations() {
             </Select>
           </Field>
         </div>
-        <p className="mt-3 rounded-lg border border-navy-700/60 bg-navy-900/40 p-3 text-xs text-ink-500">
+        <p className="mt-3 rounded-lg border border-carbon-700/60 bg-carbon-900/40 p-3 text-xs text-ink-500">
           Station status does not delete history. Suspending a station blocks new operational entries while preserving ledgers and audit logs.
         </p>
       </Modal>

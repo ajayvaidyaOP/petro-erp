@@ -65,29 +65,37 @@ Existing databases migrate automatically on boot (additive columns/tables + role
 
 ## Theming
 
-The UI uses **Forecourt Blue**: an always-dark midnight navigation frame, clean cool-white
-work surfaces, cobalt-blue primary actions, and fuel-orange highlights. Teal, plum and semantic
-status colours add distinction without replacing labels. Manrope display type and Inter body text
-are locally bundled. Both the light workspace and a high-contrast dark theme share CSS custom
-properties in `frontend/src/index.css`, exposed to Tailwind in `frontend/tailwind.config.js`:
+The UI uses **Ember & Forecourt Green**: a near-black charcoal navigation frame, warm paper
+work surfaces, ember-orange primary actions, and forecourt-green assurance. Three colours carry
+the whole product, and each one has exactly one job — orange means *your move*, green means
+*all clear*, charcoal means *structure*:
+
+| Role | Light | Dark | Where it appears |
+| --- | --- | --- | --- |
+| Ember | `#c2410c` | `#fb923c` | Navigation pill, primary buttons, focus rings, active tabs, links |
+| Forecourt green | `#067647` | `#4ade80` | Success, healthy stock, settled cash, credit paid, live shift |
+| Charcoal | `#1a1613` | `#faf6f1` | Text, sidebar shell, dashboard hero |
+| Paper | `#f6f2ec` → `#ffffff` | `#0c0b0a` → `#191613` | Page canvas and raised work surfaces |
+
+![PetroFlow Ember & Forecourt Green palette](docs/palette-ember-green.png)
+
+Amber (`warn`) and crimson (`danger`) stay reserved for genuine exceptions — a variance, a low
+tank, a failed device — so a red badge is never just decoration. Manrope display type and Inter
+body text are locally bundled. Both the light workspace and a high-contrast dark theme share CSS
+custom properties in `frontend/src/index.css`, exposed to Tailwind in `frontend/tailwind.config.js`:
 
 | Token family | Meaning |
 | --- | --- |
-| `navy-*` | Surfaces (`950` page canvas → `600` strongest border) |
+| `carbon-*` | Surfaces (`950` warm page canvas → `600` strongest border) |
 | `ink-*` | Text (`100` strongest → `600` faintest) |
-| `accent*` | Cobalt brand and teal secondary colours |
-| `fuel` / `energy` / `plum` | Fuel-orange highlight, readable orange text, and a supporting violet |
-| `onaccent` / `onfuel` | Foreground on solid action colours |
+| `accent` / `accent-green` | Ember brand and forecourt-green secondary |
+| `accent-energy` / `fuel` / `graphite` | Readable amber text, bright orange fill, neutral support |
+| `onaccent` / `onbrand` / `onfuel` | Foreground on solid brand fills, brand gradients and fuel-orange |
 | `scrim` / `inset` | Dialog backdrop and recessed surface |
 | `ok` / `warn` / `danger` / `info` | Status colours (retinted in dark mode) |
 | `onok` / `onwarn` / `ondanger` | Foreground on solid status fills |
-| `panel-*` | Always-dark showcase surfaces (login) |
+| `panel-*` / `live` | Always-dark showcase surfaces (login) and the green "live" cue |
 | `chart-1…5` | Chart series; Recharts mirrors theme values in `frontend/src/lib/theme.tsx` |
-
-The login illustration is a decorative, locally served WebP, not live station telemetry.
-Shadows and radii are tokens too (`shadow-card`, `shadow-card-hover`, `shadow-sheen`, `shadow-pop`,
-`shadow-glow`, `rounded-2.5xl`). Chart colours live in `lib/theme.tsx` because SVG attributes cannot
-resolve CSS variables — keep those hexes in step with `index.css` when the palette changes.
 
 Users switch from the sun/moon button in the header. The choice is stored in
 `localStorage` under `petroflow.theme`; with no stored choice the readable
@@ -96,7 +104,7 @@ before first paint so there is no flash of the wrong palette.
 
 Avoid re-introducing fixed Tailwind shades for text on themed surfaces (for example
 `text-emerald-300`), which read well on dark cards but are unreadable on white — use the
-status tokens instead. The same applies to `navy-*` for anything other than a surface.
+status tokens instead. The same applies to `carbon-*` for anything other than a surface.
 
 ## Requirements
 

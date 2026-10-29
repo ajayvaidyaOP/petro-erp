@@ -258,7 +258,7 @@ export default function Sales() {
                   </table>
                 </div>
               )}
-              <p className="border-t border-navy-700/60 px-4 py-3 text-[11px] text-ink-500">
+              <p className="border-t border-carbon-700/60 px-4 py-3 text-[11px] text-ink-500">
                 Totalizer-only equipment yields aggregate estimated sales per shift. Individual vehicle transactions are
                 not derived from cumulative readings.
               </p>
@@ -291,7 +291,7 @@ export default function Sales() {
                   </table>
                 </div>
               )}
-              <ul className="space-y-1 border-t border-navy-700/60 px-4 py-3 text-[11px] text-ink-500">
+              <ul className="space-y-1 border-t border-carbon-700/60 px-4 py-3 text-[11px] text-ink-500">
                 {data.notes.map((note, i) => <li key={i}>• {note}</li>)}
               </ul>
             </Card>

@@ -79,7 +79,7 @@ export default function Audit() {
       </div>
 
       <Card>
-        <div className="flex flex-wrap items-end gap-2 border-b border-navy-700/60 p-3">
+        <div className="flex flex-wrap items-end gap-2 border-b border-carbon-700/60 p-3">
           <SearchInput
             value={search}
             onChange={(value) => {
@@ -214,13 +214,13 @@ export default function Audit() {
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <div>
             <p className="label">Before</p>
-            <pre className="max-h-64 overflow-auto rounded-lg border border-navy-700/60 bg-inset p-3 text-[11px] text-ink-300">
+            <pre className="max-h-64 overflow-auto rounded-lg border border-carbon-700/60 bg-inset p-3 text-[11px] text-ink-300">
               {JSON.stringify(detail?.beforeData ?? null, null, 2)}
             </pre>
           </div>
           <div>
             <p className="label">After</p>
-            <pre className="max-h-64 overflow-auto rounded-lg border border-navy-700/60 bg-inset p-3 text-[11px] text-ink-300">
+            <pre className="max-h-64 overflow-auto rounded-lg border border-carbon-700/60 bg-inset p-3 text-[11px] text-ink-300">
               {JSON.stringify(detail?.afterData ?? null, null, 2)}
             </pre>
           </div>

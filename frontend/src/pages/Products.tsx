@@ -49,7 +49,7 @@ interface PriceRow {
   createdAt: string;
 }
 
-const emptyProduct = { code: '', name: '', category: 'PETROL', unit: 'L', color: '#0b897a' };
+const emptyProduct = { code: '', name: '', category: 'PETROL', unit: 'L', color: '#067647' };
 
 export default function Products() {
   const { can } = useAuth();
@@ -62,7 +62,7 @@ export default function Products() {
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState({ ...emptyProduct });
   const [edit, setEdit] = useState<Product | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', category: 'PETROL', color: '#0b897a', isActive: true });
+  const [editForm, setEditForm] = useState({ name: '', category: 'PETROL', color: '#067647', isActive: true });
   const [priceFor, setPriceFor] = useState<Product | null>(null);
   const [priceForm, setPriceForm] = useState({ rate: '', effectiveFrom: '', note: '', scope: 'STATION' });
 

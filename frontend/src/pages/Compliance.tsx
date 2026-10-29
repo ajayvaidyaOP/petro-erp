@@ -157,7 +157,7 @@ export default function Compliance() {
         ) : (
           <CardBody className="grid gap-3.5 md:grid-cols-2 xl:grid-cols-3">
             {data.documents.map((doc) => (
-              <div key={doc.id} className="min-w-0 break-words rounded-xl border border-navy-700/80 bg-navy-900/55 p-4">
+              <div key={doc.id} className="min-w-0 break-words rounded-xl border border-carbon-700/80 bg-carbon-900/55 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate font-display text-sm font-bold text-ink-100">{doc.title}</p>
@@ -178,7 +178,7 @@ export default function Compliance() {
                   <div className="flex justify-between"><dt>Expires on</dt><dd className={`num ${doc.status === 'EXPIRED' ? 'font-semibold text-danger' : 'font-medium text-ink-200'}`}>{formatDate(doc.expiresOn)}</dd></div>
                 </dl>
                 {can('compliance.write') && (
-                  <div className="mt-3.5 flex gap-1.5 border-t border-navy-700/70 pt-3">
+                  <div className="mt-3.5 flex gap-1.5 border-t border-carbon-700/70 pt-3">
                     <Button size="sm" variant="ghost" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => openEdit(doc)}>Renew / Edit</Button>
                     <Button size="sm" variant="ghost" aria-label="Delete document" onClick={() => setDeleteId(doc.id)}>
                       <Trash2 className="h-3.5 w-3.5 text-danger" />

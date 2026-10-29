@@ -135,7 +135,7 @@ export default function Tenants() {
       />
 
       <Card>
-        <div className="flex flex-wrap items-end gap-2 border-b border-navy-700/60 p-3">
+        <div className="flex flex-wrap items-end gap-2 border-b border-carbon-700/60 p-3">
           <div className="relative w-full sm:w-64">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500" />
             <Input
@@ -276,7 +276,7 @@ export default function Tenants() {
             <Input type="number" min={0} max={90} value={form.trialDays} onChange={(e) => setForm({ ...form, trialDays: e.target.value })} />
           </Field>
 
-          <div className="sm:col-span-2 mt-2 border-t border-navy-700/60 pt-3">
+          <div className="sm:col-span-2 mt-2 border-t border-carbon-700/60 pt-3">
             <p className="text-xs font-semibold uppercase tracking-wider text-ink-500">Owner account</p>
           </div>
           <Field label="Owner name" required>

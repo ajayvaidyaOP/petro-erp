@@ -289,9 +289,9 @@ export function CommandPalette({
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
-        className="animate-scale-in flex max-h-[72dvh] w-full max-w-xl flex-col overflow-hidden rounded-2.5xl border border-navy-700/90 bg-navy-850 shadow-pop"
+        className="animate-scale-in flex max-h-[72dvh] w-full max-w-xl flex-col overflow-hidden rounded-2.5xl border border-carbon-700/90 bg-carbon-850 shadow-pop"
       >
-        <div className="flex items-center gap-3 border-b border-navy-700/75 bg-navy-900/65 px-4 py-3.5">
+        <div className="flex items-center gap-3 border-b border-carbon-700/75 bg-carbon-900/65 px-4 py-3.5">
           <Search className="h-4 w-4 shrink-0 text-accent" aria-hidden />
           <input
             ref={inputRef}
@@ -306,7 +306,7 @@ export function CommandPalette({
               type="button"
               onClick={() => setQuery('')}
               aria-label="Clear search"
-              className="rounded-lg p-1 text-ink-500 hover:bg-navy-800 hover:text-ink-200"
+              className="rounded-lg p-1 text-ink-500 hover:bg-carbon-800 hover:text-ink-200"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -342,7 +342,7 @@ export function CommandPalette({
                         }}
                         className={cn(
                           'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors',
-                          active ? 'bg-accent/12 text-ink-100' : 'text-ink-300 hover:bg-navy-800/70',
+                          active ? 'bg-accent/12 text-ink-100' : 'text-ink-300 hover:bg-carbon-800/70',
                         )}
                       >
                         <span
@@ -350,7 +350,7 @@ export function CommandPalette({
                             'grid h-8 w-8 shrink-0 place-items-center rounded-lg border transition-colors',
                             active
                               ? 'border-accent/35 bg-accent/15 text-accent'
-                              : 'border-navy-700/80 bg-navy-900 text-ink-400',
+                              : 'border-carbon-700/80 bg-carbon-900 text-ink-400',
                           )}
                         >
                           {item.icon}
@@ -383,7 +383,7 @@ export function CommandPalette({
           )}
         </div>
 
-        <div className="flex items-center justify-between border-t border-navy-700/70 bg-navy-900/50 px-4 py-2 text-[10.5px] text-ink-500">
+        <div className="flex items-center justify-between border-t border-carbon-700/70 bg-carbon-900/50 px-4 py-2 text-[10.5px] text-ink-500">
           <span className="flex items-center gap-2">
             <span>
               <kbd className="kbd mr-1">↑↓</kbd> Navigate

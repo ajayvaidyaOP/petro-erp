@@ -179,7 +179,7 @@ function UsageBar({ label, used, max, pct, icon }: { label: string; used: number
         <span className="inline-flex items-center gap-1">{icon}{label}</span>
         <span className="num">{used} / {max}</span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-navy-800 ring-1 ring-inset ring-navy-700/60">
+      <div className="h-2 overflow-hidden rounded-full bg-carbon-800 ring-1 ring-inset ring-carbon-700/60">
         <div className={pct >= 90 ? 'h-full rounded-full bg-danger' : pct >= 70 ? 'h-full rounded-full bg-warn' : 'h-full rounded-full bg-accent'} style={{ width: `${pct}%` }} />
       </div>
     </div>

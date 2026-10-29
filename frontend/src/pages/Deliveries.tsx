@@ -420,7 +420,7 @@ function DeliveryModal({
             <Input inputMode="decimal" value={form.receivedLitres} onChange={(e) => setForm({ ...form, receivedLitres: e.target.value })} />
           </Field>
         )}
-        <p className="sm:col-span-2 mt-1 border-t border-navy-700/70 pt-3 text-[11px] font-bold uppercase tracking-[0.12em] text-accent">
+        <p className="sm:col-span-2 mt-1 border-t border-carbon-700/70 pt-3 text-[11px] font-bold uppercase tracking-[0.12em] text-accent">
           Pre-decantation check — seals &amp; 15°C density
         </p>
         <Field label="Invoice density (kg/m³ @15°C)"><Input inputMode="decimal" value={form.densityInvoice} onChange={(e) => setForm({ ...form, densityInvoice: e.target.value })} placeholder="745.0" /></Field>
@@ -429,7 +429,7 @@ function DeliveryModal({
         <Field label="TT seal numbers" hint="Compartment seal serials, comma-separated"><Input value={form.ttSealNumbers} onChange={(e) => setForm({ ...form, ttSealNumbers: e.target.value })} placeholder="A-1101, A-1102" /></Field>
         <Field label="Retained sample seal no." hint="2L reference sample seal serial"><Input value={form.sampleSealNo} onChange={(e) => setForm({ ...form, sampleSealNo: e.target.value })} /></Field>
         <Field label="Notes" className="sm:col-span-2"><Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
-        <div className="sm:col-span-2 rounded-lg border border-navy-700/75 bg-navy-900/55 px-3 py-2 text-xs text-ink-400">
+        <div className="sm:col-span-2 rounded-lg border border-carbon-700/75 bg-carbon-900/55 px-3 py-2 text-xs text-ink-400">
           Invoice value: <span className="num font-semibold text-ink-100">{formatINR(total)}</span>
           <span className="ml-2 text-ink-500">(quantity × rate + tax)</span>
         </div>

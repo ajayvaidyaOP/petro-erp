@@ -13,14 +13,14 @@ export default {
     extend: {
       colors: {
         // Surface ramp: 950 = page canvas … 600 = strongest border.
-        navy: {
-          950: channel('--navy-950'),
-          900: channel('--navy-900'),
-          850: channel('--navy-850'),
-          800: channel('--navy-800'),
-          750: channel('--navy-750'),
-          700: channel('--navy-700'),
-          600: channel('--navy-600'),
+        carbon: {
+          950: channel('--carbon-950'),
+          900: channel('--carbon-900'),
+          850: channel('--carbon-850'),
+          800: channel('--carbon-800'),
+          750: channel('--carbon-750'),
+          700: channel('--carbon-700'),
+          600: channel('--carbon-600'),
         },
         // Text ramp: 100 = strongest … 600 = faintest.
         ink: {
@@ -34,15 +34,17 @@ export default {
         accent: {
           DEFAULT: channel('--accent'),
           soft: channel('--accent-soft'),
-          teal: channel('--accent-teal'),
+          green: channel('--accent-green'),
           energy: channel('--accent-energy'),
           muted: channel('--accent'),
         },
         energy: channel('--accent-energy'),
         fuel: channel('--fuel'),
-        plum: channel('--plum'),
+        graphite: channel('--graphite'),
         onfuel: channel('--on-fuel'),
         onaccent: channel('--on-accent'),
+        onbrand: channel('--on-brand'),
+        live: channel('--hero-live'),
         onok: channel('--on-ok'),
         onwarn: channel('--on-warn'),
         ondanger: channel('--on-danger'),
@@ -67,7 +69,7 @@ export default {
         },
         chart: {
           1: channel('--accent'),
-          2: channel('--accent-teal'),
+          2: channel('--accent-green'),
           3: channel('--accent-energy'),
           4: channel('--info'),
           5: channel('--danger'),

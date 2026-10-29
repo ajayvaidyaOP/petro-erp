@@ -141,13 +141,13 @@ export default function AdminDashboard() {
             ) : (
               <>
                 {data.subscriptions.trialsEndingSoon.map((trial) => (
-                  <Link key={trial.id} to={`/admin/tenants/${trial.tenantId}`} className="block rounded-lg border border-navy-700/60 p-3 hover:border-accent/40">
+                  <Link key={trial.id} to={`/admin/tenants/${trial.tenantId}`} className="block rounded-lg border border-carbon-700/60 p-3 hover:border-accent/40">
                     <p className="text-sm text-ink-200">{trial.tenantName}</p>
                     <p className="text-xs text-warn">Trial of {trial.planName} ends {formatDateTime(trial.trialEndsAt)}</p>
                   </Link>
                 ))}
                 {data.subscriptions.expiringSoon.map((sub) => (
-                  <Link key={sub.id} to={`/admin/tenants/${sub.tenantId}`} className="block rounded-lg border border-navy-700/60 p-3 hover:border-accent/40">
+                  <Link key={sub.id} to={`/admin/tenants/${sub.tenantId}`} className="block rounded-lg border border-carbon-700/60 p-3 hover:border-accent/40">
                     <p className="text-sm text-ink-200">{sub.tenantName}</p>
                     <p className="text-xs text-ink-400">Subscription renews / ends {formatDateTime(sub.endsAt)}</p>
                   </Link>
@@ -223,14 +223,14 @@ export default function AdminDashboard() {
               <p className="col-span-full text-sm text-ink-500">No gateway events recorded yet.</p>
             ) : (
               Object.entries(data.devices.events).map(([status, count]) => (
-                <div key={status} className="rounded-lg border border-navy-700/60 bg-navy-900/40 p-3">
+                <div key={status} className="rounded-lg border border-carbon-700/60 bg-carbon-900/40 p-3">
                   <p className="text-[11px] uppercase tracking-wider text-ink-500">{status}</p>
                   <p className="num mt-1 text-lg text-ink-100">{count}</p>
                 </div>
               ))
             )}
           </div>
-          <div className="border-t border-navy-700/60 p-3 text-xs text-ink-500">
+          <div className="border-t border-carbon-700/60 p-3 text-xs text-ink-500">
             <Activity className="mr-1 inline h-3.5 w-3.5" />
             Real hardware verification: {data.devices.realHardwareVerified ? 'verified' : 'unverified — no real dispenser connected'}
           </div>

@@ -25,5 +25,5 @@ export default function NotFound({ embedded = false }: { embedded?: boolean }) {
   );
 
   if (embedded) return <div className="py-12">{body}</div>;
-  return <div className="grid min-h-dvh place-items-center bg-navy-950 p-6">{body}</div>;
+  return <div className="grid min-h-dvh place-items-center bg-carbon-950 p-6">{body}</div>;
 }

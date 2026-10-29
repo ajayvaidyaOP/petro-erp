@@ -249,7 +249,7 @@ export default function Tanks() {
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="rounded-md border border-navy-700 bg-navy-800 px-2 py-0.5 font-mono text-[11px] font-bold text-ink-200">
+                        <span className="rounded-md border border-carbon-700 bg-carbon-800 px-2 py-0.5 font-mono text-[11px] font-bold text-ink-200">
                           {tank.code}
                         </span>
                         <p className="font-display text-sm font-bold text-ink-100">{tank.name}</p>
@@ -261,10 +261,10 @@ export default function Tanks() {
                     <StatusBadge status={tank.status} />
                   </div>
 
-                  <div className="mt-4 flex items-center gap-3.5 rounded-2xl border border-navy-700/75 bg-navy-800/45 p-3.5">
+                  <div className="mt-4 flex items-center gap-3.5 rounded-2xl border border-carbon-700/75 bg-carbon-800/45 p-3.5">
                     <div
                       aria-hidden
-                      className="relative h-16 w-10 shrink-0 overflow-hidden rounded-xl border border-navy-600/80 bg-inset shadow-inner"
+                      className="relative h-16 w-10 shrink-0 overflow-hidden rounded-xl border border-carbon-600/80 bg-inset shadow-inner"
                     >
                       <div
                         className="absolute inset-x-0 bottom-0 transition-all duration-500"
@@ -301,7 +301,7 @@ export default function Tanks() {
                     </div>
                   </div>
 
-                  <dl className="mt-3.5 grid grid-cols-2 gap-2.5 rounded-xl border border-navy-700/55 bg-navy-900/45 p-3 text-[11px]">
+                  <dl className="mt-3.5 grid grid-cols-2 gap-2.5 rounded-xl border border-carbon-700/55 bg-carbon-900/45 p-3 text-[11px]">
                     <div>
                       <dt className="text-ink-500">Last physical dip</dt>
                       <dd className="num mt-0.5 font-semibold text-ink-200">{tank.lastMeasuredLitres ? formatLitres(tank.lastMeasuredLitres) : 'No dip recorded'}</dd>
@@ -320,7 +320,7 @@ export default function Tanks() {
                       <dt className="text-ink-500">Measured at</dt>
                       <dd className="mt-0.5 text-ink-300">{tank.lastMeasuredAt ? formatDateTime(tank.lastMeasuredAt) : '—'}</dd>
                     </div>
-                    <div className="col-span-2 border-t border-navy-700/50 pt-2">
+                    <div className="col-span-2 border-t border-carbon-700/50 pt-2">
                       <dt className="text-ink-500">Water bottom cut (paste)</dt>
                       <dd className={tank.lastWaterDipCm && Number(tank.lastWaterDipCm) > 2 ? 'mt-0.5 font-semibold text-danger' : 'mt-0.5 text-ink-300'}>
                         {tank.lastWaterDipCm ? `${formatNumber(tank.lastWaterDipCm, 1)} cm${Number(tank.lastWaterDipCm) > 2 ? ' — High water level (>2 cm)' : ''}` : '—'}
@@ -328,7 +328,7 @@ export default function Tanks() {
                     </div>
                   </dl>
 
-                  <div className="mt-4 flex flex-wrap gap-1.5 border-t border-navy-700/70 pt-3.5">
+                  <div className="mt-4 flex flex-wrap gap-1.5 border-t border-carbon-700/70 pt-3.5">
                     {can('stock.write') && (
                       <>
                         <Button size="sm" variant="secondary" icon={<Ruler className="h-3.5 w-3.5" />} onClick={() => setDipTank(tank)}>Record dip</Button>
@@ -442,8 +442,8 @@ export default function Tanks() {
           <ErrorState error={ledger.error} onRetry={() => void ledger.refetch()} />
         ) : ledger.data ? (
           <div>
-          <TableScrollHint className="rounded-t-lg border border-b-0 border-navy-700/60" />
-          <div className="table-wrap rounded-b-lg border border-t-0 border-navy-700/60">
+          <TableScrollHint className="rounded-t-lg border border-b-0 border-carbon-700/60" />
+          <div className="table-wrap rounded-b-lg border border-t-0 border-carbon-700/60">
             <table className="data-table min-w-[720px]">
               <thead><tr><th>Date</th><th>Type</th><th className="text-right">Signed</th><th className="text-right">Running</th><th>Note</th></tr></thead>
               <tbody>

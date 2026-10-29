@@ -167,7 +167,7 @@ export default function Reconciliation() {
 
             <Card>
               <CardHeader title="Expected collection build-up" subtitle="How the cash and digital expectations are derived" />
-              <div className="divide-y divide-navy-800/80 text-sm">
+              <div className="divide-y divide-carbon-800/80 text-sm">
                 {[
                   ['Cash sales (transaction-level)', expected.cashSales],
                   ['Cash customer receipts', expected.cashReceipts],
@@ -184,7 +184,7 @@ export default function Reconciliation() {
                   </div>
                 ))}
               </div>
-              <div className="border-t border-navy-700/60 px-4 py-3 text-[11px] text-ink-500">
+              <div className="border-t border-carbon-700/60 px-4 py-3 text-[11px] text-ink-500">
                 Credit sales are excluded. Totalizer-only aggregate shift totals lack a payment-mode split and therefore do
                 not inflate the cash expectation.
               </div>

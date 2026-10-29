@@ -271,8 +271,8 @@ export default function Suppliers() {
           <ErrorState error={ledger.error} onRetry={() => void ledger.refetch()} />
         ) : ledger.data ? (
           <div className="space-y-3">
-            <TableScrollHint className="rounded-t-lg border border-b-0 border-navy-700/60" />
-            <div className="table-wrap rounded-b-lg border border-t-0 border-navy-700/60">
+            <TableScrollHint className="rounded-t-lg border border-b-0 border-carbon-700/60" />
+            <div className="table-wrap rounded-b-lg border border-t-0 border-carbon-700/60">
               <table className="data-table min-w-[760px]">
                 <thead>
                   <tr><th>Date</th><th>Type</th><th>Description</th><th className="text-right">Purchase</th><th className="text-right">Payment</th><th className="text-right">Balance</th></tr>
