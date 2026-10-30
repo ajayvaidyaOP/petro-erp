@@ -13,29 +13,49 @@ concurrency:
 permissions:
   contents: read
 
+# Database isolation (see the "Database isolation" step in each job):
+#   * verify  -> petroflow_test  (suffix _test is enforced by the Java suite itself)
+#   * e2e     -> petroflow_e2e   (suffix _e2e)
+#   * the production schema name "petroflow" is never created, referenced or connected to.
+# Every job step connects with the unprivileged CI user below; no job step receives root
+# credentials. The MySQL service container needs an initial root password to start, which is
+# declared only in the service definition and never exported to a step.
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     services:
       mysql:
         image: mysql:8.0
         env:
-          MYSQL_ROOT_PASSWORD: petroflow
-          MYSQL_DATABASE: petroflow
+          # Container-initialisation only; this account is never handed to a job step.
+          MYSQL_ROOT_PASSWORD: ci-local-root
+          MYSQL_DATABASE: petroflow_test
+          MYSQL_USER: petroflow_ci
+          MYSQL_PASSWORD: petroflow_ci_pw
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -ppetroflow"
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci-local-root"
           --health-interval=5s
           --health-timeout=5s
           --health-retries=15
     env:
+      NODE_ENV: development
+      PETROFLOW_DB_HOST: 127.0.0.1
+      PETROFLOW_DB_PORT: '3306'
+      PETROFLOW_DB_NAME: petroflow_test
+      PETROFLOW_DB_USER: petroflow_ci
+      PETROFLOW_DB_PASSWORD: petroflow_ci_pw
       MYSQL_HOST: 127.0.0.1
       MYSQL_PORT: '3306'
-      MYSQL_DATABASE: petroflow
-      MYSQL_USER: root
-      MYSQL_PASSWORD: petroflow
+      MYSQL_DATABASE: petroflow_test
+      MYSQL_USER: petroflow_ci
+      MYSQL_PASSWORD: petroflow_ci_pw
+      TEST_DB_NAME: petroflow_test
+      SEED_DEMO_DATA: 'true'
+      ENABLE_DEMO_TOOLS: 'true'
+      COOKIE_SECURE: 'false'
     steps:
       - uses: actions/checkout@v4
 
@@ -53,6 +73,25 @@ jobs:
       - name: Install frontend & test dependencies
         run: npm ci
 
+      - name: Database isolation guard (test schema only, never "petroflow")
+        run: |
+          set -euo pipefail
+          if [ "$PETROFLOW_DB_NAME" = "petroflow" ]; then
+            echo "Refusing to run CI against the production schema name." >&2
+            exit 1
+          fi
+          case "$PETROFLOW_DB_NAME" in
+            *_test|*_e2e) ;;
+            *) echo "CI database must end in _test or _e2e (got $PETROFLOW_DB_NAME)" >&2; exit 1 ;;
+          esac
+          mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" \
+            -e "SELECT DATABASE(), CURRENT_USER();" "$PETROFLOW_DB_NAME"
+          # The API bootstraps its pool with CREATE DATABASE IF NOT EXISTS; prove the grant works.
+          mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" \
+            -e "CREATE DATABASE IF NOT EXISTS \`$PETROFLOW_DB_NAME\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+          mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" \
+            -e "SHOW DATABASES;" | grep -qx "$PETROFLOW_DB_NAME"
+
       - name: Typecheck frontend & compile Java 21 backend
         run: npm run typecheck
 
@@ -62,10 +101,12 @@ jobs:
       - name: Build frontend assets & package Java API jar
         run: npm run build
 
-      - name: MySQL schema, seed & mysqldump smoke test
+      - name: MySQL schema, seed & mysqldump smoke test (test schema only)
         run: |
+          set -euo pipefail
           npm run db:seed
-          mysqldump --no-tablespaces -h 127.0.0.1 -P 3306 -u root -ppetroflow petroflow > /tmp/petroflow-backup.sql
+          mysqldump --no-tablespaces -h "$MYSQL_HOST" -P "$MYSQL_PORT" \
+            -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" "$PETROFLOW_DB_NAME" > /tmp/petroflow-backup.sql
           test -s /tmp/petroflow-backup.sql
 
       - uses: actions/upload-artifact@v4
@@ -84,21 +125,33 @@ jobs:
       mysql:
         image: mysql:8.0
         env:
-          MYSQL_ROOT_PASSWORD: petroflow
+          # Container-initialisation only; this account is never handed to a job step.
+          MYSQL_ROOT_PASSWORD: ci-local-root
           MYSQL_DATABASE: petroflow_e2e
+          MYSQL_USER: petroflow_e2e
+          MYSQL_PASSWORD: petroflow_e2e_pw
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -ppetroflow"
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci-local-root"
           --health-interval=5s
           --health-timeout=5s
           --health-retries=15
     env:
+      NODE_ENV: development
+      PETROFLOW_DB_HOST: 127.0.0.1
+      PETROFLOW_DB_PORT: '3306'
+      PETROFLOW_DB_NAME: petroflow_e2e
+      PETROFLOW_DB_USER: petroflow_e2e
+      PETROFLOW_DB_PASSWORD: petroflow_e2e_pw
       MYSQL_HOST: 127.0.0.1
       MYSQL_PORT: '3306'
+      MYSQL_DATABASE: petroflow_e2e
+      MYSQL_USER: petroflow_e2e
+      MYSQL_PASSWORD: petroflow_e2e_pw
       E2E_MYSQL_DATABASE: petroflow_e2e
-      MYSQL_USER: root
-      MYSQL_PASSWORD: petroflow
+      SEED_DEMO_DATA: 'true'
+      ENABLE_DEMO_TOOLS: 'true'
     steps:
       - uses: actions/checkout@v4
 
@@ -114,6 +167,23 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      - name: Database isolation guard (e2e schema only, never "petroflow")
+        run: |
+          set -euo pipefail
+          if [ "$MYSQL_DATABASE" = "petroflow" ] || [ "$MYSQL_DATABASE" = "petroflow_test" ]; then
+            echo "Refusing to run E2E against $MYSQL_DATABASE." >&2
+            exit 1
+          fi
+          case "$MYSQL_DATABASE" in
+            *_e2e) ;;
+            *) echo "E2E database must end in _e2e (got $MYSQL_DATABASE)" >&2; exit 1 ;;
+          esac
+          mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" \
+            -e "SELECT DATABASE(), CURRENT_USER();" "$MYSQL_DATABASE"
+          # Playwright starts the API jar with --reset-db; prove that grant exists before the run.
+          mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" \
+            -e "CREATE DATABASE IF NOT EXISTS \`$MYSQL_DATABASE\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 
       - name: Package Java 21 API jar
         run: node scripts/gradle.mjs jar --no-daemon

@@ -53,6 +53,30 @@ public final class Db {
         return executeOnConnection(conn -> conn.exec(sql, params));
     }
 
+    /**
+     * Acquires a MySQL named advisory lock ({@code GET_LOCK}) on the current connection.
+     *
+     * <p>Named locks are server-side, so they are honoured by every API process that shares the
+     * database — unlike a JVM lock. They are released automatically when the session ends, so a
+     * crashed process cannot wedge them. Callers must run inside {@link #withConnection} (so the same
+     * session is pinned) and must call {@link #releaseLock} in a {@code finally} block.
+     *
+     * @return true when the lock was acquired within {@code timeoutSeconds}
+     */
+    public static boolean acquireLock(String name, int timeoutSeconds) {
+        Map<String, Object> row = Db.one("SELECT GET_LOCK(?, ?) AS acquired", name, Math.max(0, timeoutSeconds));
+        return row != null && num(row, "acquired") == 1;
+    }
+
+    /** Releases a named advisory lock held by the current connection. Never throws. */
+    public static void releaseLock(String name) {
+        try {
+            Db.one("SELECT RELEASE_LOCK(?) AS released", name);
+        } catch (RuntimeException ignored) {
+            /* the lock is released by MySQL when the session ends */
+        }
+    }
+
     public static <T> T withConnection(Supplier<T> work) {
         Mysql pinned = PINNED.get();
         if (pinned != null) {

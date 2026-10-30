@@ -228,12 +228,59 @@ Development server (`5173`) pump pe chhodna mat. Screens build karke preview cha
 NODE_ENV=production
 ENABLE_DEMO_TOOLS=false
 SEED_DEMO_DATA=false
-COOKIE_SECURE=false
+COOKIE_SECURE=true
 MYSQL_PASSWORD=your-mysql-password
 PETROFLOW_API_URL=http://127.0.0.1:4000
 ```
 
 `COOKIE_SECURE=true` sirf tab jab site **https://** pe ho. Pump LAN pe `http://192.168.x.x` ho to `false` rakho, warna login cookie save nahi hogi.
+
+`NODE_ENV=production` ke saath demo cheezein band rehti hain:
+
+- `SEED_DEMO_DATA` aur `ENABLE_DEMO_TOOLS` ka default `false` hai. Inme se kisi ko bhi `true` karoge to API **start hi nahi hogi** — demo users production DB mein kabhi nahi banenge.
+- `/api/v1/auth/demo-accounts` production mein 404 deta hai, aur demo login shortcuts kaam nahi karte.
+- Agar production DB mein purane demo accounts bache hue mile (`superadmin@petroflow.dev`, `owner/manager/attendant@sunrisefuels.in`, ya `is_demo=1` wala koi bhi row) to API start hote waqt ruk jaati hai aur message deti hai. Wo accounts **khud delete ya disable nahi hote** — pehle asli dealer login banao, phir demo rows hatao ya `is_demo=0` karo, uske baad restart karo.
+
+**Nayi (khali) production database pe pehla owner kaise banao**
+
+Demo seed production mein band hai, isliye pehla asli login ek one-time command se banta hai. Ye command sirf tab chalti hai jab database mein koi OWNER/SUPER_ADMIN na ho, aur ek baar successful hone ke baad apne aap band ho jaati hai:
+
+```cmd
+cd /d C:\petroflow-erp\backend
+gradlew.bat run --args="--bootstrap-owner"
+```
+
+(Repository root se `npm run db:bootstrap` bhi wahi command chalata hai.)
+
+Uske baad screen pe poocha jaata hai: account type (OWNER), email, aapka naam, pump company ka naam, short company code, pehla station ka naam/code, aur password (typing dikhayi nahi degi, do baar poocha jaayega).
+
+Zaroori baatein:
+
+- Password command line pe kabhi na likho — wo process list aur command history mein dikhta hai. Command khud poochti hai.
+- Password kam se kam 10 characters, usme letter aur number dono ho. Published demo password (`PetroFlow@2025`) mana hai.
+- Ye command **HTTP endpoint nahi** hai. Internet pe koi public registration page nahi hai.
+- Ek hi database pe dobara chalane par refuse ho jaayegi (owner pehle se hai ya marker `security.bootstrap.completed` maujood hai).
+- Agar email/slug pehle se kisi account/company ka hai to command ruk jaati hai aur ek bhi row nahi likhti.
+- Password PBKDF2 hash ke roop mein hi save hota hai, account `is_demo=0` ke saath banta hai.
+
+**Database reset protection**
+
+`--reset-db` (aur `npm run db:reset`) sirf development/test ke liye hai. `NODE_ENV=production` mein ye command **koi bhi SQL chalane se pehle** refuse ho jaati hai, taaki galti se asli shifts/sales/payments/ledger na ud jaayein. Production mein database dobara banana ho to backup restore karo.
+
+Login throttling (brute force rokne ke liye) default: 15 minute ke window mein ek account par 8 fail, ek IP par 30 fail. Badalna ho to:
+
+```text
+PETROFLOW_LOGIN_WINDOW_SECONDS=900
+PETROFLOW_LOGIN_MAX_ATTEMPTS_PER_ACCOUNT=8
+PETROFLOW_LOGIN_MAX_ATTEMPTS_PER_IP=30
+```
+
+Reverse proxy (nginx/Caddy) ke peeche chala rahe ho tabhi ye do lines lagao, warna `X-Forwarded-For` ignore hota hai:
+
+```text
+PETROFLOW_TRUST_PROXY=true
+PETROFLOW_TRUSTED_PROXIES=10.0.0.5
+```
 
 **CMD window 1 — API** (pehle se `gradlew.bat run` chal raha ho to `Ctrl+C`, phir dubara, taaki naya `.env` pick ho):
 
