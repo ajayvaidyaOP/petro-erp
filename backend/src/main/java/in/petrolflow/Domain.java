@@ -3,6 +3,8 @@ package in.petrolflow;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -10,9 +12,175 @@ import java.util.Map;
 public final class Domain {
     private Domain() {}
 
+    public record DensityEvaluation(
+            String observedDensity,
+            String observedTempC,
+            String densityAt15c,
+            String specMin,
+            String specMax,
+            int withinSpec,
+            String specificationUsed) {}
+
+    /**
+     * Converts observed glass-hydrometer reading (kg/m³) at observed temperature (°C)
+     * to standard density at 15.0°C (kg/m³) per ASTM D1250-80 / ISO 91-1 / IS 1448 [P:16]
+     * Table 53B (Generalized Petroleum Products, soda-lime glass hydrometer calibrated at 15°C),
+     * and evaluates fuel-specific BS-VI specification limits (IS 2796 for Motor Spirit,
+     * IS 1460 retail band for High Speed Diesel).
+     */
+    private static final BigDecimal TABLE_53B_MIN_DENSITY = new BigDecimal("653.0");
+    private static final BigDecimal TABLE_53B_MAX_DENSITY = new BigDecimal("1075.0");
+
+    public static DensityEvaluation evaluateDensityAt15c(String fuelCategory, String observedRaw, String tempRaw) {
+        final BigDecimal obsDec;
+        try {
+            obsDec = new BigDecimal(observedRaw.trim());
+        } catch (RuntimeException ex) {
+            throw ApiException.validation("observedDensity", "Observed density must be a valid number in kg/m³");
+        }
+        double obs = obsDec.doubleValue();
+        if (!Double.isFinite(obs)
+                || obsDec.compareTo(TABLE_53B_MIN_DENSITY) < 0
+                || obsDec.compareTo(TABLE_53B_MAX_DENSITY) > 0) {
+            throw ApiException.validation(
+                    "observedDensity",
+                    "Observed density must be within ASTM D1250-80 Table 53B valid domain 653.0–1075.0 kg/m³ (e.g. 742.5, not 0.742)");
+        }
+        final BigDecimal tempDec;
+        try {
+            tempDec = new BigDecimal(tempRaw.trim());
+        } catch (RuntimeException ex) {
+            throw ApiException.validation("observedTempC", "Observed temperature (°C) must be numeric");
+        }
+        double temp = tempDec.doubleValue();
+        if (!Double.isFinite(temp) || temp < -20.0 || temp > 65.0) {
+            throw ApiException.validation("observedTempC", "Observed temperature must be between -20°C and 65°C");
+        }
+
+        double dt = temp - 15.0;
+        double hyd = 1.0 - 0.000023 * dt - 0.00000002 * dt * dt;
+        double rhoT = obs * hyd;
+        double rho15 = rhoT;
+        for (int i = 0; i < 20; i++) {
+            double alpha;
+            if (rho15 < 770.0) {
+                alpha = (346.4228 + 0.4388 * rho15) / (rho15 * rho15);
+            } else if (rho15 < 787.5) {
+                alpha = -0.00336312 + 2680.3206 / (rho15 * rho15);
+            } else if (rho15 < 839.0) {
+                alpha = 594.5418 / (rho15 * rho15);
+            } else {
+                alpha = (186.9696 + 0.4862 * rho15) / (rho15 * rho15);
+            }
+            double vcf = Math.exp(-alpha * dt * (1.0 + 0.8 * alpha * dt));
+            double next = rhoT / vcf;
+            if (Math.abs(next - rho15) < 1e-7) {
+                rho15 = next;
+                break;
+            }
+            rho15 = next;
+        }
+        if (!Double.isFinite(rho15)) {
+            throw ApiException.validation("observedDensity", "Unable to converge ASTM D1250-80 Table 53B density at 15°C");
+        }
+        BigDecimal d15 = BigDecimal.valueOf(rho15).setScale(1, java.math.RoundingMode.HALF_UP);
+        if (d15.compareTo(TABLE_53B_MIN_DENSITY) < 0 || d15.compareTo(TABLE_53B_MAX_DENSITY) > 0) {
+            throw ApiException.validation(
+                    "observedDensity",
+                    "Corrected density at 15°C (" + Money.fixed(d15, 1)
+                            + " kg/m³) falls outside ASTM D1250-80 Table 53B valid domain 653.0–1075.0 kg/m³; extrapolation is not permitted");
+        }
+        String cat = fuelCategory == null ? "" : fuelCategory.trim().toUpperCase();
+        String specMin;
+        String specMax;
+        if ("DIESEL".equals(cat)) {
+            specMin = "810";
+            specMax = "845";
+        } else if ("PETROL".equals(cat)) {
+            specMin = "720";
+            specMax = "775";
+        } else {
+            specMin = null;
+            specMax = null;
+        }
+        String specLabel = densitySpecificationLabel(cat);
+        int within = 0;
+        if (specMin != null && specMax != null) {
+            within = (d15.compareTo(new BigDecimal(specMin)) >= 0 && d15.compareTo(new BigDecimal(specMax)) <= 0) ? 1 : 0;
+        }
+        return new DensityEvaluation(
+                Money.fixed(obsDec, 1),
+                Money.fixed(tempDec, 1),
+                Money.fixed(d15, 1),
+                specMin,
+                specMax,
+                within,
+                specLabel);
+    }
+
+    public static String densitySpecificationLabel(String fuelCategory) {
+        String cat = fuelCategory == null ? "" : fuelCategory.trim().toUpperCase();
+        if ("DIESEL".equals(cat)) {
+            return "ASTM D1250 / IS 1448 [P:16] Table 53B @ 15°C · IS 1460:2017 BS-VI Diesel (810–845 kg/m³)";
+        }
+        if ("PETROL".equals(cat)) {
+            return "ASTM D1250 / IS 1448 [P:16] Table 53B @ 15°C · IS 2796:2017 BS-VI Motor Gasoline (720–775 kg/m³)";
+        }
+        return "ASTM D1250 / IS 1448 [P:16] Table 53B @ 15°C · Unsupported fuel category (no BS-VI density spec)";
+    }
+
+    public static BigDecimal applyCreditEntryDelta(BigDecimal acc, Map<String, Object> entry) {
+        String type = Db.str(entry, "type");
+        BigDecimal rawAmt = Money.d(entry.get("amount"));
+        BigDecimal absAmt = rawAmt.abs();
+        if ("CREDIT_SALE".equals(type)) return acc.add(absAmt);
+        if ("PAYMENT".equals(type)) return acc.subtract(absAmt);
+        if ("PAYMENT_REVERSAL".equals(type)) return acc.add(absAmt);
+        return acc.add(rawAmt);
+    }
+
+    public static Map<String, BigDecimal> stationScopedCustomerBalances(
+            String tenantId,
+            Collection<String> customerIds,
+            Collection<String> stationIds) {
+        if (tenantId == null || customerIds == null || customerIds.isEmpty() || stationIds == null || stationIds.isEmpty()) {
+            return Map.of();
+        }
+        List<String> custList = new ArrayList<>(customerIds);
+        List<String> stnList = new ArrayList<>(stationIds);
+        String custIn = String.join(",", Collections.nCopies(custList.size(), "?"));
+        String stnIn = String.join(",", Collections.nCopies(stnList.size(), "?"));
+        List<Object> params = new ArrayList<>(1 + custList.size() + stnList.size());
+        params.add(tenantId);
+        params.addAll(custList);
+        params.addAll(stnList);
+        Map<String, BigDecimal> out = new LinkedHashMap<>();
+        for (Map<String, Object> row : Db.all(
+                "SELECT customer_id, type, amount FROM credit_entries "
+                        + "WHERE tenant_id = ? AND status = 'POSTED' "
+                        + "AND customer_id IN (" + custIn + ") "
+                        + "AND station_id IN (" + stnIn + ")",
+                params.toArray())) {
+            String cid = Db.str(row, "customer_id");
+            if (cid != null) {
+                out.put(cid, applyCreditEntryDelta(out.getOrDefault(cid, BigDecimal.ZERO), row));
+            }
+        }
+        return out;
+    }
+
+    public static String stationScopedCustomerBalance(String tenantId, String customerId, Collection<String> stationIds) {
+        if (customerId == null || stationIds == null || stationIds.isEmpty()) {
+            return "0.00";
+        }
+        Map<String, BigDecimal> map = stationScopedCustomerBalances(tenantId, List.of(customerId), stationIds);
+        return Money.money(map.getOrDefault(customerId, BigDecimal.ZERO));
+    }
+
     public static BigDecimal signedLitres(String type, Object quantity) {
-        BigDecimal amount = Money.d(quantity).abs();
-        if ("ADJUSTMENT".equals(type)) return Money.d(quantity).negate();
+        BigDecimal raw = Money.d(quantity);
+        if ("ADJUSTMENT".equals(type)) return raw;
+        BigDecimal amount = raw.abs();
         if ("DISPENSED".equals(type) || "TRANSFER_OUT".equals(type)) return amount.negate();
         return amount;
     }
@@ -66,7 +234,7 @@ public final class Domain {
             BigDecimal book = bookStock(Db.str(tank, "id"));
             Map<String, Object> last = Db.one(
                     """
-                    SELECT measured_litres, variance_litres, measured_at, method
+                    SELECT measured_litres, variance_litres, measured_at, method, water_dip_cm
                       FROM tank_measurements WHERE tank_id = ? ORDER BY measured_at DESC LIMIT 1
                     """, Db.str(tank, "id"));
             Map<String, Object> card = new LinkedHashMap<>();
@@ -88,6 +256,7 @@ public final class Domain {
             card.put("lastVarianceLitres", last == null ? null : last.get("variance_litres"));
             card.put("lastMeasuredAt", last == null ? null : last.get("measured_at"));
             card.put("lastMeasurementMethod", last == null ? null : last.get("method"));
+            card.put("lastWaterDipCm", last == null ? null : last.get("water_dip_cm"));
             out.add(card);
         }
         return out;

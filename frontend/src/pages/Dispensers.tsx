@@ -53,6 +53,7 @@ interface TankMini {
   code: string;
   productId: string;
   stationId: string;
+  status?: string;
 }
 interface Device {
   id: string;
@@ -406,6 +407,7 @@ export default function Dispensers() {
           </Field>
           <Field
             label="Source underground tank"
+            required
             className="sm:col-span-2"
             hint="Critical mapping: volume dispensed from this nozzle deducts directly from the selected tank's book stock."
           >
@@ -416,7 +418,7 @@ export default function Dispensers() {
             >
               <option value="">{nozzleForm.productId ? 'Select tank…' : 'Select fuel product first'}</option>
               {(tanks.data ?? [])
-                .filter((t) => t.productId === nozzleForm.productId)
+                .filter((t) => t.productId === nozzleForm.productId && (!t.status || t.status === 'ACTIVE'))
                 .map((t) => (
                   <option key={t.id} value={t.id}>{t.code} ({productMap.get(t.productId)?.name ?? ''})</option>
                 ))}

@@ -1,10 +1,12 @@
 package in.petrolflow;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -101,11 +103,28 @@ public final class ReportApi {
         data.put("stock", Domain.tankSummary(Db.str(station, "id")));
         data.put("productSplit", productSplit(Db.str(station, "id"), date, auth.tenantId()));
         data.put("devices", Map.of("total", Db.count("SELECT COUNT(*) AS count FROM hardware_devices WHERE station_id = ? AND status != 'DISABLED'", station.get("id")), "online", 0));
-        data.put("receivables", Money.money(Db.one("SELECT COALESCE(SUM(CAST(balance AS DECIMAL(20,2))), 0) AS total FROM customers WHERE tenant_id = ?", auth.tenantId()).get("total")));
+        BigDecimal stationReceivables;
+        if (auth.allStations) {
+            stationReceivables = Money.d(Db.one("SELECT COALESCE(SUM(CAST(balance AS DECIMAL(20,2))), 0) AS total FROM customers WHERE tenant_id = ?", auth.tenantId()).get("total"));
+        } else {
+            stationReceivables = BigDecimal.ZERO;
+            for (Map<String, Object> ce : Db.all(
+                    "SELECT type, amount FROM credit_entries WHERE tenant_id = ? AND station_id = ? AND status = 'POSTED'",
+                    auth.tenantId(), station.get("id"))) {
+                String t = Db.str(ce, "type");
+                BigDecimal a = Money.d(ce.get("amount"));
+                if ("CREDIT_SALE".equals(t) || "PAYMENT_REVERSAL".equals(t)) stationReceivables = stationReceivables.add(a.abs());
+                else if ("PAYMENT".equals(t)) stationReceivables = stationReceivables.subtract(a.abs());
+                else stationReceivables = stationReceivables.add(a);
+            }
+        }
+        data.put("receivables", Money.money(stationReceivables));
         data.put("payables", "0.00");
         data.put("trend", trend);
         data.put("alerts", alerts);
-        data.put("recentActivity", Json.shapeAll(Db.all("SELECT action, summary, created_at, actor_email FROM audit_logs WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 8", auth.tenantId())));
+        data.put("recentActivity", Json.shapeAll(Db.all(
+                "SELECT action, summary, created_at, actor_email FROM audit_logs WHERE tenant_id = ? AND station_id = ? ORDER BY created_at DESC LIMIT 8",
+                auth.tenantId(), station.get("id"))));
         data.put("disclaimer", ACCOUNTING + " " + HARDWARE);
         ctx.ok(data);
     }
@@ -245,7 +264,7 @@ public final class ReportApi {
         data.put("expenses", expenses);
         data.put("deliveries", deliveries);
         data.put("receipts", receipts);
-        data.put("stock", Domain.tankSummary(Db.str(station, "id")));
+        data.put("stock", dsrTankStock(Db.str(station, "id"), Db.str(station, "name"), start, end));
         data.put("reconciliation", recon == null ? null : Json.shape(recon));
         data.put("paymentMix", byMode(Db.str(station, "id"), start, end));
         data.put("totals", Web.map(
@@ -346,29 +365,65 @@ public final class ReportApi {
         ctx.ok(Web.map("month", month, "rows", rows));
     }
 
+    private static List<String> resolveAgeingStationIds(Auth auth, Web.Ctx ctx) {
+        String stationParam = ctx.q("stationId");
+        if (stationParam != null && !stationParam.isBlank() && !"all".equalsIgnoreCase(stationParam)) {
+            auth.station(stationParam.trim());
+            return List.of(stationParam.trim());
+        }
+        if (auth.allStations) {
+            return null;
+        }
+        return new ArrayList<>(auth.stationIds);
+    }
+
     private static void ageing(Web.Ctx ctx) {
         Auth auth = ctx.requireAuth();
         auth.require("reports.read");
-        if (ctx.q("stationId") != null && !"all".equals(ctx.q("stationId"))) auth.station(ctx.q("stationId"));
-        ctx.ok(fifoAgeing(auth.tenantId()));
+        ctx.ok(fifoAgeing(auth.tenantId(), resolveAgeingStationIds(auth, ctx)));
     }
 
-    private static Map<String, Object> fifoAgeing(String tenantId) {
+    private static Map<String, Object> fifoAgeing(String tenantId, List<String> stationIds) {
         List<Map<String, Object>> rows = new ArrayList<>();
         BigDecimal outstanding = BigDecimal.ZERO;
         BigDecimal b0 = BigDecimal.ZERO;
         BigDecimal b31 = BigDecimal.ZERO;
         BigDecimal b61 = BigDecimal.ZERO;
         BigDecimal b90 = BigDecimal.ZERO;
+        if (stationIds != null && stationIds.isEmpty()) {
+            return Web.map(
+                    "asOf", Clock.todayIst(),
+                    "rows", rows,
+                    "totals", Web.map("outstanding", "0.00", "bucket0To30", "0.00", "bucket31To60", "0.00", "bucket61To90", "0.00", "bucket90Plus", "0.00"),
+                    "note", "Payments FIFO tareeke se sabse purani udhaar me lage mane gaye hain.");
+        }
+        String stationClause = stationIds == null
+                ? ""
+                : " AND station_id IN (" + String.join(",", Collections.nCopies(stationIds.size(), "?")) + ")";
         long today = LocalDate.parse(Clock.todayIst()).atTime(12, 0).toInstant(ZoneOffset.ofHoursMinutes(5, 30)).toEpochMilli();
         for (Map<String, Object> customer : Db.all("SELECT id, code, name, phone, credit_limit FROM customers WHERE tenant_id = ? AND status = 'ACTIVE' ORDER BY name", tenantId)) {
+            List<Object> payParams = new ArrayList<>();
+            payParams.add(customer.get("id"));
+            payParams.add(tenantId);
+            if (stationIds != null) payParams.addAll(stationIds);
             BigDecimal paid = BigDecimal.ZERO;
-            for (Map<String, Object> payment : Db.all("SELECT amount FROM credit_entries WHERE customer_id = ? AND type = 'PAYMENT' AND status = 'POSTED'", customer.get("id"))) {
-                paid = paid.add(Money.d(payment.get("amount")).abs());
+            for (Map<String, Object> payment : Db.all(
+                    "SELECT type, amount FROM credit_entries WHERE customer_id = ? AND tenant_id = ? AND type IN ('PAYMENT','PAYMENT_REVERSAL') AND status = 'POSTED'" + stationClause,
+                    payParams.toArray())) {
+                BigDecimal amt = Money.d(payment.get("amount")).abs();
+                if ("PAYMENT".equals(payment.get("type"))) paid = paid.add(amt);
+                else paid = paid.subtract(amt);
             }
+            if (paid.signum() < 0) paid = BigDecimal.ZERO;
             BigDecimal d0 = BigDecimal.ZERO, d31 = BigDecimal.ZERO, d61 = BigDecimal.ZERO, d90 = BigDecimal.ZERO, due = BigDecimal.ZERO;
             String oldestUnpaidAt = null;
-            for (Map<String, Object> sale : Db.all("SELECT amount, occurred_at FROM credit_entries WHERE customer_id = ? AND type = 'CREDIT_SALE' AND status = 'POSTED' ORDER BY occurred_at", customer.get("id"))) {
+            List<Object> saleParams = new ArrayList<>();
+            saleParams.add(customer.get("id"));
+            saleParams.add(tenantId);
+            if (stationIds != null) saleParams.addAll(stationIds);
+            for (Map<String, Object> sale : Db.all(
+                    "SELECT amount, occurred_at FROM credit_entries WHERE customer_id = ? AND tenant_id = ? AND type = 'CREDIT_SALE' AND status = 'POSTED'" + stationClause + " ORDER BY occurred_at",
+                    saleParams.toArray())) {
                 BigDecimal remaining = Money.d(sale.get("amount")).abs();
                 if (paid.signum() > 0) {
                     BigDecimal used = remaining.min(paid);
@@ -511,7 +566,7 @@ public final class ReportApi {
         Auth auth = ctx.requireAuth();
         auth.require("reports.read");
         StringBuilder csv = new StringBuilder("customer,code,outstanding,0_to_30,31_to_60,61_to_90,90_plus\n");
-        Object rows = fifoAgeing(auth.tenantId()).get("rows");
+        Object rows = fifoAgeing(auth.tenantId(), resolveAgeingStationIds(auth, ctx)).get("rows");
         if (rows instanceof List<?> list) {
             for (Object item : list) {
                 Map<String, Object> row = Json.object(item);
@@ -531,20 +586,49 @@ public final class ReportApi {
         Auth auth = ctx.requireAuth();
         auth.require("reports.read");
         String stationId = ctx.q("stationId");
-        if (stationId != null && !stationId.isBlank()) auth.station(stationId);
-        String month = ctx.q("month") == null ? Clock.todayIst().substring(0, 7) : ctx.q("month");
-        StringBuilder csv = new StringBuilder("date,product,hsn,qty,rate,amount,gst_rate\n");
-        List<Map<String, Object>> rows = stationId == null || stationId.isBlank()
-                ? Db.all("SELECT m.occurred_at, p.name, p.hsn_code, m.quantity, m.rate, m.amount, p.gst_rate_pct FROM lube_movements m JOIN lube_products p ON p.id = m.product_id WHERE m.tenant_id = ? AND m.type = 'SALE' AND m.occurred_at LIKE ? ORDER BY m.occurred_at", auth.tenantId(), month + "%")
-                : Db.all("SELECT m.occurred_at, p.name, p.hsn_code, m.quantity, m.rate, m.amount, p.gst_rate_pct FROM lube_movements m JOIN lube_products p ON p.id = m.product_id WHERE m.station_id = ? AND m.type = 'SALE' AND m.occurred_at LIKE ? ORDER BY m.occurred_at", stationId, month + "%");
+        String month = (ctx.q("month") == null || ctx.q("month").isBlank()) ? Clock.todayIst().substring(0, 7) : ctx.q("month").trim();
+        if (!month.matches("\\d{4}-\\d{2}")) throw ApiException.unprocessable("month (YYYY-MM) is required");
+        String fromIso = Clock.istDayStart(month + "-01");
+        String toIso = Clock.istDayStart(Clock.addDays(month + "-28", 4).substring(0, 8) + "01");
+
+        String where = "m.tenant_id = ? AND m.type = 'SALE' AND m.occurred_at >= ? AND m.occurred_at < ?";
+        List<Object> params = new ArrayList<>(List.of(auth.tenantId(), fromIso, toIso));
+        if (stationId != null && !stationId.isBlank() && !"all".equalsIgnoreCase(stationId)) {
+            auth.station(stationId);
+            where += " AND m.station_id = ?";
+            params.add(stationId);
+        } else if (!auth.allStations) {
+            if (auth.stationIds.isEmpty()) {
+                ctx.csv("lubricants-gst.csv", "date,product,hsn,qty,rate,amount,gst_rate,taxable_amount,cgst_amount,sgst_amount,gst_amount\n");
+                return;
+            }
+            List<String> allowed = new ArrayList<>(auth.stationIds);
+            where += " AND m.station_id IN (" + String.join(",", Collections.nCopies(allowed.size(), "?")) + ")";
+            params.addAll(allowed);
+        }
+        StringBuilder csv = new StringBuilder("date,product,hsn,qty,rate,amount,gst_rate,taxable_amount,cgst_amount,sgst_amount,gst_amount\n");
+        List<Map<String, Object>> rows = Db.all(
+                "SELECT m.occurred_at, p.name, p.hsn_code, m.quantity, m.rate, m.amount, p.gst_rate_pct FROM lube_movements m JOIN lube_products p ON p.id = m.product_id WHERE "
+                        + where + " ORDER BY m.occurred_at",
+                params.toArray());
         for (Map<String, Object> row : rows) {
+            BigDecimal gross = Money.d(row.get("amount")).abs();
+            BigDecimal gstRate = Money.d(row.get("gst_rate_pct"));
+            BigDecimal gstAmt = Money.d(OpsApi.inclusiveGstAmount(gross, gstRate));
+            BigDecimal taxable = gross.subtract(gstAmt);
+            BigDecimal cgst = gstAmt.divide(new BigDecimal("2"), 2, RoundingMode.HALF_UP);
+            BigDecimal sgst = gstAmt.subtract(cgst);
             csv.append(csvCell(row.get("occurred_at"))).append(',')
                     .append(csvCell(row.get("name"))).append(',')
                     .append(csvCell(row.get("hsn_code"))).append(',')
-                    .append(csvCell(row.get("quantity"))).append(',')
-                    .append(csvCell(row.get("rate"))).append(',')
-                    .append(csvCell(row.get("amount"))).append(',')
-                    .append(csvCell(row.get("gst_rate_pct"))).append('\n');
+                    .append(csvCell(Money.d(row.get("quantity")).abs().stripTrailingZeros().toPlainString())).append(',')
+                    .append(csvCell(Money.money(row.get("rate")))).append(',')
+                    .append(csvCell(Money.money(gross))).append(',')
+                    .append(csvCell(row.get("gst_rate_pct"))).append(',')
+                    .append(csvCell(Money.money(taxable))).append(',')
+                    .append(csvCell(Money.money(cgst))).append(',')
+                    .append(csvCell(Money.money(sgst))).append(',')
+                    .append(csvCell(Money.money(gstAmt))).append('\n');
         }
         ctx.csv("lubricants-gst.csv", csv.toString());
     }
@@ -553,6 +637,58 @@ public final class ReportApi {
         String text = value == null ? "" : String.valueOf(value);
         if (text.contains(",") || text.contains("\"") || text.contains("\n")) return "\"" + text.replace("\"", "\"\"") + "\"";
         return text;
+    }
+
+    private static List<Map<String, Object>> dsrTankStock(String stationId, String stationName, String start, String end) {
+        List<Map<String, Object>> summary = Domain.tankSummary(stationId);
+        List<Map<String, Object>> out = new ArrayList<>(summary.size());
+        for (Map<String, Object> tank : summary) {
+            String tankId = String.valueOf(tank.get("id"));
+            BigDecimal openingBook = BigDecimal.ZERO;
+            BigDecimal deliveredToday = BigDecimal.ZERO;
+            BigDecimal dispensedBook = BigDecimal.ZERO;
+            BigDecimal bookClosing = BigDecimal.ZERO;
+            for (Map<String, Object> mv : Db.all(
+                    "SELECT type, quantity_litres, occurred_at FROM stock_movements WHERE tank_id = ? AND occurred_at <= ? ORDER BY occurred_at ASC",
+                    tankId, end)) {
+                String type = Db.str(mv, "type");
+                String occ = Db.str(mv, "occurred_at");
+                BigDecimal signed = Domain.signedLitres(type, mv.get("quantity_litres"));
+                bookClosing = bookClosing.add(signed);
+                if (occ.compareTo(start) < 0 || "OPENING".equals(type)) {
+                    openingBook = openingBook.add(signed);
+                } else if ("DELIVERY".equals(type) || "TRANSFER_IN".equals(type)) {
+                    deliveredToday = deliveredToday.add(signed);
+                } else if ("DISPENSED".equals(type) || "TRANSFER_OUT".equals(type)) {
+                    dispensedBook = dispensedBook.add(signed.abs());
+                } else if ("ADJUSTMENT".equals(type)) {
+                    // Shift reversal or loss/gain adjustment during the day adjusts net dispensed/received so opening + delivered - dispensed aligns with bookClosing
+                    if (signed.signum() < 0) {
+                        dispensedBook = dispensedBook.add(signed.abs());
+                    } else {
+                        deliveredToday = deliveredToday.add(signed);
+                    }
+                }
+            }
+            Map<String, Object> dayMeas = Db.one(
+                    "SELECT measured_litres, variance_litres FROM tank_measurements WHERE tank_id = ? AND measured_at >= ? AND measured_at <= ? ORDER BY measured_at DESC LIMIT 1",
+                    tankId, start, end);
+            String measured = dayMeas == null || dayMeas.get("measured_litres") == null
+                    ? null
+                    : Money.litres(dayMeas.get("measured_litres"));
+            boolean varianceFlag = dayMeas != null && dayMeas.get("measured_litres") != null
+                    && Money.d(dayMeas.get("measured_litres")).subtract(bookClosing).abs().compareTo(new BigDecimal("50")) > 0;
+            Map<String, Object> row = new LinkedHashMap<>(tank);
+            row.put("stationName", stationName);
+            row.put("openingBook", Money.litres(openingBook));
+            row.put("deliveredToday", Money.litres(deliveredToday));
+            row.put("dispensedBook", Money.litres(dispensedBook));
+            row.put("bookClosing", Money.litres(bookClosing));
+            row.put("measured", measured);
+            row.put("varianceFlag", varianceFlag);
+            out.add(row);
+        }
+        return out;
     }
 
     private static List<Map<String, Object>> productSplit(String stationId, String date, String tenantId) {

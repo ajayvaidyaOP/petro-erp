@@ -20,12 +20,21 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public final class Web {
+    private static final Set<String> MUTATION_METHODS = Set.of("POST", "PUT", "PATCH", "DELETE");
+    private static final long IDEMPOTENCY_POLL_TIMEOUT_MS = 5_000L;
+    private static final long IDEMPOTENCY_POLL_INTERVAL_MS = 25L;
+    private static final int COMPLETED_RETENTION_HOURS = 24;
     private final Config config;
-    private final List<Route> routes = new ArrayList<>();
+    private final Map<String, String> inFlightIdempotencyClaims = new ConcurrentHashMap<>();
+    private final List<Route> routes = new CopyOnWriteArrayList<>();
     private final Path spaDist;
     private HttpServer server;
     private ExecutorService executor;
@@ -90,8 +99,7 @@ public final class Web {
                 Map<String, String> params = route.match(path);
                 if (params == null) continue;
                 ctx.params = params;
-                route.handler.handle(ctx);
-                if (!ctx.sent) ctx.ok(Map.of());
+                executeWithIdempotency(ctx, path, route.handler);
                 return;
             }
             ctx.error(404, "NOT_FOUND", "No route for " + ctx.method + " " + ctx.path);
@@ -161,6 +169,252 @@ public final class Web {
         }
     }
 
+    private static final class IdempotencyClaimConflict extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+        IdempotencyClaimConflict() { super(null, null, true, false); }
+    }
+
+    private static final class IdempotencyNon2xxAbort extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+        IdempotencyNon2xxAbort() { super(null, null, true, false); }
+    }
+
+    private void executeWithIdempotency(Ctx ctx, String routePath, Handler handler) {
+        String rawKey = ctx.header("idempotency-key");
+        if (rawKey == null || rawKey.isBlank() || !MUTATION_METHODS.contains(ctx.method) || ctx.auth == null || ctx.auth.tenantId == null) {
+            handler.handle(ctx);
+            if (!ctx.sent) ctx.ok(Map.of());
+            return;
+        }
+        String idemKey = rawKey.trim();
+        if (idemKey.length() > 200) {
+            throw ApiException.validation("Idempotency-Key", "Idempotency-Key must be at most 200 characters");
+        }
+        String tenantId = ctx.auth.tenantId;
+        String rawQuery = ctx.exchange.getRequestURI().getRawQuery();
+        String scope = ctx.method + " " + routePath + (rawQuery == null || rawQuery.isEmpty() ? "" : "?" + rawQuery);
+        String requestHash = Passwords.sha256(Json.stringify(canonicalize(ctx.body)));
+        String compositeKey = tenantId + "\0" + scope + "\0" + idemKey;
+        int leaseSeconds = config.idempotencyLeaseSeconds;
+
+        for (int attempt = 0; attempt < 4; attempt++) {
+            if (!awaitAndAcquireInFlightSlot(compositeKey, requestHash)) {
+                if (replayCompletedIfPresent(ctx, tenantId, scope, idemKey, requestHash)) {
+                    return;
+                }
+                throw new ApiException(409, "IDEMPOTENCY_IN_PROGRESS", "A request with this Idempotency-Key is currently in progress");
+            }
+            try {
+                Db.tx(() -> {
+                    ctx.bufferedStatus = 0;
+                    ctx.bufferedContentType = null;
+                    ctx.bufferedBody = null;
+
+                    String claimId = Clock.newId("idm");
+                    String claimNow = Clock.nowIso();
+                    String claimExpires = Clock.addSecondsIso(claimNow, leaseSeconds);
+                    try {
+                        Db.exec(
+                                """
+                                INSERT INTO `idempotency_keys`
+                                  (`id`, `tenant_id`, `scope`, `key`, `request_hash`, `status`, `response_status`, `response_body`, `created_at`, `expires_at`)
+                                VALUES (?, ?, ?, ?, ?, 'IN_PROGRESS', NULL, NULL, ?, ?)
+                                """,
+                                claimId, tenantId, scope, idemKey, requestHash, claimNow, claimExpires);
+                    } catch (ApiException ex) {
+                        if ("DUPLICATE".equals(ex.code)) throw new IdempotencyClaimConflict();
+                        if ("DB_LOCK_TIMEOUT".equals(ex.code)) {
+                            throw new ApiException(409, "IDEMPOTENCY_IN_PROGRESS", "A request with this Idempotency-Key is currently in progress");
+                        }
+                        throw ex;
+                    }
+
+                    ctx.bufferJsonForIdempotency = true;
+                    try {
+                        handler.handle(ctx);
+                        if (!ctx.sent && ctx.bufferedBody == null) ctx.ok(Map.of());
+                    } finally {
+                        ctx.bufferJsonForIdempotency = false;
+                    }
+
+                    if (ctx.bufferedBody == null || ctx.bufferedStatus < 200 || ctx.bufferedStatus >= 300) {
+                        throw new IdempotencyNon2xxAbort();
+                    }
+
+                    String completedNow = Clock.nowIso();
+                    String expiresAt = Clock.addHoursIso(completedNow, COMPLETED_RETENTION_HOURS);
+                    int updated = Db.exec(
+                            """
+                            UPDATE `idempotency_keys`
+                               SET `status` = 'COMPLETED',
+                                   `response_status` = ?,
+                                   `response_body` = ?,
+                                   `expires_at` = ?
+                             WHERE `id` = ? AND `status` = 'IN_PROGRESS'
+                            """,
+                            ctx.bufferedStatus,
+                            new String(ctx.bufferedBody, StandardCharsets.UTF_8),
+                            expiresAt,
+                            claimId);
+                    if (updated != 1) {
+                        throw new ApiException(409, "IDEMPOTENCY_IN_PROGRESS", "Idempotency claim lease was invalidated before commit");
+                    }
+                    return null;
+                });
+                ctx.raw(ctx.bufferedStatus, ctx.bufferedContentType, ctx.bufferedBody);
+                return;
+            } catch (IdempotencyNon2xxAbort abort) {
+                if (ctx.bufferedBody != null) {
+                    ctx.raw(ctx.bufferedStatus, ctx.bufferedContentType, ctx.bufferedBody);
+                }
+                return;
+            } catch (IdempotencyClaimConflict conflict) {
+                // Release local slot before polling/clearing so another finishing thread is never blocked
+            } finally {
+                inFlightIdempotencyClaims.remove(compositeKey, requestHash);
+            }
+
+            if (replayOrClearExistingClaim(ctx, tenantId, scope, idemKey, requestHash, compositeKey)) {
+                return;
+            }
+        }
+        throw new ApiException(409, "IDEMPOTENCY_IN_PROGRESS", "A request with this Idempotency-Key is currently in progress");
+    }
+
+    private boolean awaitAndAcquireInFlightSlot(String compositeKey, String requestHash) {
+        long deadline = System.currentTimeMillis() + IDEMPOTENCY_POLL_TIMEOUT_MS;
+        while (true) {
+            String activeHash = inFlightIdempotencyClaims.putIfAbsent(compositeKey, requestHash);
+            if (activeHash == null) {
+                return true;
+            }
+            if (!activeHash.equals(requestHash)) {
+                throw ApiException.conflict("Idempotency-Key has already been used with a different request payload");
+            }
+            if (System.currentTimeMillis() >= deadline) {
+                return false;
+            }
+            try {
+                Thread.sleep(IDEMPOTENCY_POLL_INTERVAL_MS);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                throw new ApiException(409, "IDEMPOTENCY_IN_PROGRESS", "Interrupted while waiting for in-progress idempotent request");
+            }
+        }
+    }
+
+    private static boolean replayCompletedIfPresent(Ctx ctx, String tenantId, String scope, String idemKey, String requestHash) {
+        Map<String, Object> existing = Db.one(
+                "SELECT * FROM `idempotency_keys` WHERE `tenant_id` = ? AND `scope` = ? AND `key` = ?",
+                tenantId, scope, idemKey);
+        if (existing == null) {
+            return false;
+        }
+        if (!"COMPLETED".equals(Db.str(existing, "status"))) {
+            if (!requestHash.equals(Db.str(existing, "request_hash"))) {
+                throw ApiException.conflict("Idempotency-Key has already been used with a different request payload");
+            }
+            return false;
+        }
+        String now = Clock.nowIso();
+        String expiresAt = Db.str(existing, "expires_at");
+        if (expiresAt != null && expiresAt.compareTo(now) <= 0) {
+            return false;
+        }
+        if (!requestHash.equals(Db.str(existing, "request_hash"))) {
+            throw ApiException.conflict("Idempotency-Key has already been used with a different request payload");
+        }
+        int replayStatus = existing.get("response_status") == null ? 200 : (int) Db.num(existing, "response_status");
+        String replayBody = existing.get("response_body") == null ? "{\"data\":{}}" : Db.str(existing, "response_body");
+        ctx.exchange.getResponseHeaders().set("Idempotent-Replayed", "true");
+        ctx.raw(replayStatus, "application/json; charset=utf-8", replayBody.getBytes(StandardCharsets.UTF_8));
+        return true;
+    }
+
+    private boolean replayOrClearExistingClaim(
+            Ctx ctx,
+            String tenantId,
+            String scope,
+            String idemKey,
+            String requestHash,
+            String compositeKey) {
+        long deadline = System.currentTimeMillis() + IDEMPOTENCY_POLL_TIMEOUT_MS;
+        while (true) {
+            String now = Clock.nowIso();
+            Map<String, Object> existing = Db.one(
+                    "SELECT * FROM `idempotency_keys` WHERE `tenant_id` = ? AND `scope` = ? AND `key` = ?",
+                    tenantId, scope, idemKey);
+            if (existing == null) {
+                return false;
+            }
+            String status = Db.str(existing, "status");
+            String expiresAt = Db.str(existing, "expires_at");
+            if ("COMPLETED".equals(status)) {
+                if (expiresAt != null && expiresAt.compareTo(now) <= 0) {
+                    Db.tx(() -> Db.exec(
+                            "DELETE FROM `idempotency_keys` WHERE `id` = ? AND `status` = 'COMPLETED' AND `expires_at` <= ?",
+                            existing.get("id"), now));
+                    return false;
+                }
+                if (!requestHash.equals(Db.str(existing, "request_hash"))) {
+                    throw ApiException.conflict("Idempotency-Key has already been used with a different request payload");
+                }
+                int replayStatus = existing.get("response_status") == null ? 200 : (int) Db.num(existing, "response_status");
+                String replayBody = existing.get("response_body") == null ? "{\"data\":{}}" : Db.str(existing, "response_body");
+                ctx.exchange.getResponseHeaders().set("Idempotent-Replayed", "true");
+                ctx.raw(replayStatus, "application/json; charset=utf-8", replayBody.getBytes(StandardCharsets.UTF_8));
+                return true;
+            }
+
+            // Status is IN_PROGRESS (or non-COMPLETED): never evict if original in-JVM transaction is still active
+            if (expiresAt != null && expiresAt.compareTo(now) <= 0 && !inFlightIdempotencyClaims.containsKey(compositeKey)) {
+                try {
+                    int deleted = Db.tx(() -> Db.exec(
+                            "DELETE FROM `idempotency_keys` WHERE `id` = ? AND `status` = 'IN_PROGRESS' AND `expires_at` <= ?",
+                            existing.get("id"), now));
+                    if (deleted > 0) {
+                        return false;
+                    }
+                    continue;
+                } catch (ApiException lockEx) {
+                    if ("DB_LOCK_TIMEOUT".equals(lockEx.code) || "DB_DEADLOCK".equals(lockEx.code)) {
+                        throw new ApiException(409, "IDEMPOTENCY_IN_PROGRESS", "A request with this Idempotency-Key is currently in progress");
+                    }
+                    throw lockEx;
+                }
+            }
+
+            if (!requestHash.equals(Db.str(existing, "request_hash"))) {
+                throw ApiException.conflict("Idempotency-Key has already been used with a different request payload");
+            }
+            if (System.currentTimeMillis() >= deadline) {
+                throw new ApiException(409, "IDEMPOTENCY_IN_PROGRESS", "A request with this Idempotency-Key is currently in progress");
+            }
+            try {
+                Thread.sleep(IDEMPOTENCY_POLL_INTERVAL_MS);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                throw new ApiException(409, "IDEMPOTENCY_IN_PROGRESS", "Interrupted while waiting for in-progress idempotent request");
+            }
+        }
+    }
+
+    private static Object canonicalize(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> sorted = new TreeMap<>();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                sorted.put(String.valueOf(entry.getKey()), canonicalize(entry.getValue()));
+            }
+            return sorted;
+        }
+        if (value instanceof List<?> list) {
+            List<Object> out = new ArrayList<>(list.size());
+            for (Object item : list) out.add(canonicalize(item));
+            return out;
+        }
+        return value;
+    }
+
     public interface Handler { void handle(Ctx ctx); }
 
     private record Route(String method, String pattern, Handler handler) {
@@ -189,6 +443,10 @@ public final class Web {
         public Auth auth;
         private final HttpExchange exchange;
         private boolean sent;
+        boolean bufferJsonForIdempotency;
+        int bufferedStatus;
+        String bufferedContentType;
+        byte[] bufferedBody;
         public final boolean preview;
 
         Ctx(Config config, HttpExchange exchange) throws IOException {
@@ -286,6 +544,12 @@ public final class Web {
         }
 
         public void raw(int status, String type, byte[] bytes) {
+            if (bufferJsonForIdempotency) {
+                bufferedStatus = status;
+                bufferedContentType = type;
+                bufferedBody = bytes;
+                return;
+            }
             if (sent) return;
             sent = true;
             try {
