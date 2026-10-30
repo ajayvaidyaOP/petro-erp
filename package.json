@@ -22,6 +22,7 @@
     "test": "node scripts/gradle.mjs verifyJava --no-daemon",
     "test:e2e": "playwright test",
     "db:reset": "node scripts/gradle.mjs run --args=\"--reset-db --check-only\" --no-daemon",
+    "db:bootstrap": "node scripts/gradle.mjs run --args=\"--bootstrap-owner\" --no-daemon",
     "db:seed": "node scripts/gradle.mjs run --args=\"--check-only\" --no-daemon"
   },
   "devDependencies": {

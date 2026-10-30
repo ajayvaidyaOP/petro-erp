@@ -6,8 +6,15 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Pure Java 21 unit + MySQL 8 HTTP integration test suite for PetroFlow ERP.
@@ -254,6 +261,13 @@ public final class BackendTests {
 
             // 24. F-18: Bounded MySQL connection pooling, tx single-connection pinning, timeouts, and zero leaks
             verifyF18MysqlConnectionPooling(base, testDb);
+
+            // 25. Phase 0 security remediation: A5 login throttling over HTTP + A4 production demo guard
+            verifyLoginThrottleAndDemoGuard(client, url, base, testDb);
+
+            // 26. Phase 0 completion: D1/D2 first-owner bootstrap, D3 advisory-locked throttle, D6 reset guard
+            verifyBootstrapFlow(client, url, base);
+            verifyThrottleAdvisoryLock(base);
 
             // Reset clean demo seed in isolated test DB at end of test run
             Main.resetDatabase(base);
@@ -2939,6 +2953,853 @@ public final class BackendTests {
         HttpRequest.Builder b = HttpRequest.newBuilder(URI.create(uri)).GET();
         if (token != null) b.header("Authorization", "Bearer " + token);
         return client.send(b.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Phase 0 security remediation — A4 (production demo security) and A5 (login throttling)
+    // -----------------------------------------------------------------------------------------
+
+    private static Config testConfig(String testDb, Map<String, String> extra) {
+        Map<String, String> env = new LinkedHashMap<>();
+        env.put("PETROFLOW_DB_NAME", testDb);
+        env.putAll(extra);
+        return Config.load(env);
+    }
+
+    /** Runs an action that must throw IllegalStateException; returns the message (or null on failure). */
+    private static String expectConfigFailure(Runnable action, String label) {
+        try {
+            action.run();
+        } catch (IllegalStateException expected) {
+            check(true, label);
+            return expected.getMessage() == null ? "" : expected.getMessage();
+        }
+        check(false, label + " (no failure was raised)");
+        return null;
+    }
+
+    /** A4: production defaults and explicit demo enablement rejection. No database required. */
+    private static void testProductionDemoSecurity() {
+        Config production = testConfig("petroflow_test", Map.of("NODE_ENV", "production"));
+        check(production.production, "A4: NODE_ENV=production is recognised as production");
+        check("production".equalsIgnoreCase(Config.PRODUCTION_ENV), "A4: the production environment marker is stable");
+        check(!production.seedDemo, "A4: demo seeding defaults to false in production (never silently creates demo users)");
+        check(!production.demoTools, "A4: demo tools default to false in production");
+        check(production.cookieSecure, "A4: production keeps secure session cookies by default");
+
+        Config uppercase = testConfig("petroflow_test", Map.of("NODE_ENV", "PRODUCTION"));
+        check(uppercase.production && !uppercase.seedDemo && !uppercase.demoTools,
+                "A4: production detection is case-insensitive");
+
+        Config dev = testConfig("petroflow_test", Map.of("NODE_ENV", "development"));
+        check(!dev.production, "A4: development is not treated as production");
+        check(dev.seedDemo && dev.demoTools, "A4: development keeps the existing demo experience (seed + tools on)");
+
+        Config noEnv = testConfig("petroflow_test", Map.of());
+        check(!noEnv.production, "A4: an unset NODE_ENV does not become production by accident");
+
+        String seedMessage = expectConfigFailure(
+                () -> testConfig("petroflow_test", Map.of("NODE_ENV", "production", "SEED_DEMO_DATA", "true")),
+                "A4: SEED_DEMO_DATA=true in production fails startup configuration");
+        check(seedMessage != null && seedMessage.contains("SEED_DEMO_DATA"),
+                "A4: the seeding failure names the offending variable");
+
+        String toolsMessage = expectConfigFailure(
+                () -> testConfig("petroflow_test", Map.of("NODE_ENV", "production", "ENABLE_DEMO_TOOLS", "true")),
+                "A4: ENABLE_DEMO_TOOLS=true in production fails startup configuration");
+        check(toolsMessage != null && toolsMessage.contains("ENABLE_DEMO_TOOLS"),
+                "A4: the demo-tools failure names the offending variable");
+
+        Config explicitOff = testConfig("petroflow_test",
+                Map.of("NODE_ENV", "production", "SEED_DEMO_DATA", "false", "ENABLE_DEMO_TOOLS", "false"));
+        check(!explicitOff.seedDemo && !explicitOff.demoTools,
+                "A4: explicitly disabled demo settings are accepted in production");
+    }
+
+    /** A4: demo-account detection finds seeded logins without touching unrelated users. */
+    private static void testDemoAccountDetection() {
+        List<Map<String, Object>> seeded = List.of(
+                Map.of("id", "u1", "email", "superadmin@petroflow.dev", "is_demo", 1),
+                Map.of("id", "u2", "email", "owner@sunrisefuels.in", "is_demo", 1),
+                Map.of("id", "u3", "email", "manager@sunrisefuels.in", "is_demo", 1),
+                Map.of("id", "u4", "email", "attendant@sunrisefuels.in", "is_demo", 1));
+        List<DemoGuard.Finding> findings = DemoGuard.scan(seeded);
+        check(findings.size() == 4, "A4: all four seeded demo accounts are detected");
+        check(findings.stream().anyMatch(f -> "owner@sunrisefuels.in".equals(f.email())),
+                "A4: detection reports the seeded demo administrator by email");
+
+        List<Map<String, Object>> unflaggedDemoEmail = List.of(
+                Map.of("id", "u5", "email", " owner@sunrisefuels.in ", "is_demo", 0));
+        check(DemoGuard.scan(unflaggedDemoEmail).size() == 1,
+                "A4: a seeded demo email is still detected after is_demo is cleared (case/space tolerant)");
+
+        List<Map<String, Object>> unrelated = List.of(
+                Map.of("id", "u6", "email", "dealer@realpump.in", "is_demo", 0),
+                Map.of("id", "u7", "email", "accountant@realpump.in", "is_demo", 0));
+        check(DemoGuard.scan(unrelated).isEmpty(),
+                "A4: unrelated legitimate users are never flagged as demo accounts");
+        check(DemoGuard.scan(List.of()).isEmpty(), "A4: an empty user list produces no findings");
+
+        String message = DemoGuard.describe(findings);
+        check(message.contains("owner@sunrisefuels.in") && message.contains("did not delete"),
+                "A4: the failure message names the accounts and confirms nothing was modified");
+        check(!message.toLowerCase(java.util.Locale.ROOT).contains("pbkdf2") && !message.contains("$"),
+                "A4: the failure message contains no password hashes or tokens");
+        check(message.contains("SEED_DEMO_DATA=false") && message.contains("ENABLE_DEMO_TOOLS=false"),
+                "A4: the failure message restates the required production settings");
+
+        // The detection list must be derived from the seed file that actually ships with this build.
+        Config locator = Config.load(Map.of());
+        java.util.Set<String> fromSeed = DemoGuard.seededEmails(locator.mysqlDir().resolve("seed.sql"));
+        check(fromSeed.size() == DemoGuard.SEEDED_DEMO_EMAILS.size(),
+                "A4: seed.sql declares exactly the expected demo accounts (" + fromSeed.size() + ")");
+        check(new java.util.TreeSet<>(DemoGuard.SEEDED_DEMO_EMAILS).equals(fromSeed),
+                "A4: the built-in demo account list matches backend/db/mysql/seed.sql");
+        check(DemoGuard.scan(seeded, fromSeed).size() == 4,
+                "A4: scan() with seed-derived accounts finds every seeded demo login");
+        check(DemoGuard.seededEmails(locator.mysqlDir().resolve("does-not-exist.sql")).isEmpty(),
+                "A4: a missing seed file yields no demo emails instead of failing startup");
+    }
+
+    /** In-memory Store used to exercise the throttle policy without MySQL. */
+    private static final class FakeThrottleStore implements LoginThrottle.Store {
+        private final List<String[]> rows = new ArrayList<>(); // id, ipKey, accountKey, attemptedAt
+        private int seq = 0;
+
+        @Override public synchronized String record(String ipKey, String accountKey, String attemptedAtIso) {
+            String id = "fake-" + (++seq);
+            rows.add(new String[]{id, ipKey, accountKey, attemptedAtIso});
+            return id;
+        }
+        @Override public synchronized void release(String id) {
+            rows.removeIf(row -> row[0].equals(id));
+        }
+        @Override public synchronized long countByIp(String ipKey, String sinceIso) {
+            return rows.stream().filter(row -> row[1].equals(ipKey) && row[3].compareTo(sinceIso) >= 0).count();
+        }
+        @Override public synchronized long countByAccount(String accountKey, String sinceIso) {
+            return rows.stream().filter(row -> row[2].equals(accountKey) && row[3].compareTo(sinceIso) >= 0).count();
+        }
+        @Override public synchronized long clearAccount(String accountKey) {
+            int before = rows.size();
+            rows.removeIf(row -> row[2].equals(accountKey));
+            return before - rows.size();
+        }
+        @Override public synchronized String oldestByIp(String ipKey, String sinceIso) {
+            return rows.stream().filter(row -> row[1].equals(ipKey) && row[3].compareTo(sinceIso) >= 0)
+                    .map(row -> row[3]).min(String::compareTo).orElse(null);
+        }
+        @Override public synchronized String oldestByAccount(String accountKey, String sinceIso) {
+            return rows.stream().filter(row -> row[2].equals(accountKey) && row[3].compareTo(sinceIso) >= 0)
+                    .map(row -> row[3]).min(String::compareTo).orElse(null);
+        }
+        @Override public synchronized int pruneBefore(String beforeIso) {
+            int before = rows.size();
+            rows.removeIf(row -> row[3].compareTo(beforeIso) < 0);
+            return before - rows.size();
+        }
+        synchronized int size() { return rows.size(); }
+    }
+
+    /** A5: throttle policy — per-IP, per-account, windows, success scoping, concurrency. */
+    private static void testLoginThrottlePolicy() throws Exception {
+        String now = Clock.nowIso();
+        Config oneAccountManyIps = testConfig("petroflow_test", Map.of(
+                "PETROFLOW_LOGIN_MAX_ATTEMPTS_PER_ACCOUNT", "3",
+                "PETROFLOW_LOGIN_MAX_ATTEMPTS_PER_IP", "1000",
+                "PETROFLOW_LOGIN_WINDOW_SECONDS", "900"));
+        check(oneAccountManyIps.loginMaxAttemptsPerAccount == 3 && oneAccountManyIps.loginMaxAttemptsPerIp == 1000,
+                "A5: thresholds and window are configurable");
+
+        FakeThrottleStore store = new FakeThrottleStore();
+        String victim = "owner@sunrisefuels.in";
+        int blockedAt = -1;
+        for (int i = 1; i <= 10; i++) {
+            LoginThrottle.Decision d = LoginThrottle.evaluate(store, oneAccountManyIps, "198.51.100." + i, victim, now);
+            if (!d.allowed()) { blockedAt = i; check(LoginThrottle.SCOPE_ACCOUNT.equals(d.limitedScope()),
+                    "A5: an account spread across many IPs is throttled on the account bucket"); break; }
+        }
+        check(blockedAt == 4, "A5: one account from many IPs is throttled after the configured account limit (blocked at " + blockedAt + ")");
+
+        Config oneIpManyAccounts = testConfig("petroflow_test", Map.of(
+                "PETROFLOW_LOGIN_MAX_ATTEMPTS_PER_ACCOUNT", "1000",
+                "PETROFLOW_LOGIN_MAX_ATTEMPTS_PER_IP", "3",
+                "PETROFLOW_LOGIN_WINDOW_SECONDS", "900"));
+        FakeThrottleStore ipStore = new FakeThrottleStore();
+        int ipBlockedAt = -1;
+        for (int i = 1; i <= 10; i++) {
+            LoginThrottle.Decision d = LoginThrottle.evaluate(ipStore, oneIpManyAccounts, "203.0.113.9", "user" + i + "@example.com", now);
+            if (!d.allowed()) { ipBlockedAt = i; check(LoginThrottle.SCOPE_IP.equals(d.limitedScope()),
+                    "A5: spraying many accounts from one IP is throttled on the IP bucket"); break; }
+        }
+        check(ipBlockedAt == 4, "A5: many accounts from one IP are throttled after the configured IP limit (blocked at " + ipBlockedAt + ")");
+        check(ipStore.size() == 3, "A5: rejected attempts are released and do not consume quota");
+
+        // Normal success while under the limit.
+        FakeThrottleStore healthy = new FakeThrottleStore();
+        LoginThrottle.evaluate(healthy, oneAccountManyIps, "192.0.2.1", victim, now);
+        LoginThrottle.evaluate(healthy, oneAccountManyIps, "192.0.2.1", victim, now);
+        check(LoginThrottle.evaluate(healthy, oneAccountManyIps, "192.0.2.1", victim, now).allowed(),
+                "A5: a normal sign-in is not throttled while under both limits");
+
+        // Account identifiers are normalised (trim + lowercase) so casing cannot reset a counter.
+        FakeThrottleStore normalised = new FakeThrottleStore();
+        for (int i = 0; i < 3; i++) LoginThrottle.evaluate(normalised, oneAccountManyIps, "192.0.2.2", "OWNER@SunriseFuels.in ", now);
+        check(!LoginThrottle.evaluate(normalised, oneAccountManyIps, "192.0.2.3", "owner@sunrisefuels.in", now).allowed(),
+                "A5: casing/whitespace variations of the same account share one bucket");
+        check("owner@sunrisefuels.in".equals(LoginThrottle.normalizeAccount("  OWNER@SunriseFuels.IN  ")),
+                "A5: account identifiers are normalised before hashing");
+
+        // Window expiry — no permanent lockout.
+        String later = Clock.addSecondsIso(now, 901);
+        check(LoginThrottle.evaluate(store, oneAccountManyIps, "198.51.100.50", victim, later).allowed(),
+                "A5: sign-in resumes automatically once the window has elapsed (no permanent lockout)");
+        String partial = Clock.addSecondsIso(now, 5);
+        check(!LoginThrottle.evaluate(store, oneAccountManyIps, "198.51.100.51", victim, partial).allowed(),
+                "A5: the throttle still applies inside the window");
+
+        // A rejected request reports a retry delay instead of a permanent denial.
+        LoginThrottle.Decision limited = LoginThrottle.evaluate(store, oneAccountManyIps, "198.51.100.52", victim, now);
+        check(!limited.allowed() && limited.retryAfterSeconds() >= 1
+                        && limited.retryAfterSeconds() <= oneAccountManyIps.loginWindowSeconds + 1L,
+                "A5: a throttled response carries a bounded retry-after hint");
+
+        // Success clears only this account's history.
+        FakeThrottleStore scoped = new FakeThrottleStore();
+        LoginThrottle.evaluate(scoped, oneIpManyAccounts, "203.0.113.10", "a@example.com", now);
+        LoginThrottle.evaluate(scoped, oneIpManyAccounts, "203.0.113.10", "b@example.com", now);
+        LoginThrottle.clearOnSuccess(scoped, " A@Example.com ", null);
+        check(scoped.countByAccount(LoginThrottle.key(LoginThrottle.SCOPE_ACCOUNT, "a@example.com"),
+                Clock.addSecondsIso(now, -60)) == 0, "A5: a successful sign-in clears that account's own attempts");
+        check(scoped.countByIp(LoginThrottle.key(LoginThrottle.SCOPE_IP, "203.0.113.10"),
+                Clock.addSecondsIso(now, -60)) == 1, "A5: a successful sign-in never clears another account's history");
+
+        // Keys are hashes, never raw identifiers.
+        String ipKey = LoginThrottle.key(LoginThrottle.SCOPE_IP, "203.0.113.10");
+        check(ipKey.length() == 64 && !ipKey.contains("203.0.113.10") && !ipKey.contains("@"),
+                "A5: stored throttle keys are SHA-256 hashes, never raw IPs or emails");
+        check(!LoginThrottle.key(LoginThrottle.SCOPE_IP, "203.0.113.10")
+                        .equals(LoginThrottle.key(LoginThrottle.SCOPE_ACCOUNT, "203.0.113.10")),
+                "A5: IP and account buckets are namespaced separately");
+
+        // Generic messaging — no account-existence or account-state disclosure.
+        String generic = LoginThrottle.GENERIC_AUTH_MESSAGE.toLowerCase(java.util.Locale.ROOT);
+        check(!generic.contains("not found") && !generic.contains("disabled") && !generic.contains("exist")
+                && !generic.contains("demo") && !generic.contains("owner"), "A5: the sign-in error is generic");
+        check(LoginThrottle.THROTTLED_MESSAGE.toLowerCase(java.util.Locale.ROOT).contains("too many"),
+                "A5: the throttled error is distinct from a credential error");
+
+        // Concurrent attempts cannot bypass the limit.
+        Config concurrency = testConfig("petroflow_test", Map.of(
+                "PETROFLOW_LOGIN_MAX_ATTEMPTS_PER_IP", "5",
+                "PETROFLOW_LOGIN_MAX_ATTEMPTS_PER_ACCOUNT", "1000",
+                "PETROFLOW_LOGIN_WINDOW_SECONDS", "900"));
+        FakeThrottleStore racing = new FakeThrottleStore();
+        ExecutorService pool = Executors.newFixedThreadPool(16);
+        CountDownLatch start = new CountDownLatch(1);
+        AtomicInteger permitted = new AtomicInteger();
+        List<java.util.concurrent.Future<?>> futures = new ArrayList<>();
+        for (int i = 0; i < 16; i++) {
+            final int n = i;
+            futures.add(pool.submit(() -> {
+                try {
+                    start.await();
+                    if (LoginThrottle.evaluate(racing, concurrency, "203.0.113.77", "racer" + n + "@example.com", now).allowed()) {
+                        permitted.incrementAndGet();
+                    }
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+            }));
+        }
+        start.countDown();
+        for (java.util.concurrent.Future<?> future : futures) future.get(30, TimeUnit.SECONDS);
+        pool.shutdownNow();
+        check(permitted.get() <= 5, "A5: concurrent attempts cannot exceed the limit (" + permitted.get() + " of 16 permitted)");
+        check(permitted.get() >= 1, "A5: the concurrency test actually exercised the throttle");
+    }
+
+    /** A5: proxy handling — X-Forwarded-For is never trusted blindly. */
+    private static void testClientIpResolution() {
+        Config direct = testConfig("petroflow_test", Map.of());
+        check(!direct.trustProxy, "A5: forwarded headers are ignored unless a trusted proxy is configured");
+        check("203.0.113.5".equals(Web.resolveClientIp(direct, "1.2.3.4", "203.0.113.5")),
+                "A5: a forged X-Forwarded-For header cannot spoof the client IP");
+        check("203.0.113.5".equals(Web.resolveClientIp(direct, "not-an-ip", "203.0.113.5")),
+                "A5: malformed forwarded headers are ignored");
+
+        Config proxied = testConfig("petroflow_test", Map.of(
+                "PETROFLOW_TRUST_PROXY", "true",
+                "PETROFLOW_TRUSTED_PROXIES", "10.0.0.5"));
+        check(proxied.trustProxy, "A5: trusted-proxy mode is opt-in");
+        check("1.2.3.4".equals(Web.resolveClientIp(proxied, "1.2.3.4", "10.0.0.5")),
+                "A5: the forwarded client IP is honoured behind a configured trusted proxy");
+        check("10.9.9.9".equals(Web.resolveClientIp(proxied, "1.2.3.4", "10.9.9.9")),
+                "A5: a direct caller cannot forge the header even when trusted-proxy mode is on");
+        check("1.2.3.4".equals(Web.resolveClientIp(proxied, "6.6.6.6, 1.2.3.4, 10.0.0.5", "10.0.0.5")),
+                "A5: the right-most untrusted hop is used, so client-supplied left entries are ignored");
+        check("6.6.6.6".equals(Web.resolveClientIp(proxied, "6.6.6.6, garbage", "10.0.0.5")),
+                "A5: invalid hops are skipped rather than trusted");
+        check("2001:db8::1".equals(Web.resolveClientIp(proxied, "[2001:DB8::1]:443, 10.0.0.5", "10.0.0.5")),
+                "A5: IPv6 client addresses are normalised");
+        check("203.0.113.9".equals(Web.normalizeIp("::ffff:203.0.113.9")),
+                "A5: IPv4-mapped IPv6 addresses are normalised");
+        check(Web.normalizeIp("example.com") == null && Web.normalizeIp("1.2.3") == null,
+                "A5: hostnames and partial addresses are rejected as client IPs");
+
+        String message = expectConfigFailure(
+                () -> testConfig("petroflow_test", Map.of("PETROFLOW_TRUST_PROXY", "true")),
+                "A5: trust-proxy without a trusted proxy list fails startup configuration");
+        check(message != null && message.contains("PETROFLOW_TRUSTED_PROXIES"),
+                "A5: the proxy failure tells the operator which variable is missing");
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Phase 0 completion: D1/D2 bootstrap, D4/D5 throttle precision, D6 reset protection
+    // -----------------------------------------------------------------------------------------
+
+    private static String expectBootstrapRefusal(Runnable action, String label) {
+        try {
+            action.run();
+        } catch (Bootstrap.BootstrapException expected) {
+            check(true, label);
+            return expected.getMessage() == null ? "" : expected.getMessage();
+        }
+        check(false, label + " (no refusal was raised)");
+        return null;
+    }
+
+    /** D1/D2: request validation, slug derivation, password policy. No database, no side effects. */
+    private static void testBootstrapValidation() {
+        Bootstrap.Request valid = Bootstrap.validate(
+                new Bootstrap.Request("OWNER", " Owner@Dealer.IN ", "Asha Rao", "Sunrise Fuels Pvt Ltd",
+                        "", "Main Outlet", "", "Pune", "Maharashtra"));
+        check("owner@dealer.in".equals(valid.email()), "D1: bootstrap lowercases and trims the owner email");
+        check("sunrise-fuels-pvt-ltd".equals(valid.tenantSlug()), "D1: bootstrap derives a URL-safe company slug");
+        check("SUNRIS-01".equals(valid.stationCode()), "D1: bootstrap derives a station code when omitted");
+        check("OWNER".equals(valid.role()), "D1: an explicit OWNER role is accepted");
+
+        Bootstrap.Request noSlug = Bootstrap.validate(
+                new Bootstrap.Request(null, "a@b.co", "Asha", "Rao Fuels", null, null, null, null, null));
+        check("OWNER".equals(noSlug.role()), "D1: the role defaults to OWNER");
+        check("rao-fuels".equals(noSlug.tenantSlug()), "D1: a blank slug is derived from the company name");
+        check(noSlug.stationName() == null && noSlug.stationCode() == null,
+                "D1: no station is created when the operator skips it");
+
+        Bootstrap.Request superAdmin = Bootstrap.validate(new Bootstrap.Request("super_admin", "ops@petrolflow.dev", "Ops", "x", "y", "s", "c", null, null));
+        check("SUPER_ADMIN".equals(superAdmin.role()) && superAdmin.tenantName() == null,
+                "D1: a platform administrator request carries no tenant");
+
+        String emailMessage = expectBootstrapRefusal(() -> {
+            Bootstrap.validate(new Bootstrap.Request("OWNER", "not-an-email", "A", "B", null, null, null, null, null));
+        },
+                "D1: an invalid email is refused");
+        check(emailMessage != null && emailMessage.toLowerCase(java.util.Locale.ROOT).contains("email"),
+                "D1: the email refusal explains the problem");
+        expectBootstrapRefusal(() -> {
+            Bootstrap.validate(new Bootstrap.Request("OWNER", "a@b.co", "  ", "B", null, null, null, null, null));
+        },
+                "D1: a blank owner name is refused");
+        expectBootstrapRefusal(() -> {
+            Bootstrap.validate(new Bootstrap.Request("OWNER", "a@b.co", "A", "  ", null, null, null, null, null));
+        },
+                "D1: a blank company name is refused");
+        expectBootstrapRefusal(() -> {
+            Bootstrap.validate(new Bootstrap.Request("OWNER", "a@b.co", "A", "B", "bad slug!", null, null, null, null));
+        },
+                "D1: an invalid company slug is refused");
+        expectBootstrapRefusal(() -> {
+            Bootstrap.validate(new Bootstrap.Request("MANAGER", "a@b.co", "A", "B", null, null, null, null, null));
+        },
+                "D1: a role other than OWNER/SUPER_ADMIN is refused");
+        expectBootstrapRefusal(() -> Bootstrap.validate(null), "D1: a missing request is refused");
+        expectBootstrapRefusal(() -> {
+            Bootstrap.validate(new Bootstrap.Request("OWNER", "a@b.co", "A", "B", null, "", "X-01", null, null));
+        },
+                "D1: a station code without a station name is refused");
+
+        check("my-pump-1".equals(Bootstrap.slugify("My Pump #1")), "D1: slugify strips punctuation");
+        check(Bootstrap.slugify("   ").isEmpty(), "D1: slugify of a blank name is empty (and rejected later)");
+        check(Bootstrap.slugify("A".repeat(80)).length() <= 40, "D1: slugify caps the slug at 40 characters");
+
+        Config production = testConfig("petroflow_test", Map.of("NODE_ENV", "production"));
+        String weak = expectBootstrapRefusal(() -> Bootstrap.validatePassword(production, "short1"),
+                "D1: a password shorter than the policy is refused");
+        check(weak != null && weak.toLowerCase(java.util.Locale.ROOT).contains("10"),
+                "D1: the password refusal states the minimum length");
+        expectBootstrapRefusal(() -> Bootstrap.validatePassword(production, "alllettersonly"),
+                "D1: a password without a digit is refused");
+        expectBootstrapRefusal(() -> Bootstrap.validatePassword(production, null),
+                "D1: an empty password is refused");
+        String published = expectBootstrapRefusal(() -> Bootstrap.validatePassword(production, production.demoPassword),
+                "D1: the published demo password is refused");
+        check(published != null && published.toLowerCase(java.util.Locale.ROOT).contains("demo"),
+                "D1: the demo-password refusal explains why");
+        Bootstrap.validatePassword(production, "Dealer-Owner-2026");
+        check(true, "D1: a strong, non-default password is accepted");
+
+        java.util.Map<String, String> parsed = Bootstrap.parseArgs(new String[]{
+                "--bootstrap-owner", "--email=owner@dealer.in", "--name=Asha Rao", "--role=OWNER"});
+        check("owner@dealer.in".equals(parsed.get("email")) && "Asha Rao".equals(parsed.get("name")),
+                "D1: bootstrap CLI flags are parsed, including values with spaces");
+        check(!parsed.containsKey("bootstrap-owner"), "D1: valueless flags are not mistaken for options");
+    }
+
+    /** D6: production resets are refused before any database work. */
+    private static void testResetProtection() {
+        Config production = testConfig("petroflow_test", Map.of("NODE_ENV", "production"));
+        Config development = testConfig("petroflow_test", Map.of("NODE_ENV", "development"));
+
+        String message = null;
+        try {
+            Main.assertResetAllowed(production);
+            check(false, "D6: --reset-db is refused in production");
+        } catch (IllegalStateException refused) {
+            message = refused.getMessage();
+            check(true, "D6: --reset-db is refused in production");
+        }
+        check(message != null && message.contains("--reset-db") && message.contains("production"),
+                "D6: the reset refusal names the command and the environment");
+
+        // The refusal must happen before any SQL: with no database reachable at all, this still
+        // throws the production guard (proving resetDatabase never reached Db.withConnection).
+        try {
+            Main.resetDatabase(production);
+            check(false, "D6: resetDatabase refuses production even if the CLI check is bypassed");
+        } catch (IllegalStateException refused) {
+            check(refused.getMessage() != null && refused.getMessage().contains("--reset-db"),
+                    "D6: resetDatabase refuses production even if the CLI check is bypassed");
+        } catch (RuntimeException other) {
+            check(false, "D6: resetDatabase reached the database layer in production: " + other.getClass().getSimpleName());
+        }
+        check(true, "D6: no SQL was executed by the production reset path");
+
+        Main.assertResetAllowed(development);
+        check(true, "D6: --reset-db stays available in development and tests");
+        Main.assertResetAllowed(null);
+        check(true, "D6: a missing configuration does not block the development reset");
+    }
+
+    /** D4/D5: retry precision and canonical account identity for the throttle. */
+    private static void testThrottlePrecisionAndIdentity() {
+        String now = Clock.nowIso();
+        Config config = testConfig("petroflow_test", Map.of(
+                "PETROFLOW_LOGIN_MAX_ATTEMPTS_PER_ACCOUNT", "1",
+                "PETROFLOW_LOGIN_MAX_ATTEMPTS_PER_IP", "1000",
+                "PETROFLOW_LOGIN_WINDOW_SECONDS", "60"));
+        FakeThrottleStore store = new FakeThrottleStore();
+        LoginThrottle.evaluate(store, config, "203.0.113.1", "a@example.com", now);
+        LoginThrottle.Decision blocked = LoginThrottle.evaluate(store, config, "203.0.113.2", "a@example.com", now);
+        check(!blocked.allowed(), "D4: the account bucket blocks the second attempt");
+        check(blocked.retryAfterSeconds() >= 60 && blocked.retryAfterSeconds() <= 61,
+                "D4: Retry-After covers the remaining window without under-stating it (" + blocked.retryAfterSeconds() + "s)");
+        LoginThrottle.Decision late = LoginThrottle.evaluate(store, config, "203.0.113.3", "a@example.com",
+                Clock.addSecondsIso(now, 59));
+        check(!late.allowed() && late.retryAfterSeconds() >= 2 && late.retryAfterSeconds() <= 3,
+                "D4: Retry-After shrinks as the window elapses (" + late.retryAfterSeconds() + "s)");
+        check(LoginThrottle.evaluate(store, config, "203.0.113.4", "a@example.com",
+                Clock.addSecondsIso(now, 61)).allowed(),
+                "D4: the window still expires exactly when the hint says it will");
+
+        // D5: the canonical stored email is the bucket key, so collation-equivalent spellings share it.
+        check("owner@sunrisefuels.in".equals(LoginThrottle.accountIdentity("owner@sunrisefuels.in", "OWNER@SunriseFuels.in")),
+                "D5: an existing account is keyed on its canonical stored email");
+        check("owner@sunrisefuels.in".equals(LoginThrottle.accountIdentity(null, "  OWNER@SunriseFuels.in  ")),
+                "D5: an unknown account falls back to the normalised submitted address");
+        String canonical = LoginThrottle.accountIdentity("owner@sunrisefuels.in", "owne\u0301r@sunrisefuels.in");
+        check("owner@sunrisefuels.in".equals(canonical),
+                "D5: an accent-variant spelling resolves to the same account bucket");
+        check(!LoginThrottle.accountIdentity("a@example.com", "b@example.com")
+                        .equals(LoginThrottle.accountIdentity("b@example.com", "a@example.com")),
+                "D5: two distinct accounts stay in distinct buckets");
+
+        // The locked variant must not require a database for non-database stores.
+        FakeThrottleStore fake = new FakeThrottleStore();
+        LoginThrottle.Decision passthrough = LoginThrottle.evaluateLocked(fake, config, "203.0.113.9", "z@example.com", now);
+        check(passthrough.allowed() && fake.size() == 1,
+                "D3: evaluateLocked applies the same policy for non-database stores");
+    }
+
+    /**
+     * A5 + A4 regression coverage that needs the real MySQL schema: HTTP login throttling, persisted
+     * throttle state, and the production demo-account guard reading real rows. Test database only.
+     */
+    private static void verifyLoginThrottleAndDemoGuard(HttpClient client, String baseUrl, Config base, String testDb)
+            throws Exception {
+        String loginUrl = baseUrl + "/auth/login";
+        String email = "owner@sunrisefuels.in";
+
+        Main.resetDatabase(base);
+        Main.apply(base.mysqlDir().resolve("schema.sql"));
+        Main.seedIfEmpty(base);
+
+        // A normal sign-in still works while under the limit.
+        HttpResponse<String> ok = post(client, loginUrl, null, Map.of("email", email, "password", base.demoPassword));
+        check(ok.statusCode() == 200, "A5: a normal sign-in succeeds while under the throttle limits (got " + ok.statusCode() + ")");
+
+        // Many different accounts from one IP are throttled with a generic 429.
+        int firstBlocked = -1;
+        String throttledBody = null;
+        String retryAfter = null;
+        boolean allPlain401 = true;
+        for (int i = 1; i <= 60; i++) {
+            HttpResponse<String> r = post(client, loginUrl, null,
+                    Map.of("email", "nobody" + i + "@example.com", "password", "wrong-password"));
+            if (r.statusCode() == 429) {
+                firstBlocked = i;
+                throttledBody = r.body();
+                retryAfter = r.headers().firstValue("retry-after").orElse(null);
+                break;
+            }
+            if (r.statusCode() != 401) allPlain401 = false;
+        }
+        check(allPlain401, "A5: wrong passwords stay a plain 401 until the IP limit is reached");
+        check(firstBlocked > 0, "A5: many accounts from one IP are throttled over HTTP");
+        check(firstBlocked >= Math.max(1, base.loginMaxAttemptsPerIp - 5),
+                "A5: the IP limit is not triggered early (blocked on attempt " + firstBlocked
+                        + ", limit " + base.loginMaxAttemptsPerIp + ")");
+        check(throttledBody != null && throttledBody.contains(LoginThrottle.THROTTLED_MESSAGE),
+                "A5: the throttled response uses the generic throttle message");
+        check(retryAfter != null && !retryAfter.isBlank(), "A5: the throttled response carries a Retry-After header");
+
+        // Throttle state lives in MySQL, so a second API process enforces the same limits.
+        long rows = Db.count("SELECT COUNT(*) AS c FROM login_throttle_attempts");
+        check(rows > 0, "A5: throttle attempts are persisted in login_throttle_attempts (multi-process safe)");
+        check(Db.count("SELECT COUNT(*) AS c FROM login_throttle_attempts WHERE account_key LIKE '%@%'") == 0
+                        && Db.count("SELECT COUNT(*) AS c FROM login_throttle_attempts WHERE ip_key LIKE '%@%'") == 0,
+                "A5: the throttle table stores hashed keys only (no raw emails)");
+
+        // Window expiry: with a short window the stored history stops counting.
+        Config expired = testConfig(testDb, Map.of(
+                "PETROFLOW_LOGIN_WINDOW_SECONDS", "1",
+                "PETROFLOW_LOGIN_MAX_ATTEMPTS_PER_IP", "3"));
+        check(LoginThrottle.evaluate(LoginThrottle.dbStore(), expired, "203.0.113.77", email,
+                        Clock.addSecondsIso(Clock.nowIso(), 5)).allowed(),
+                "A5: attempts resume automatically after the window expires (no permanent lockout)");
+
+        // Success clears only the successful account's history.
+        Db.exec("DELETE FROM login_throttle_attempts");
+        for (int i = 0; i < 3; i++) {
+            LoginThrottle.evaluate(LoginThrottle.dbStore(), base, "192.0.2.10", "other@example.com", Clock.nowIso());
+            LoginThrottle.evaluate(LoginThrottle.dbStore(), base, "192.0.2.10", email, Clock.nowIso());
+        }
+        LoginThrottle.clearOnSuccess(LoginThrottle.dbStore(), "  OWNER@SunriseFuels.in ", null);
+        check(Db.count("SELECT COUNT(*) AS c FROM login_throttle_attempts WHERE account_key = ?",
+                        LoginThrottle.key(LoginThrottle.SCOPE_ACCOUNT, email)) == 0,
+                "A5: a successful sign-in clears that account's attempts only");
+        check(Db.count("SELECT COUNT(*) AS c FROM login_throttle_attempts WHERE account_key = ?",
+                        LoginThrottle.key(LoginThrottle.SCOPE_ACCOUNT, "other@example.com")) > 0,
+                "A5: a successful sign-in never clears another account's history");
+
+        // Concurrency against the real database.
+        Db.exec("DELETE FROM login_throttle_attempts");
+        Config tight = testConfig(testDb, Map.of(
+                "PETROFLOW_LOGIN_MAX_ATTEMPTS_PER_IP", "5",
+                "PETROFLOW_LOGIN_MAX_ATTEMPTS_PER_ACCOUNT", "1000"));
+        ExecutorService pool = Executors.newFixedThreadPool(16);
+        CountDownLatch start = new CountDownLatch(1);
+        AtomicInteger permitted = new AtomicInteger();
+        List<java.util.concurrent.Future<?>> futures = new ArrayList<>();
+        for (int i = 0; i < 16; i++) {
+            final int n = i;
+            futures.add(pool.submit(() -> {
+                try {
+                    start.await();
+                    if (LoginThrottle.evaluate(LoginThrottle.dbStore(), tight, "203.0.113.250",
+                            "racer" + n + "@example.com", Clock.nowIso()).allowed()) {
+                        permitted.incrementAndGet();
+                    }
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+            }));
+        }
+        start.countDown();
+        for (java.util.concurrent.Future<?> future : futures) future.get(30, TimeUnit.SECONDS);
+        pool.shutdownNow();
+        check(permitted.get() <= 5, "A5: concurrent attempts cannot exceed the limit in MySQL (" + permitted.get() + " of 16)");
+
+        // A4: the production guard detects seeded demo accounts and mutates nothing.
+        long usersBefore = Db.count("SELECT COUNT(*) AS c FROM users");
+        long demoBefore = Db.count("SELECT COUNT(*) AS c FROM users WHERE is_demo = 1");
+        List<DemoGuard.Finding> findings = DemoGuard.detectInDatabase();
+        check(findings.size() >= DemoGuard.SEEDED_DEMO_EMAILS.size(),
+                "A4: demo-account detection finds every seeded demo user (" + findings.size() + ")");
+        check(findings.stream().anyMatch(f -> email.equals(f.email())),
+                "A4: detection reports the seeded demo administrator email");
+
+        Config production = testConfig(testDb, Map.of("NODE_ENV", "production"));
+        String guardMessage = expectConfigFailure(() -> DemoGuard.enforceProductionStartup(production),
+                "A4: production startup fails safely when known demo accounts exist");
+        check(guardMessage != null && guardMessage.contains(email),
+                "A4: the startup failure names the detected demo account");
+        check(guardMessage != null && !guardMessage.toLowerCase(java.util.Locale.ROOT).contains("pbkdf2"),
+                "A4: the startup failure logs no password hashes");
+        check(Db.count("SELECT COUNT(*) AS c FROM users") == usersBefore,
+                "A4: the production guard never deletes user rows");
+        check(Db.count("SELECT COUNT(*) AS c FROM users WHERE is_demo = 1") == demoBefore,
+                "A4: the production guard never modifies or deactivates demo rows");
+        check(!production.seedDemo && !production.demoTools,
+                "A4: the production configuration that triggered the guard had seeding and demo tools off");
+
+        DemoGuard.enforceProductionStartup(base);
+        check(true, "A4: the same check is a no-op outside production (development keeps its demo data)");
+
+        // A4: a production-configured API serves no demo shortcuts and refuses demo logins, while a
+        // real (non-demo) account still signs in normally.
+        int productionPort = 4294;
+        Web productionWeb = new Web(testConfig(testDb, Map.of(
+                "NODE_ENV", "production",
+                "PORT", String.valueOf(productionPort))));
+        productionWeb.listen();
+        String productionUrl = "http://127.0.0.1:" + productionPort + "/api/v1";
+        String tempUserId = Clock.newId("usr");
+        try {
+            HttpResponse<String> demoList = get(client, productionUrl + "/auth/demo-accounts", null);
+            check(demoList.statusCode() == 404, "A4: /auth/demo-accounts does not work in production");
+            check(!demoList.body().contains(base.demoPassword),
+                    "A4: the disabled demo endpoint never leaks the demo password");
+
+            HttpResponse<String> demoLogin = post(client, productionUrl + "/auth/login", null,
+                    Map.of("email", email, "password", base.demoPassword));
+            check(demoLogin.statusCode() == 401, "A4: a demo account cannot sign in to a production API");
+            check(!demoLogin.body().toLowerCase(java.util.Locale.ROOT).contains("demo"),
+                    "A4: the demo-login refusal does not disclose that the account is a demo account");
+
+            String now = Clock.nowIso();
+            Db.exec("""
+                    INSERT INTO users (id, tenant_id, email, name, password_hash, role_key, status,
+                                       must_change_password, is_demo, granted_permissions, created_at, updated_at)
+                    VALUES (?, NULL, 'dealer.real@example.in', 'Real Dealer', ?, 'SUPER_ADMIN', 'ACTIVE', 0, 0, '[]', ?, ?)
+                    """, tempUserId, Passwords.hash("Temp-Real-Deal-2026"), now, now);
+            HttpResponse<String> realLogin = post(client, productionUrl + "/auth/login", null,
+                    Map.of("email", "dealer.real@example.in", "password", "Temp-Real-Deal-2026"));
+            check(realLogin.statusCode() == 200, "A4: a real non-demo account still signs in on a production API");
+            check(!realLogin.body().contains("sessionToken"),
+                    "A4: production login responses never return the session token in the body");
+
+            HttpResponse<String> wrongPassword = post(client, productionUrl + "/auth/login", null,
+                    Map.of("email", "dealer.real@example.in", "password", "nope"));
+            check(wrongPassword.statusCode() == 401
+                            && wrongPassword.body().contains(LoginThrottle.GENERIC_AUTH_MESSAGE),
+                    "A5: a wrong password on a production API returns the generic message");
+
+            HttpResponse<String> unknownAccount = post(client, productionUrl + "/auth/login", null,
+                    Map.of("email", "never-existed@example.in", "password", "nope"));
+            check(unknownAccount.statusCode() == 401
+                            && unknownAccount.body().contains(LoginThrottle.GENERIC_AUTH_MESSAGE),
+                    "A5: an unknown account returns the same generic message as a wrong password");
+
+            Db.exec("UPDATE users SET status = 'DISABLED' WHERE id = ?", tempUserId);
+            HttpResponse<String> disabled = post(client, productionUrl + "/auth/login", null,
+                    Map.of("email", "dealer.real@example.in", "password", "Temp-Real-Deal-2026"));
+            check(disabled.statusCode() == 401 && disabled.body().contains(LoginThrottle.GENERIC_AUTH_MESSAGE),
+                    "A5: a disabled account is indistinguishable from a wrong password");
+        } finally {
+            Db.exec("DELETE FROM sessions WHERE user_id = ?", tempUserId);
+            Db.exec("DELETE FROM users WHERE id = ?", tempUserId);
+            productionWeb.stop();
+        }
+
+        // Reset throttle state so later suites start clean.
+        Db.exec("DELETE FROM login_throttle_attempts");
+    }
+
+    /**
+     * D1/D2: first-owner bootstrap against the real MySQL schema. Test database only.
+     */
+    private static void verifyBootstrapFlow(HttpClient client, String url, Config base) throws Exception {
+        String ownerPassword = "Dealer-Owner-2026";
+
+        // --- system role reference data exists even without the demo seed ---------------------
+        Main.resetDatabase(base);
+        Main.apply(base.mysqlDir().resolve("schema.sql"));
+        check(Db.count("SELECT COUNT(*) AS c FROM users") == 0, "D1: a fresh schema has no users");
+        check(Db.count("SELECT COUNT(*) AS c FROM roles WHERE `key` IN ('OWNER','MANAGER','STAFF','SUPER_ADMIN')") == 4,
+                "D1: schema.sql provides the four system roles on a fresh production database");
+        Main.apply(base.mysqlDir().resolve("schema.sql"));
+        check(Db.count("SELECT COUNT(*) AS c FROM roles") == 4,
+                "D1: re-applying the schema does not duplicate the system roles (idempotent)");
+
+        // --- invalid input is refused before anything is written -----------------------------
+        long tenantsBefore = Db.count("SELECT COUNT(*) AS c FROM tenants");
+        try {
+            Bootstrap.createFirstOwner(base, Bootstrap.Request.owner("owner@dealer.in", "Asha Rao", "Asha Fuels", "asha-fuels"),
+                    "short");
+            check(false, "D1: bootstrap refuses a weak password");
+        } catch (Bootstrap.BootstrapException expected) {
+            check(true, "D1: bootstrap refuses a weak password");
+        }
+        check(Db.count("SELECT COUNT(*) AS c FROM tenants") == tenantsBefore,
+                "D1: a refused bootstrap writes no tenant row");
+        check(Db.count("SELECT COUNT(*) AS c FROM users") == 0, "D1: a refused bootstrap writes no user row");
+        check(Db.count("SELECT COUNT(*) AS c FROM app_settings WHERE `key` = ?", Bootstrap.MARKER_KEY) == 0,
+                "D1: a refused bootstrap does not set the completion marker");
+
+        // --- successful first-owner creation --------------------------------------------------
+        Bootstrap.Result created = Bootstrap.createFirstOwner(base,
+                new Bootstrap.Request("OWNER", "owner@dealer.in", "Asha Rao", "Asha Fuels", "asha-fuels",
+                        "Asha Fuels — Main Outlet", "ASHA-01", "Pune", "Maharashtra"),
+                ownerPassword);
+        check(created.userId() != null && created.tenantId() != null && created.stationId() != null,
+                "D1: bootstrap creates the tenant, the owner and the first station");
+        check(Db.count("SELECT COUNT(*) AS c FROM users WHERE id = ? AND is_demo = 0 AND role_key = 'OWNER' AND status = 'ACTIVE'",
+                created.userId()) == 1, "D1: the first owner is a real (is_demo=0) active OWNER");
+        check(Db.count("SELECT COUNT(*) AS c FROM tenants WHERE id = ? AND is_demo = 0 AND status = 'ACTIVE'",
+                created.tenantId()) == 1, "D1: the tenant is real (is_demo=0) and active");
+        check(Db.count("SELECT COUNT(*) AS c FROM stations WHERE id = ? AND tenant_id = ? AND is_demo = 0",
+                created.stationId(), created.tenantId()) == 1, "D1: the station belongs to the tenant and is not demo data");
+        check(Db.count("SELECT COUNT(*) AS c FROM user_station_access WHERE user_id = ? AND station_id = ?",
+                created.userId(), created.stationId()) == 1, "D1: the owner is granted access to its first station");
+        String hash = Db.str(Db.one("SELECT password_hash FROM users WHERE id = ?", created.userId()), "password_hash");
+        check(hash != null && hash.startsWith("pbkdf2$"), "D1: the bootstrap password is stored with the existing PBKDF2 hasher");
+        check(hash != null && !hash.contains(ownerPassword), "D1: the bootstrap password is never stored in clear text");
+        check(!Bootstrap.describe(created).contains(ownerPassword), "D1: the bootstrap summary never prints the password");
+        check(Db.count("SELECT COUNT(*) AS c FROM app_settings WHERE `key` = ?", Bootstrap.MARKER_KEY) == 1,
+                "D1: a successful bootstrap records its one-time marker");
+
+        // --- the new owner can actually sign in ----------------------------------------------
+        HttpResponse<String> login = post(client, url + "/auth/login", null,
+                Map.of("email", "owner@dealer.in", "password", ownerPassword));
+        check(login.statusCode() == 200, "D1: the bootstrapped owner can sign in (got " + login.statusCode() + ")");
+        String ownerToken = String.valueOf(Json.object(Json.object(Json.parse(login.body())).get("data")).get("sessionToken"));
+        HttpResponse<String> me = get(client, url + "/auth/me", ownerToken);
+        check(me.statusCode() == 200, "D1: the bootstrapped owner gets a working session");
+
+        // --- it is disabled afterwards -------------------------------------------------------
+        try {
+            Bootstrap.createFirstOwner(base, Bootstrap.Request.owner("second@dealer.in", "Second Owner", "Other Fuels", "other-fuels"),
+                    "Second-Owner-2026");
+            check(false, "D1: a second bootstrap is refused once an owner exists");
+        } catch (Bootstrap.BootstrapException expected) {
+            check(true, "D1: a second bootstrap is refused once an owner exists");
+        }
+        check(Db.count("SELECT COUNT(*) AS c FROM users WHERE role_key IN ('OWNER','SUPER_ADMIN')") == 1,
+                "D1: the refused second bootstrap creates no second owner");
+        check(Db.count("SELECT COUNT(*) AS c FROM tenants") == 1, "D1: the refused second bootstrap creates no tenant");
+        check(Db.count("SELECT COUNT(*) AS c FROM users WHERE email = 'second@dealer.in'") == 0,
+                "D1: the refused second bootstrap creates no user");
+        DemoGuard.enforceProductionStartup(testConfig(base.dbName, Map.of("NODE_ENV", "production")));
+        check(true, "D1: a bootstrapped production database passes the demo-account guard");
+
+        // --- a conflicting account is refused, and never modified ----------------------------
+        Main.resetDatabase(base);
+        Main.apply(base.mysqlDir().resolve("schema.sql"));
+        String now = Clock.nowIso();
+        String existingId = Clock.newId("usr");
+        Db.exec("""
+                INSERT INTO users (id, tenant_id, email, name, password_hash, role_key, status,
+                                   must_change_password, is_demo, granted_permissions, created_at, updated_at)
+                VALUES (?, NULL, 'taken@dealer.in', 'Existing Staff', ?, 'STAFF', 'ACTIVE', 0, 0, '[]', ?, ?)
+                """, existingId, Passwords.hash("Existing-Staff-2026"), now, now);
+        String conflictMessage = expectConfigFailure(() -> {
+            try {
+                Bootstrap.createFirstOwner(base, Bootstrap.Request.owner("taken@dealer.in", "New Owner", "New Fuels", "new-fuels"),
+                        "New-Owner-2026");
+            } catch (Bootstrap.BootstrapException refused) {
+                throw new IllegalStateException(refused.getMessage(), refused);
+            }
+        }, "D1: bootstrap refuses an email that already exists");
+        check(conflictMessage != null && conflictMessage.toLowerCase(java.util.Locale.ROOT).contains("already exists"),
+                "D1: the conflicting-account refusal explains the conflict");
+        check(Db.count("SELECT COUNT(*) AS c FROM users WHERE id = ? AND role_key = 'STAFF'", existingId) == 1,
+                "D1: the existing conflicting account is left untouched");
+        check(Db.count("SELECT COUNT(*) AS c FROM users") == 1, "D1: the refused bootstrap adds no user");
+
+        // --- an existing conflicting tenant slug is refused ----------------------------------
+        try {
+            Bootstrap.createFirstOwner(base, Bootstrap.Request.owner("other@dealer.in", "Owner Two", "New Fuels", "new-fuels"),
+                    "New-Owner-2026");
+            Bootstrap.createFirstOwner(base, Bootstrap.Request.owner("third@dealer.in", "Owner Three", "New Fuels", "new-fuels"),
+                    "New-Owner-2026");
+            check(false, "D1: bootstrap refuses a company slug that is already taken");
+        } catch (Bootstrap.BootstrapException expected) {
+            check(true, "D1: bootstrap refuses a company slug that is already taken");
+        }
+        check(Db.count("SELECT COUNT(*) AS c FROM tenants WHERE slug = 'new-fuels'") == 1,
+                "D1: only one tenant is created for a duplicated slug");
+
+        // --- concurrent bootstraps: exactly one wins -----------------------------------------
+        Main.resetDatabase(base);
+        Main.apply(base.mysqlDir().resolve("schema.sql"));
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        CountDownLatch start = new CountDownLatch(1);
+        AtomicInteger succeeded = new AtomicInteger();
+        AtomicInteger refused = new AtomicInteger();
+        List<java.util.concurrent.Future<?>> futures = new ArrayList<>();
+        for (int i = 0; i < 2; i++) {
+            final int n = i;
+            futures.add(pool.submit(() -> {
+                try {
+                    start.await();
+                    Bootstrap.createFirstOwner(base,
+                            Bootstrap.Request.owner("racer" + n + "@dealer.in", "Racer " + n, "Racer Fuels " + n, "racer-fuels-" + n),
+                            "Racer-Owner-2026");
+                    succeeded.incrementAndGet();
+                } catch (Bootstrap.BootstrapException refusedBootstrap) {
+                    refused.incrementAndGet();
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+            }));
+        }
+        start.countDown();
+        for (java.util.concurrent.Future<?> future : futures) future.get(60, TimeUnit.SECONDS);
+        pool.shutdownNow();
+        check(succeeded.get() == 1 && refused.get() == 1,
+                "D1: concurrent bootstraps produce exactly one owner (" + succeeded.get() + " succeeded, " + refused.get() + " refused)");
+        check(Db.count("SELECT COUNT(*) AS c FROM users WHERE role_key = 'OWNER'") == 1,
+                "D1: concurrency cannot create a second owner row");
+        check(Db.count("SELECT COUNT(*) AS c FROM tenants") == 1, "D1: concurrency cannot create a second tenant");
+
+        // --- restore the demo seed for the remaining suite steps ------------------------------
+        Main.resetDatabase(base);
+        Main.apply(base.mysqlDir().resolve("schema.sql"));
+        Main.seedIfEmpty(base);
+        check(Db.count("SELECT COUNT(*) AS c FROM users") > 0, "D1: the demo seed still loads after the bootstrap tests");
+    }
+
+    /** D3: the throttle's reserve+count sequence runs under a MySQL advisory lock. */
+    private static void verifyThrottleAdvisoryLock(Config base) {
+        Db.exec("DELETE FROM login_throttle_attempts");
+        Config tight = testConfig(base.dbName, Map.of(
+                "PETROFLOW_LOGIN_MAX_ATTEMPTS_PER_IP", "5",
+                "PETROFLOW_LOGIN_MAX_ATTEMPTS_PER_ACCOUNT", "1000"));
+        AtomicInteger permitted = new AtomicInteger();
+        try {
+            LoginThrottle.Decision first = LoginThrottle.evaluateLocked(LoginThrottle.dbStore(), tight,
+                    "203.0.113.99", "locked@example.com", Clock.nowIso());
+            check(first.allowed(), "D3: evaluateLocked admits a request through the real MySQL store");
+            String lockName = Db.str(Db.one("SELECT IF(GET_LOCK(?, 1) = 1, 'free', 'held') AS state", LoginThrottle.LOCK_NAME), "state");
+            Db.releaseLock(LoginThrottle.LOCK_NAME);
+            check("free".equals(lockName), "D3: the throttle advisory lock is released after each request");
+
+            ExecutorService pool = Executors.newFixedThreadPool(12);
+            CountDownLatch start = new CountDownLatch(1);
+            List<java.util.concurrent.Future<?>> futures = new ArrayList<>();
+            for (int i = 0; i < 12; i++) {
+                final int n = i;
+                futures.add(pool.submit(() -> {
+                    try {
+                        start.await();
+                        if (LoginThrottle.evaluateLocked(LoginThrottle.dbStore(), tight, "203.0.113.100",
+                                "racer" + n + "@example.com", Clock.nowIso()).allowed()) {
+                            permitted.incrementAndGet();
+                        }
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                    }
+                }));
+            }
+            start.countDown();
+            for (java.util.concurrent.Future<?> future : futures) future.get(60, TimeUnit.SECONDS);
+            pool.shutdownNow();
+        } catch (Exception error) {
+            check(false, "D3: advisory-locked throttle concurrency test failed: " + error.getMessage());
+        }
+        check(permitted.get() <= 5, "D3: concurrent locked reservations cannot exceed the IP limit (" + permitted.get() + " of 12)");
+        check(permitted.get() >= 1, "D3: the advisory-locked test actually exercised the throttle");
+        Db.exec("DELETE FROM login_throttle_attempts");
     }
 
     private static HttpResponse<String> post(HttpClient client, String uri, String token, Object body) throws Exception {

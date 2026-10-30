@@ -459,9 +459,7 @@ public final class Web {
             exchange.getRequestHeaders().forEach((key, values) -> {
                 if (values != null && !values.isEmpty()) headers.put(key.toLowerCase(), values.get(0));
             });
-            this.ip = header("x-forwarded-for") != null
-                    ? header("x-forwarded-for").split(",")[0].trim()
-                    : exchange.getRemoteAddress().getAddress().getHostAddress();
+            this.ip = resolveClientIp(config, header("x-forwarded-for"), exchange.getRemoteAddress().getAddress().getHostAddress());
             this.preview = computePreview();
             cors();
             byte[] raw = exchange.getRequestBody().readNBytes(2_000_001);
@@ -491,6 +489,12 @@ public final class Web {
         public String q(String key) { return query.get(key); }
         public String p(String key) { return params.get(key); }
         public String header(String key) { return headers.get(key.toLowerCase()); }
+
+        /** Sets a response header (for example {@code Retry-After}) before the body is written. */
+        public void responseHeader(String name, String value) {
+            if (sent) return;
+            exchange.getResponseHeaders().set(name, value);
+        }
 
         public Map<String, Object> body() { return Json.object(body); }
 
@@ -642,6 +646,78 @@ public final class Web {
             }
             return null;
         }
+    }
+
+    /**
+     * Resolves the client address used for throttling and audit records.
+     *
+     * <p>{@code X-Forwarded-For} is only honoured when the operator explicitly opted in
+     * ({@code PETROFLOW_TRUST_PROXY=true}) <em>and</em> the immediate peer is one of the configured
+     * trusted proxies. The right-most hop that is not itself a trusted proxy is used, because that is
+     * the value appended by the proxy closest to us; anything further left can be forged by the
+     * client. Otherwise the real socket address is used, so a direct caller cannot spoof its address.
+     */
+    static String resolveClientIp(Config config, String forwardedFor, String remoteAddress) {
+        String direct = normalizeIp(remoteAddress);
+        if (direct == null) direct = "unknown";
+        if (config == null || !config.trustProxy) return direct;
+        if (!config.trustedProxies.isEmpty() && !config.trustedProxies.contains(direct.toLowerCase(java.util.Locale.ROOT))) {
+            return direct;
+        }
+        if (forwardedFor == null || forwardedFor.isBlank()) return direct;
+        String[] hops = forwardedFor.split(",");
+        for (int i = hops.length - 1; i >= 0; i--) {
+            String candidate = normalizeIp(hops[i]);
+            if (candidate == null) continue;
+            if (!config.trustedProxies.contains(candidate.toLowerCase(java.util.Locale.ROOT))) return candidate;
+        }
+        return direct;
+    }
+
+    /** Strict syntactic validation of an IP literal; never performs DNS resolution. */
+    static String normalizeIp(String raw) {
+        if (raw == null) return null;
+        String value = raw.trim();
+        if (value.isEmpty() || value.length() > 64) return null;
+        if (value.startsWith("[")) {
+            int end = value.indexOf(']');
+            if (end <= 1) return null;
+            String inner = value.substring(1, end);
+            String rest = value.substring(end + 1);
+            if (!rest.isEmpty() && !rest.matches(":\\d{1,5}")) return null;
+            return ipv6(inner);
+        }
+        String lower = value.toLowerCase(java.util.Locale.ROOT);
+        if (lower.startsWith("::ffff:") && lower.indexOf('.') >= 0) {
+            String mapped = ipv4(value.substring(7));
+            return mapped;
+        }
+        if (value.indexOf('.') >= 0 && value.indexOf(':') >= 0) {
+            int colon = value.indexOf(':');
+            if (!value.substring(colon + 1).matches("\\d{1,5}")) return null;
+            return ipv4(value.substring(0, colon));
+        }
+        if (value.indexOf(':') >= 0) return ipv6(value);
+        return ipv4(value);
+    }
+
+    private static String ipv4(String value) {
+        String[] parts = value.split("\\.", -1);
+        if (parts.length != 4) return null;
+        for (String part : parts) {
+            if (!part.matches("\\d{1,3}")) return null;
+            int octet = Integer.parseInt(part);
+            if (octet > 255) return null;
+        }
+        return value;
+    }
+
+    private static String ipv6(String value) {
+        if (value.length() < 2 || value.length() > 45) return null;
+        if (!value.contains(":")) return null;
+        if (!value.matches("[0-9A-Fa-f:.]+")) return null;
+        if (value.contains(":::")) return null;
+        return value.toLowerCase(java.util.Locale.ROOT);
     }
 
     private static Map<String, String> parseQuery(String raw) {

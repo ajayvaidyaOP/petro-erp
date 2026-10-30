@@ -6,7 +6,19 @@ import java.util.List;
 import java.util.Map;
 
 public final class AuthRoutes {
+    /** Roles allowed to sign in. Anything else is treated as an ordinary credential failure. */
+    private static final List<String> SIGN_IN_ROLES = List.of("OWNER", "MANAGER", "STAFF", "SUPER_ADMIN");
+
     private AuthRoutes() {}
+
+    /**
+     * A syntactically valid PBKDF2 hash of a random secret. Verifying an unknown account against this
+     * value burns the same CPU as a real check, so response timing does not reveal whether an email
+     * exists. Built lazily so startup is not delayed.
+     */
+    private static final class DummyHash {
+        private static final String VALUE = Passwords.hash(Passwords.randomToken());
+    }
 
     public static void register(Web web) {
         web.post("/auth/login", AuthRoutes::login);
@@ -20,23 +32,57 @@ public final class AuthRoutes {
     private static void login(Web.Ctx ctx) {
         String email = ctx.str("email");
         String password = ctx.str("password");
-        if (email == null || password == null) throw ApiException.validation("email", "Email and password are required");
-        Map<String, Object> row = Db.one("SELECT * FROM users WHERE email = ?", email.trim().toLowerCase());
-        if (row == null || !Passwords.verify(password, Db.str(row, "password_hash"))) {
-            throw ApiException.unauthorized("Invalid email or password");
+        if (email == null || password == null || email.isBlank() || password.isEmpty()) {
+            throw ApiException.validation("email", "Email and password are required");
         }
-        if (!"ACTIVE".equals(row.get("status"))) throw ApiException.forbidden("This account is disabled");
-        String role = Db.str(row, "role_key");
-        if (!List.of("OWNER", "MANAGER", "STAFF", "SUPER_ADMIN").contains(role)) {
-            throw ApiException.forbidden("This account uses a retired role. Ask the owner to create a staff login.");
+        // Resolve the account first: MySQL compares emails with utf8mb4_unicode_ci (case- and
+        // accent-insensitive), so the throttle must key on the canonical stored address, otherwise a
+        // collation-equivalent spelling would open a fresh bucket (audit finding D5).
+        Map<String, Object> row = Db.one("SELECT * FROM users WHERE email = ?", LoginThrottle.normalizeAccount(email));
+        String account = LoginThrottle.accountIdentity(row == null ? null : Db.str(row, "email"), email);
+
+        LoginThrottle.Store throttle = LoginThrottle.dbStore();
+        LoginThrottle.Decision gate = LoginThrottle.evaluateLocked(throttle, ctx.config, ctx.ip, account, Clock.nowIso());
+        if (!gate.allowed()) {
+            // Log the event, never the attempted identifier or password.
+            Auth.audit(null, "AUTH_LOGIN_THROTTLED", "User", null, null,
+                    "Sign-in throttled from " + ctx.ip + " (" + gate.limitedScope() + " limit)");
+            ctx.responseHeader("Retry-After", String.valueOf(gate.retryAfterSeconds()));
+            throw new ApiException(429, "TOO_MANY_ATTEMPTS", LoginThrottle.THROTTLED_MESSAGE);
+        }
+
+        boolean passwordOk = row != null && Passwords.verify(password, Db.str(row, "password_hash"));
+        if (row == null) {
+            // Equalize timing with the not-found path; never short-circuit on a missing account.
+            Passwords.verify(password, DummyHash.VALUE);
+        }
+        if (!passwordOk) {
+            throw ApiException.unauthorized(LoginThrottle.GENERIC_AUTH_MESSAGE);
+        }
+
+        // Every remaining failure mode reports the same generic message so callers cannot probe for
+        // disabled accounts, suspended organizations, retired roles or demo logins.
+        if (!"ACTIVE".equals(Db.str(row, "status"))) {
+            throw ApiException.unauthorized(LoginThrottle.GENERIC_AUTH_MESSAGE);
+        }
+        if (!SIGN_IN_ROLES.contains(Db.str(row, "role_key"))) {
+            throw ApiException.unauthorized(LoginThrottle.GENERIC_AUTH_MESSAGE);
+        }
+        if (ctx.config.production && Db.num(row, "is_demo") == 1) {
+            throw ApiException.unauthorized(LoginThrottle.GENERIC_AUTH_MESSAGE);
         }
         if (row.get("tenant_id") != null) {
             Map<String, Object> tenant = Db.one("SELECT status FROM tenants WHERE id = ?", row.get("tenant_id"));
-            if (tenant == null || !"ACTIVE".equals(tenant.get("status"))) {
-                throw ApiException.forbidden("This organization is suspended. Contact your platform administrator.");
+            if (tenant == null || !"ACTIVE".equals(Db.str(tenant, "status"))) {
+                throw ApiException.unauthorized(LoginThrottle.GENERIC_AUTH_MESSAGE);
             }
         }
+
         Auth auth = Auth.load(Db.str(row, "id"), null);
+        if (auth == null) {
+            throw ApiException.unauthorized(LoginThrottle.GENERIC_AUTH_MESSAGE);
+        }
+        LoginThrottle.clearOnSuccess(throttle, account, gate);
         Map<String, Object> session = Auth.session(auth, ctx.config, ctx.ip, ctx.header("user-agent"));
         ctx.cookie(ctx.config.cookieName, String.valueOf(session.get("token")), String.valueOf(session.get("expiresAt")));
         Db.exec("UPDATE users SET last_login_at = ? WHERE id = ?", Clock.nowIso(), auth.userId);

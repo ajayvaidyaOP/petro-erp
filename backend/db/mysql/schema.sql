@@ -126,6 +126,22 @@ CREATE TABLE IF NOT EXISTS `roles` (
   `is_system` TINYINT(1) NOT NULL DEFAULT 1
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- System role reference data. These rows are referenced by users.role_key (FK) and must exist
+-- on every installation, including production databases that never load demo data. Guarded so
+-- re-applying the schema on every boot is a no-op once they exist.
+INSERT INTO `roles` (`id`, `key`, `name`, `description`, `permissions`, `scope`, `is_system`)
+SELECT 'rol_32bb4f12-d86d-47b2-b81a-38be309d450c', 'OWNER', 'Owner', 'Full control of pumps, prices, finance, team and settings.', '["stations.read","stations.write","products.read","products.write","prices.write","tanks.read","tanks.write","dispensers.read","dispensers.write","employees.read","employees.write","devices.read","devices.write","readings.read","readings.manual","shifts.read","shifts.open","shifts.close","shifts.approve","sales.read","sales.write","stock.read","stock.write","deliveries.read","deliveries.write","customers.read","customers.write","suppliers.read","suppliers.write","payments.read","payments.write","expenses.read","expenses.write","reconciliation.read","reconciliation.write","reports.read","density.read","density.write","dayclose.manage","compliance.read","compliance.write","lubricants.read","lubricants.write","attendance.read","attendance.write","audit.read","settings.read","settings.write","billing.read"]', 'TENANT', 1 FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM `roles` WHERE `key` = 'OWNER');
+INSERT INTO `roles` (`id`, `key`, `name`, `description`, `permissions`, `scope`, `is_system`)
+SELECT 'rol_95237edb-3a5f-41b0-8963-ac10c9b081e2', 'MANAGER', 'Manager', 'Daily shifts, readings, stock, deliveries, credit and expenses.', '["stations.read","products.read","tanks.read","dispensers.read","devices.read","readings.read","readings.manual","shifts.read","shifts.open","shifts.close","shifts.approve","sales.read","sales.write","stock.read","stock.write","deliveries.read","deliveries.write","customers.read","customers.write","suppliers.read","payments.read","payments.write","expenses.read","expenses.write","reconciliation.read","reconciliation.write","reports.read","density.read","density.write","dayclose.manage","compliance.read","lubricants.read","lubricants.write","attendance.read","attendance.write"]', 'STATION', 1 FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM `roles` WHERE `key` = 'MANAGER');
+INSERT INTO `roles` (`id`, `key`, `name`, `description`, `permissions`, `scope`, `is_system`)
+SELECT 'rol_4221f062-50b7-4e93-b720-1a9bb832c125', 'STAFF', 'Staff', 'Login with only the permissions the owner ticked for this person.', '[]', 'STATION', 1 FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM `roles` WHERE `key` = 'STAFF');
+INSERT INTO `roles` (`id`, `key`, `name`, `description`, `permissions`, `scope`, `is_system`)
+SELECT 'rol_ee8c4736-cf14-49d7-ba59-f19318006f93', 'SUPER_ADMIN', 'Platform Administrator', 'Internal platform maintenance.', '["platform.manage","platform.audit","settings.read"]', 'PLATFORM', 1 FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM `roles` WHERE `key` = 'SUPER_ADMIN');
+
 CREATE TABLE IF NOT EXISTS `users` (
   `id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
   `tenant_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin,
@@ -877,6 +893,29 @@ CREATE TABLE IF NOT EXISTS `idempotency_keys` (
   `expires_at` VARCHAR(40) NOT NULL,
   UNIQUE KEY `uq_idempotency_keys_tenant_id__scope__key` (`tenant_id`, `scope`, `key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Failed sign-in throttling (audit finding A5). One row per reserved login attempt, keyed by a
+-- SHA-256 of the client IP and a SHA-256 of the normalized account email. The table stores no raw
+-- IP addresses, email addresses, passwords or session tokens. Rows are deleted on successful sign-in
+-- (account scope only) and pruned after 48 hours. Additive table: no existing table is modified.
+CREATE TABLE IF NOT EXISTS `login_throttle_attempts` (
+  `id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
+  `ip_key` CHAR(64) NOT NULL,
+  `account_key` CHAR(64) NOT NULL,
+  `attempted_at` VARCHAR(40) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+SET @exists := (SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'login_throttle_attempts' AND index_name = 'idx_login_throttle_ip');
+SET @ddl := IF(@exists = 0, 'ALTER TABLE `login_throttle_attempts` ADD INDEX `idx_login_throttle_ip` (ip_key, attempted_at)', 'DO 0');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @exists := (SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'login_throttle_attempts' AND index_name = 'idx_login_throttle_account');
+SET @ddl := IF(@exists = 0, 'ALTER TABLE `login_throttle_attempts` ADD INDEX `idx_login_throttle_account` (account_key, attempted_at)', 'DO 0');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 CREATE TABLE IF NOT EXISTS `app_settings` (
   `id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
