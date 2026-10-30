@@ -3,10 +3,16 @@ package in.petrolflow;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 public final class Config {
+    public static final String PRODUCTION_ENV = "production";
+
     public final String env;
     public final boolean production;
     public final boolean demoTools;
@@ -31,13 +37,42 @@ public final class Config {
     public final String sandboxId;
     public final String appOrigin;
     public final java.util.Set<String> allowedOrigins;
+    /** True only when the operator explicitly opted into trusting reverse-proxy forwarding headers. */
+    public final boolean trustProxy;
+    /** Peer addresses allowed to supply X-Forwarded-For when {@link #trustProxy} is enabled. */
+    public final Set<String> trustedProxies;
+    /** Failed sign-in attempts allowed per account inside {@link #loginWindowSeconds}. */
+    public final int loginMaxAttemptsPerAccount;
+    /** Failed sign-in attempts allowed per client IP inside {@link #loginWindowSeconds}. */
+    public final int loginMaxAttemptsPerIp;
+    /** Rolling window for sign-in throttling. */
+    public final int loginWindowSeconds;
 
     private Config(Map<String, String> env, Path root) {
         this.root = root;
         this.env = str(env, "NODE_ENV", "development");
-        this.production = "production".equals(this.env);
-        this.demoTools = bool(env, "ENABLE_DEMO_TOOLS", !production);
-        this.seedDemo = bool(env, "SEED_DEMO_DATA", true);
+        this.production = PRODUCTION_ENV.equalsIgnoreCase(this.env.trim());
+
+        String seedRaw = raw(env, "SEED_DEMO_DATA");
+        boolean seedDemoRequested = seedRaw == null ? !production : truthy(seedRaw);
+        String toolsRaw = raw(env, "ENABLE_DEMO_TOOLS");
+        boolean demoToolsRequested = toolsRaw == null ? !production : truthy(toolsRaw);
+
+        if (production && seedDemoRequested) {
+            throw new IllegalStateException(
+                    "SEED_DEMO_DATA=true is not allowed when NODE_ENV=production. "
+                            + "Remove SEED_DEMO_DATA or set it to SEED_DEMO_DATA=false. "
+                            + "PetroFlow never seeds demo users into a production database.");
+        }
+        if (production && demoToolsRequested) {
+            throw new IllegalStateException(
+                    "ENABLE_DEMO_TOOLS=true is not allowed when NODE_ENV=production. "
+                            + "Remove ENABLE_DEMO_TOOLS or set it to ENABLE_DEMO_TOOLS=false. "
+                            + "Demo logins and /auth/demo-accounts stay disabled in production.");
+        }
+        this.seedDemo = seedDemoRequested;
+        this.demoTools = demoToolsRequested;
+
         this.demoPassword = str(env, "DEMO_PASSWORD", "PetroFlow@2025");
         this.host = str(env, "HOST", "0.0.0.0");
         this.port = num(env, "PORT", 4000);
@@ -65,6 +100,27 @@ public final class Config {
             if (!trimmed.isEmpty()) origins.add(trimmed);
         }
         this.allowedOrigins = java.util.Collections.unmodifiableSet(origins);
+
+        this.trustProxy = truthy(raw(env, "PETROFLOW_TRUST_PROXY"));
+        Set<String> proxies = new LinkedHashSet<>();
+        String proxyList = raw(env, "PETROFLOW_TRUSTED_PROXIES");
+        if (proxyList != null) {
+            for (String item : proxyList.split(",")) {
+                String trimmed = item.trim();
+                if (!trimmed.isEmpty()) proxies.add(trimmed.toLowerCase(Locale.ROOT));
+            }
+        }
+        if (this.trustProxy && proxies.isEmpty()) {
+            throw new IllegalStateException(
+                    "PETROFLOW_TRUST_PROXY=true requires PETROFLOW_TRUSTED_PROXIES with the exact IP address(es) "
+                            + "of your reverse proxy (for example PETROFLOW_TRUSTED_PROXIES=10.0.0.5). "
+                            + "Without a trusted proxy list the application would accept forged X-Forwarded-For headers.");
+        }
+        this.trustedProxies = Collections.unmodifiableSet(proxies);
+
+        this.loginWindowSeconds = clamp(num(env, "PETROFLOW_LOGIN_WINDOW_SECONDS", 900), 1, 86_400);
+        this.loginMaxAttemptsPerAccount = clamp(num(env, "PETROFLOW_LOGIN_MAX_ATTEMPTS_PER_ACCOUNT", 8), 1, 100_000);
+        this.loginMaxAttemptsPerIp = clamp(num(env, "PETROFLOW_LOGIN_MAX_ATTEMPTS_PER_IP", 30), 1, 100_000);
     }
 
     public static Config load() {
@@ -122,6 +178,12 @@ public final class Config {
         return value == null || value.isBlank() ? fallback : value;
     }
 
+    /** Returns the raw configured value, or null when the operator did not set it at all. */
+    private static String raw(Map<String, String> env, String key) {
+        String value = env.get(key);
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
     private static int num(Map<String, String> env, String key, int fallback) {
         try {
             return Integer.parseInt(str(env, key, String.valueOf(fallback)));
@@ -134,9 +196,14 @@ public final class Config {
         return Math.max(min, Math.min(max, value));
     }
 
+    private static boolean truthy(String value) {
+        if (value == null) return false;
+        return value.equals("1") || value.equalsIgnoreCase("true") || value.equalsIgnoreCase("yes") || value.equalsIgnoreCase("on");
+    }
+
     private static boolean bool(Map<String, String> env, String key, boolean fallback) {
         String value = env.get(key);
         if (value == null || value.isBlank()) return fallback;
-        return value.equals("1") || value.equalsIgnoreCase("true") || value.equalsIgnoreCase("yes") || value.equalsIgnoreCase("on");
+        return truthy(value.trim());
     }
 }
