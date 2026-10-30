@@ -19,6 +19,11 @@ public final class Config {
     public final String dbName;
     public final String dbUser;
     public final String dbPassword;
+    public final int dbPoolMaxSize;
+    public final int dbConnectTimeoutMs;
+    public final int dbSocketTimeoutMs;
+    public final int dbPoolAcquireTimeoutMs;
+    public final int idempotencyLeaseSeconds;
     public final String cookieName;
     public final int sessionHours;
     public final boolean cookieSecure;
@@ -41,6 +46,14 @@ public final class Config {
         this.dbName = str(env, "PETROFLOW_DB_NAME", str(env, "MYSQL_DATABASE", "petroflow"));
         this.dbUser = str(env, "PETROFLOW_DB_USER", str(env, "MYSQL_USER", "root"));
         this.dbPassword = str(env, "PETROFLOW_DB_PASSWORD", str(env, "MYSQL_PASSWORD", ""));
+        this.dbPoolMaxSize = clamp(num(env, "PETROFLOW_DB_POOL_MAX", num(env, "MYSQL_POOL_MAX", 10)), 2, 64);
+        this.dbConnectTimeoutMs = clamp(num(env, "PETROFLOW_DB_CONNECT_TIMEOUT_MS", 8_000), 1_000, 60_000);
+        this.dbSocketTimeoutMs = clamp(num(env, "PETROFLOW_DB_SOCKET_TIMEOUT_MS", 30_000), 2_000, 120_000);
+        this.dbPoolAcquireTimeoutMs = clamp(num(env, "PETROFLOW_DB_POOL_TIMEOUT_MS", 10_000), 1_000, 60_000);
+        this.idempotencyLeaseSeconds = clamp(
+                num(env, "PETROFLOW_IDEMPOTENCY_LEASE_SECONDS", 90),
+                this.production ? 60 : 2,
+                this.production ? 120 : 300);
         this.cookieName = str(env, "SESSION_COOKIE_NAME", "pf_session");
         this.sessionHours = num(env, "SESSION_TTL_HOURS", 12);
         this.cookieSecure = bool(env, "COOKIE_SECURE", production);
@@ -115,6 +128,10 @@ public final class Config {
         } catch (NumberFormatException ignored) {
             return fallback;
         }
+    }
+
+    private static int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     private static boolean bool(Map<String, String> env, String key, boolean fallback) {

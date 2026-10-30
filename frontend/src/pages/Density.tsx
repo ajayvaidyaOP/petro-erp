@@ -57,8 +57,34 @@ interface ProductOption {
   category: string;
 }
 
-const SPEC: Record<string, [number, number]> = { PETROL: [720, 775], DIESEL: [810, 860] };
-const CORRECTION: Record<string, number> = { PETROL: 0.85, DIESEL: 0.7 };
+const SPEC: Record<string, [number, number]> = { PETROL: [720, 775], DIESEL: [810, 845] };
+
+function computeAstm53bDensity15c(observedKgM3: number, tempC: number): number {
+  const dt = tempC - 15;
+  const hyd = 1 - 0.000023 * dt - 0.00000002 * dt * dt;
+  const rhoT = observedKgM3 * hyd;
+  let rho15 = rhoT;
+  for (let i = 0; i < 20; i += 1) {
+    let alpha: number;
+    if (rho15 < 770) {
+      alpha = (346.4228 + 0.4388 * rho15) / (rho15 * rho15);
+    } else if (rho15 < 787.5) {
+      alpha = -0.00336312 + 2680.3206 / (rho15 * rho15);
+    } else if (rho15 < 839) {
+      alpha = 594.5418 / (rho15 * rho15);
+    } else {
+      alpha = (186.9696 + 0.4862 * rho15) / (rho15 * rho15);
+    }
+    const vcf = Math.exp(-alpha * dt * (1 + 0.8 * alpha * dt));
+    const next = rhoT / vcf;
+    if (Math.abs(next - rho15) < 1e-7) {
+      rho15 = next;
+      break;
+    }
+    rho15 = next;
+  }
+  return rho15;
+}
 
 export default function Density() {
   const { can } = useAuth();
@@ -296,15 +322,15 @@ function CreateDensityModal({
   });
 
   const selectedTank = tanks.data?.data.find((t) => t.id === tankId);
-  const category = products.data?.data.find((p) => p.id === selectedTank?.productId)?.category ?? 'PETROL';
+  const category = products.data?.data.find((p) => p.id === selectedTank?.productId)?.category ?? '';
   const preview = useMemo(() => {
     const o = Number(observed);
     const t = Number(temp);
-    if (!o || Number.isNaN(t) || observed === '' || temp === '') return null;
-    const k = CORRECTION[category] ?? 0.7;
-    const at15 = o + k * (t - 15);
+    if (!o || o < 653 || o > 1075 || Number.isNaN(t) || t < -20 || t > 65 || observed === '' || temp === '') return null;
+    const at15 = Math.round(computeAstm53bDensity15c(o, t) * 10) / 10;
+    if (at15 < 653 || at15 > 1075) return null;
     const spec = SPEC[category];
-    return { at15: at15.toFixed(1), within: spec ? at15 >= spec[0] && at15 <= spec[1] : true, spec };
+    return { at15: at15.toFixed(1), within: spec ? at15 >= spec[0] && at15 <= spec[1] : false, spec };
   }, [observed, temp, category]);
 
   const create = useMutation({

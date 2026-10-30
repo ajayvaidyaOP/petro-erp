@@ -30,19 +30,36 @@ public final class Mysql implements AutoCloseable {
     private final String database;
     private final String user;
     private final String password;
+    private final int connectTimeoutMs;
+    private final int socketTimeoutMs;
     private final ReentrantLock lock = new ReentrantLock();
     private Socket socket;
     private InputStream in;
     private OutputStream out;
     private int sequence;
     private boolean inTransaction;
+    private boolean foreignKeyChecksDisabled;
+    private volatile long lastUsedAtMs;
 
     public Mysql(String host, int port, String database, String user, String password) {
+        this(host, port, database, user, password, 8_000, 30_000);
+    }
+
+    public Mysql(
+            String host,
+            int port,
+            String database,
+            String user,
+            String password,
+            int connectTimeoutMs,
+            int socketTimeoutMs) {
         this.host = host;
         this.port = port;
         this.database = database;
         this.user = user;
         this.password = password == null ? "" : password;
+        this.connectTimeoutMs = Math.max(1_000, connectTimeoutMs);
+        this.socketTimeoutMs = Math.max(2_000, socketTimeoutMs);
     }
 
     public void connect() {
@@ -51,8 +68,77 @@ public final class Mysql implements AutoCloseable {
             open(false);
             execUnlocked("CREATE DATABASE IF NOT EXISTS `" + database.replace("`", "``") + "` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
             execUnlocked("USE `" + database.replace("`", "``") + "`");
-            execUnlocked("SET NAMES utf8mb4");
-            execUnlocked("SET SESSION sql_mode = 'STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION'");
+            configureSession();
+            lastUsedAtMs = System.currentTimeMillis();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public void connectToExistingDatabase() {
+        lock.lock();
+        try {
+            ensureConnected();
+            lastUsedAtMs = System.currentTimeMillis();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public boolean inTransaction() {
+        return inTransaction;
+    }
+
+    public boolean isOpen() {
+        return socket != null
+                && socket.isConnected()
+                && !socket.isClosed()
+                && !socket.isInputShutdown()
+                && !socket.isOutputShutdown();
+    }
+
+    public void validateOrReconnect(long idleCheckThresholdMs) {
+        lock.lock();
+        try {
+            if (!isOpen()) {
+                ensureConnected();
+                lastUsedAtMs = System.currentTimeMillis();
+                return;
+            }
+            if (System.currentTimeMillis() - lastUsedAtMs >= idleCheckThresholdMs) {
+                query("SELECT 1");
+            }
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public void resetSessionForPool() {
+        lock.lock();
+        try {
+            if (!isOpen()) {
+                inTransaction = false;
+                foreignKeyChecksDisabled = false;
+                return;
+            }
+            if (inTransaction) {
+                try {
+                    execUnlocked("ROLLBACK");
+                } catch (Throwable ignored) {
+                    closeSocket();
+                    return;
+                } finally {
+                    inTransaction = false;
+                }
+            }
+            if (foreignKeyChecksDisabled) {
+                try {
+                    execUnlocked("SET FOREIGN_KEY_CHECKS = 1");
+                    foreignKeyChecksDisabled = false;
+                } catch (Throwable ignored) {
+                    closeSocket();
+                }
+            }
         } finally {
             lock.unlock();
         }
@@ -87,17 +173,27 @@ public final class Mysql implements AutoCloseable {
             ensureConnected();
             execUnlocked("START TRANSACTION");
             inTransaction = true;
+            boolean committed = false;
             try {
                 T value = work.get();
                 execUnlocked("COMMIT");
+                committed = true;
                 return value;
-            } catch (RuntimeException error) {
-                try {
-                    execUnlocked("ROLLBACK");
-                } catch (RuntimeException ignored) {
-                    closeSocket();
+            } catch (Throwable error) {
+                if (!committed) {
+                    if (socket == null || socket.isClosed()) {
+                        closeSocket();
+                    } else {
+                        try {
+                            execUnlocked("ROLLBACK");
+                        } catch (Throwable ignored) {
+                            closeSocket();
+                        }
+                    }
                 }
-                throw error;
+                if (error instanceof RuntimeException re) throw re;
+                if (error instanceof Error err) throw err;
+                throw new RuntimeException(error);
             } finally {
                 inTransaction = false;
             }
@@ -118,16 +214,25 @@ public final class Mysql implements AutoCloseable {
         lock.lock();
         try {
             ensureConnected();
+            String bound = bind(sql, params);
+            trackSessionMutation(bound);
             try {
-                return command(bind(sql, params));
+                Result res = command(bound);
+                lastUsedAtMs = System.currentTimeMillis();
+                return res;
             } catch (ApiException error) {
                 throw error;
             } catch (IOException first) {
-                if (inTransaction) throw new ApiException(503, "DB_UNAVAILABLE", "MySQL connection dropped during a transaction");
+                if (inTransaction) {
+                    closeSocket();
+                    throw new ApiException(503, "DB_UNAVAILABLE", "MySQL connection dropped during a transaction");
+                }
                 closeSocket();
                 ensureConnected();
                 try {
-                    return command(bind(sql, params));
+                    Result res = command(bound);
+                    lastUsedAtMs = System.currentTimeMillis();
+                    return res;
                 } catch (IOException second) {
                     throw new ApiException(503, "DB_UNAVAILABLE", "MySQL is not reachable at " + host + ":" + port);
                 }
@@ -137,9 +242,29 @@ public final class Mysql implements AutoCloseable {
         }
     }
 
+    private void trackSessionMutation(String sql) {
+        if (sql == null) return;
+        String upper = sql.trim().toUpperCase();
+        if (upper.startsWith("SET FOREIGN_KEY_CHECKS")) {
+            int eq = upper.indexOf('=');
+            if (eq > 0) {
+                String val = upper.substring(eq + 1).replace(";", "").trim();
+                foreignKeyChecksDisabled = "0".equals(val) || "OFF".equals(val) || "FALSE".equals(val);
+            }
+        }
+    }
+
+    private void configureSession() {
+        execUnlocked("SET NAMES utf8mb4");
+        execUnlocked("SET SESSION sql_mode = 'STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION'");
+        execUnlocked("SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE");
+        foreignKeyChecksDisabled = false;
+    }
+
     private void execUnlocked(String sql) {
         try {
             command(sql);
+            lastUsedAtMs = System.currentTimeMillis();
         } catch (IOException error) {
             throw new ApiException(503, "DB_UNAVAILABLE", "MySQL command failed: " + error.getMessage());
         }
@@ -149,8 +274,7 @@ public final class Mysql implements AutoCloseable {
         if (socket != null && socket.isConnected() && !socket.isClosed()) return;
         try {
             open(true);
-            execUnlocked("SET NAMES utf8mb4");
-            execUnlocked("SET SESSION sql_mode = 'STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION'");
+            configureSession();
         } catch (ApiException error) {
             throw error;
         } catch (RuntimeException error) {
@@ -162,9 +286,9 @@ public final class Mysql implements AutoCloseable {
         closeSocket();
         try {
             socket = new Socket();
-            socket.connect(new InetSocketAddress(host, port), 8_000);
+            socket.connect(new InetSocketAddress(host, port), connectTimeoutMs);
             socket.setTcpNoDelay(true);
-            socket.setSoTimeout(60_000);
+            socket.setSoTimeout(socketTimeoutMs);
             in = socket.getInputStream();
             out = socket.getOutputStream();
             sequence = 0;
@@ -557,6 +681,8 @@ public final class Mysql implements AutoCloseable {
                 : new String(packet, Math.min(3, packet.length), Math.max(0, packet.length - 3), StandardCharsets.UTF_8);
         if (code == 1062) return new ApiException(409, "DUPLICATE", "A record with these details already exists", Map.of("mysql", message));
         if (code == 1451 || code == 1452) return new ApiException(409, "IN_USE", "This record is referenced by other records and cannot be changed");
+        if (code == 1213) return new ApiException(503, "DB_DEADLOCK", "Transient transaction serialization conflict", Map.of("mysql", message));
+        if (code == 1205) return new ApiException(503, "DB_LOCK_TIMEOUT", "Database lock wait timeout exceeded", Map.of("mysql", message));
         return new ApiException(400, "DB_ERROR", message.isBlank() ? "MySQL rejected the statement" : message);
     }
 

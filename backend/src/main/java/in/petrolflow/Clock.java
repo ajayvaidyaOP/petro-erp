@@ -20,6 +20,10 @@ public final class Clock {
         return DateTimeFormatter.ISO_INSTANT.format(Instant.parse(iso).plus(hours, ChronoUnit.HOURS).truncatedTo(ChronoUnit.MILLIS));
     }
 
+    public static String addSecondsIso(String iso, long seconds) {
+        return DateTimeFormatter.ISO_INSTANT.format(Instant.parse(iso).plus(seconds, ChronoUnit.SECONDS).truncatedTo(ChronoUnit.MILLIS));
+    }
+
     public static String addDays(String date, int days) {
         return LocalDate.parse(date).plusDays(days).toString();
     }

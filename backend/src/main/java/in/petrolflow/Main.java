@@ -41,30 +41,43 @@ public final class Main {
     }
 
     public static void resetDatabase(Config config) {
-        Db.exec("SET FOREIGN_KEY_CHECKS = 0");
-        for (var row : Db.all("SELECT table_name AS t FROM information_schema.tables WHERE table_schema = ?", config.dbName)) {
-            String t = Db.str(row, "t");
-            if (t != null && !t.isBlank()) {
-                Db.exec("DROP TABLE IF EXISTS `" + t.replace("`", "``") + "`");
+        Db.withConnection(() -> {
+            Db.exec("SET FOREIGN_KEY_CHECKS = 0");
+            try {
+                for (var row : Db.all("SELECT table_name AS t FROM information_schema.tables WHERE table_schema = ?", config.dbName)) {
+                    String t = Db.str(row, "t");
+                    if (t != null && !t.isBlank()) {
+                        Db.exec("DROP TABLE IF EXISTS `" + t.replace("`", "``") + "`");
+                    }
+                }
+            } finally {
+                Db.exec("SET FOREIGN_KEY_CHECKS = 1");
             }
-        }
-        Db.exec("SET FOREIGN_KEY_CHECKS = 1");
+            return null;
+        });
     }
 
     public static void apply(Path file) throws Exception {
         if (!Files.isRegularFile(file)) throw new IllegalStateException("Missing schema: " + file);
-        int applied = 0;
-        for (String statement : Mysql.split(Files.readString(file))) {
-            String sql = statement.trim();
-            if (sql.isEmpty()) continue;
-            try {
-                Db.exec(sql);
-                applied++;
-            } catch (RuntimeException error) {
-                throw new IllegalStateException("Schema failed near: " + sql.substring(0, Math.min(160, sql.length())), error);
-            }
+        String content = Files.readString(file);
+        try {
+            Db.withConnectionVoid(() -> {
+                int applied = 0;
+                for (String statement : Mysql.split(content)) {
+                    String sql = statement.trim();
+                    if (sql.isEmpty()) continue;
+                    try {
+                        Db.exec(sql);
+                        applied++;
+                    } catch (RuntimeException error) {
+                        throw new IllegalStateException("Schema failed near: " + sql.substring(0, Math.min(160, sql.length())), error);
+                    }
+                }
+                System.out.println("Schema applied (" + applied + " statements) from " + file);
+            });
+        } catch (Db.CheckedWrapper cw) {
+            throw cw.causeException;
         }
-        System.out.println("Schema applied (" + applied + " statements) from " + file);
     }
 
     public static void seedIfEmpty(Config config) throws Exception {
@@ -78,18 +91,24 @@ public final class Main {
             System.out.println("Seed skipped — " + seed + " is missing");
             return;
         }
-        Db.exec("SET FOREIGN_KEY_CHECKS = 0");
         String sql = Files.readString(seed).replaceAll("(?m)^SET\\s+.*$", "");
-        int applied = 0;
-        for (String statement : Mysql.split(sql)) {
-            String trimmed = statement.trim();
-            if (trimmed.isEmpty()) continue;
-            Db.exec(trimmed);
-            applied++;
-        }
-        Db.exec("SET FOREIGN_KEY_CHECKS = 1");
-        String now = Clock.nowIso();
-        Db.exec("UPDATE hardware_devices SET last_heartbeat_at = ?, last_sync_at = ? WHERE status = 'ONLINE'", now, now);
-        System.out.println("Demo seed loaded (" + applied + " statements). Password: " + config.demoPassword);
+        Db.withConnection(() -> {
+            Db.exec("SET FOREIGN_KEY_CHECKS = 0");
+            int applied = 0;
+            try {
+                for (String statement : Mysql.split(sql)) {
+                    String trimmed = statement.trim();
+                    if (trimmed.isEmpty()) continue;
+                    Db.exec(trimmed);
+                    applied++;
+                }
+            } finally {
+                Db.exec("SET FOREIGN_KEY_CHECKS = 1");
+            }
+            String now = Clock.nowIso();
+            Db.exec("UPDATE hardware_devices SET last_heartbeat_at = ?, last_sync_at = ? WHERE status = 'ONLINE'", now, now);
+            System.out.println("Demo seed loaded (" + applied + " statements). Password: " + config.demoPassword);
+            return null;
+        });
     }
 }

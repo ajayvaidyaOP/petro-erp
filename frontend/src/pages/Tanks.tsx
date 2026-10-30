@@ -381,14 +381,18 @@ export default function Tanks() {
                   <thead><tr><th>Date</th><th>Tank</th><th>Product</th><th>Type</th><th className="text-right">Quantity</th><th>Note</th></tr></thead>
                   <tbody>
                     {movementsRows.map((movement) => {
-                      const signed = ['OPENING', 'DELIVERY', 'TRANSFER_IN', 'ADJUSTMENT'].includes(movement.type);
+                      const signed =
+                        movement.type === 'ADJUSTMENT'
+                          ? Number(movement.quantityLitres) >= 0
+                          : ['OPENING', 'DELIVERY', 'TRANSFER_IN'].includes(movement.type);
+                      const absQty = Math.abs(Number(movement.quantityLitres));
                       return (
                         <tr key={movement.id}>
                           <td className="text-xs text-ink-400">{formatDateTime(movement.occurredAt)}</td>
                           <td className="text-ink-200">{movement.tankCode}</td>
                           <td className="text-xs text-ink-400">{movement.productName}</td>
                           <td><Badge tone={movement.type === 'DISPENSED' ? 'accent' : movement.type === 'DELIVERY' ? 'success' : 'neutral'}>{movement.type}</Badge></td>
-                          <td className={`num text-right ${signed ? 'text-ok' : 'text-warn'}`}>{signed ? '+' : '−'}{formatNumber(movement.quantityLitres, 3)} L</td>
+                          <td className={`num text-right ${signed ? 'text-ok' : 'text-warn'}`}>{signed ? '+' : '−'}{formatNumber(absQty, 3)} L</td>
                           <td className="max-w-[320px] text-[11px] text-ink-500">{movement.note ?? '—'}</td>
                         </tr>
                       );

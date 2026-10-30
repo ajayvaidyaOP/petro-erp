@@ -48,7 +48,7 @@ export const COMPLIANCE_DOC_TYPES = [
   'POLLUTION_NOC', 'ELECTRICAL_SAFETY', 'INSURANCE', 'OTHER',
 ] as const;
 
-export const ATTENDANCE_STATUSES = ['PRESENT', 'ABSENT', 'HALF_DAY', 'leave', 'WEEK_OFF'] as const;
+export const ATTENDANCE_STATUSES = ['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE', 'WEEK_OFF'] as const;
 
 export const ACCOUNTING_DISCLAIMER =
   'Figures are operational estimates derived from dispenser totalizers and recorded entries. ' +

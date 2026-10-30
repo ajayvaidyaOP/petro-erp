@@ -1,12 +1,15 @@
 package in.petrolflow;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /** Settings, attendance, density, compliance, lubricants, devices, readings and platform admin. */
 public final class OpsApi {
@@ -75,13 +78,29 @@ public final class OpsApi {
         auth.require("audit.read");
         int page = Domain.pageOf(ctx);
         int size = Domain.pageSize(ctx);
-        String where = "a.tenant_id = ?";
-        List<Object> params = new ArrayList<>(List.of(auth.tenantId()));
-        if (ctx.q("stationId") != null && !ctx.q("stationId").isBlank()) {
-            auth.station(ctx.q("stationId"));
-            where += " AND (a.station_id = ? OR a.station_id IS NULL)";
-            params.add(ctx.q("stationId"));
+        String stationParam = ctx.q("stationId");
+        String stationWhere = "";
+        List<Object> stationParams = new ArrayList<>();
+        if (stationParam != null && !stationParam.isBlank() && !"all".equalsIgnoreCase(stationParam)) {
+            auth.station(stationParam.trim());
+            if (auth.allStations) {
+                stationWhere = " AND (a.station_id = ? OR a.station_id IS NULL)";
+            } else {
+                stationWhere = " AND a.station_id = ?";
+            }
+            stationParams.add(stationParam.trim());
+        } else if (!auth.allStations) {
+            if (auth.stationIds.isEmpty()) {
+                throw ApiException.forbidden("You do not have access to any station");
+            }
+            List<String> allowed = new ArrayList<>(auth.stationIds);
+            stationWhere = " AND a.station_id IN (" + String.join(",", Collections.nCopies(allowed.size(), "?")) + ")";
+            stationParams.addAll(allowed);
         }
+        String where = "a.tenant_id = ?" + stationWhere;
+        List<Object> params = new ArrayList<>();
+        params.add(auth.tenantId());
+        params.addAll(stationParams);
         if (ctx.q("action") != null && !ctx.q("action").isBlank()) { where += " AND a.action = ?"; params.add(ctx.q("action")); }
         if (ctx.q("from") != null && !ctx.q("from").isBlank()) { where += " AND a.created_at >= ?"; params.add(Clock.istDayStart(ctx.q("from"))); }
         if (ctx.q("to") != null && !ctx.q("to").isBlank()) { where += " AND a.created_at <= ?"; params.add(Clock.istDayEnd(ctx.q("to"))); }
@@ -96,9 +115,12 @@ public final class OpsApi {
         List<Map<String, Object>> rows = Json.shapeAll(Db.all(
                 "SELECT a.*, u.name AS actor_name FROM audit_logs a LEFT JOIN users u ON u.id = a.actor_id WHERE " + where + " ORDER BY a.created_at DESC LIMIT ? OFFSET ?",
                 params.toArray()), List.of("before_data", "after_data"));
+        List<Object> actionParams = new ArrayList<>();
+        actionParams.add(auth.tenantId());
+        actionParams.addAll(stationParams);
         List<Map<String, Object>> actions = Db.all(
-                "SELECT action, COUNT(*) AS count FROM audit_logs WHERE tenant_id = ? GROUP BY action ORDER BY count DESC LIMIT 30",
-                auth.tenantId());
+                "SELECT a.action AS action, COUNT(*) AS count FROM audit_logs a WHERE a.tenant_id = ?" + stationWhere + " GROUP BY a.action ORDER BY count DESC LIMIT 30",
+                actionParams.toArray());
         Map<String, Object> meta = new LinkedHashMap<>(Domain.page(total, page, size));
         meta.put("actions", actions);
         ctx.ok(rows, meta);
@@ -207,68 +229,131 @@ public final class OpsApi {
         Auth auth = ctx.requireAuth();
         auth.require("attendance.read");
         Map<String, Object> station = auth.station(required(ctx));
+        String stationId = Db.str(station, "id");
         String date = Domain.requireDate(ctx.q("date"), "Date");
         List<Map<String, Object>> employees = new ArrayList<>();
-        for (Map<String, Object> user : Db.all("SELECT id, name, email, role_key FROM users WHERE tenant_id = ? AND status = 'ACTIVE' AND role_key IN ('OWNER','MANAGER','STAFF') ORDER BY name", auth.tenantId())) {
-            Map<String, Object> mark = Db.one("SELECT status, in_time, out_time FROM attendance_records WHERE user_id = ? AND attendance_date = ?", user.get("id"), date);
+        for (Map<String, Object> user : stationCrew(auth.tenantId(), stationId)) {
+            Map<String, Object> mark = Db.one(
+                    "SELECT status, in_time, out_time, station_id FROM attendance_records WHERE user_id = ? AND tenant_id = ? AND attendance_date = ?",
+                    user.get("id"), auth.tenantId(), date);
+            boolean forThisStation = mark != null && stationId.equals(Db.str(mark, "station_id"));
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("userId", user.get("id"));
             row.put("name", user.get("name"));
             row.put("email", user.get("email"));
             row.put("roleKey", user.get("role_key"));
-            row.put("status", mark == null ? null : mark.get("status"));
-            row.put("inTime", mark == null ? null : mark.get("in_time"));
-            row.put("outTime", mark == null ? null : mark.get("out_time"));
+            row.put("status", forThisStation && mark.get("status") != null ? Db.str(mark, "status").trim().toUpperCase() : null);
+            row.put("inTime", forThisStation ? mark.get("in_time") : null);
+            row.put("outTime", forThisStation ? mark.get("out_time") : null);
             employees.add(row);
         }
-        ctx.ok(Map.of("stationId", station.get("id"), "date", date, "employees", employees));
+        ctx.ok(Map.of("stationId", stationId, "date", date, "employees", employees));
     }
 
     private static void attendanceSummary(Web.Ctx ctx) {
         Auth auth = ctx.requireAuth();
         auth.require("attendance.read");
-        auth.station(required(ctx));
-        String month = ctx.q("month") == null ? Clock.todayIst().substring(0, 7) : ctx.q("month");
+        Map<String, Object> station = auth.station(required(ctx));
+        String stationId = Db.str(station, "id");
+        String month = (ctx.q("month") == null || ctx.q("month").isBlank()) ? Clock.todayIst().substring(0, 7) : ctx.q("month").trim();
+        if (!month.matches("\\d{4}-\\d{2}")) throw ApiException.unprocessable("month (YYYY-MM) is required");
         List<Map<String, Object>> employees = new ArrayList<>();
-        for (Map<String, Object> user : Db.all("SELECT id, name, role_key FROM users WHERE tenant_id = ? AND status = 'ACTIVE' ORDER BY name", auth.tenantId())) {
+        for (Map<String, Object> user : stationCrew(auth.tenantId(), stationId)) {
+            String uid = Db.str(user, "id");
+            double present = countStatus(uid, stationId, month, "PRESENT");
+            double absent = countStatus(uid, stationId, month, "ABSENT");
+            double halfDay = countStatus(uid, stationId, month, "HALF_DAY");
+            double weekOff = countStatus(uid, stationId, month, "WEEK_OFF");
+            double leave = countStatus(uid, stationId, month, "LEAVE");
+            double payableDays = present + (halfDay * 0.5) + weekOff;
             Map<String, Object> row = new LinkedHashMap<>();
-            row.put("userId", user.get("id"));
+            row.put("userId", uid);
             row.put("name", user.get("name"));
             row.put("roleKey", user.get("role_key"));
-            row.put("present", countStatus(Db.str(user, "id"), month, "PRESENT"));
-            row.put("absent", countStatus(Db.str(user, "id"), month, "ABSENT"));
-            row.put("halfDay", countStatus(Db.str(user, "id"), month, "HALF_DAY"));
-            row.put("weekOff", countStatus(Db.str(user, "id"), month, "WEEK_OFF"));
-            row.put("leave", countStatus(Db.str(user, "id"), month, "LEAVE"));
-            row.put("payableDays", countStatus(Db.str(user, "id"), month, "PRESENT") + countStatus(Db.str(user, "id"), month, "HALF_DAY") * 0.5);
+            row.put("present", present);
+            row.put("absent", absent);
+            row.put("halfDay", halfDay);
+            row.put("weekOff", weekOff);
+            row.put("leave", leave);
+            row.put("payableDays", payableDays);
             employees.add(row);
         }
-        ctx.ok(Map.of("month", month, "employees", employees));
+        ctx.ok(Map.of("stationId", stationId, "month", month, "employees", employees));
     }
 
     private static void markAttendance(Web.Ctx ctx) {
         Auth auth = ctx.requireAuth();
         auth.require("attendance.write");
-        Map<String, Object> station = auth.station(ctx.str("stationId"));
+        String stationId = requiredBody(ctx, "stationId");
         String date = Domain.requireDate(ctx.str("date"), "Date");
         Object entries = ctx.body().get("entries");
-        if (entries instanceof List<?> list) {
+        if (!(entries instanceof List<?> list)) {
+            throw ApiException.validation("entries", "entries array is required");
+        }
+        Set<String> validStatuses = Set.of("PRESENT", "ABSENT", "HALF_DAY", "LEAVE", "WEEK_OFF");
+        Db.tx(() -> {
+            Map<String, Object> station = auth.station(stationId);
+            Domain.assertDayOpen(stationId, date);
             for (Object item : list) {
                 Map<String, Object> entry = Json.object(item);
-                String userId = String.valueOf(entry.get("userId"));
-                String status = String.valueOf(entry.get("status"));
-                Map<String, Object> existing = Db.one("SELECT id FROM attendance_records WHERE user_id = ? AND attendance_date = ?", userId, date);
+                String userId = entry.get("userId") == null ? "" : String.valueOf(entry.get("userId")).trim();
+                String rawStatus = entry.get("status") == null ? "" : String.valueOf(entry.get("status")).trim().toUpperCase();
+                if (userId.isEmpty() || !validStatuses.contains(rawStatus)) {
+                    throw ApiException.validation("status", "Attendance status must be PRESENT, ABSENT, HALF_DAY, LEAVE, or WEEK_OFF");
+                }
+                Map<String, Object> emp = Db.one(
+                        "SELECT id, role_key FROM users WHERE id = ? AND tenant_id = ? AND status = 'ACTIVE'",
+                        userId, auth.tenantId());
+                if (emp == null) {
+                    throw ApiException.notFound("Employee not found in this organization");
+                }
+                boolean assigned = "OWNER".equals(Db.str(emp, "role_key"))
+                        || Db.one("SELECT id FROM user_station_access WHERE user_id = ? AND station_id = ?", userId, stationId) != null;
+                if (!assigned) {
+                    throw ApiException.unprocessable("Employee is not assigned to this station");
+                }
+                String now = Clock.nowIso();
+                Map<String, Object> existing = Db.one(
+                        "SELECT id FROM attendance_records WHERE user_id = ? AND attendance_date = ?",
+                        userId, date);
                 if (existing == null) {
                     Db.exec(
-                            "INSERT INTO attendance_records (id, tenant_id, station_id, user_id, attendance_date, status, in_time, out_time, marked_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                            Clock.newId("att"), auth.tenantId(), station.get("id"), userId, date, status, entry.get("inTime"), entry.get("outTime"), auth.userId, Clock.nowIso(), Clock.nowIso());
+                            """
+                            INSERT INTO attendance_records
+                              (id, tenant_id, station_id, user_id, attendance_date, status, in_time, out_time, marked_by, created_at, updated_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """,
+                            Clock.newId("att"), auth.tenantId(), station.get("id"), userId, date, rawStatus,
+                            entry.get("inTime"), entry.get("outTime"), auth.userId, now, now);
                 } else {
-                    Db.exec("UPDATE attendance_records SET status = ?, in_time = ?, out_time = ?, marked_by = ?, updated_at = ? WHERE id = ?",
-                            status, entry.get("inTime"), entry.get("outTime"), auth.userId, Clock.nowIso(), existing.get("id"));
+                    Db.exec(
+                            """
+                            UPDATE attendance_records
+                               SET station_id = ?, status = ?, in_time = ?, out_time = ?, marked_by = ?, updated_at = ?
+                             WHERE id = ?
+                            """,
+                            station.get("id"), rawStatus, entry.get("inTime"), entry.get("outTime"), auth.userId, now, existing.get("id"));
                 }
             }
-        }
+            Auth.audit(auth, "ATTENDANCE_MARKED", "Attendance", stationId + ":" + date, stationId,
+                    "Marked attendance for " + list.size() + " staff on " + date);
+            return null;
+        });
         ctx.ok(Map.of("saved", true));
+    }
+
+    private static List<Map<String, Object>> stationCrew(String tenantId, String stationId) {
+        return Db.all(
+                """
+                SELECT u.id, u.name, u.email, u.role_key
+                  FROM users u
+                 WHERE u.tenant_id = ?
+                   AND u.status = 'ACTIVE'
+                   AND u.role_key IN ('OWNER','MANAGER','STAFF')
+                   AND (u.role_key = 'OWNER'
+                        OR EXISTS (SELECT 1 FROM user_station_access usa WHERE usa.user_id = u.id AND usa.station_id = ?))
+                 ORDER BY u.name
+                """, tenantId, stationId);
     }
 
     private static void density(Web.Ctx ctx) {
@@ -277,50 +362,116 @@ public final class OpsApi {
         Map<String, Object> station = auth.station(required(ctx));
         int page = Domain.pageOf(ctx);
         int size = Domain.pageSize(ctx);
-        String where = "d.station_id = ?";
-        List<Object> params = new ArrayList<>(List.of(station.get("id")));
-        if (ctx.q("from") != null) { where += " AND d.business_date >= ?"; params.add(ctx.q("from")); }
-        if (ctx.q("to") != null) { where += " AND d.business_date <= ?"; params.add(ctx.q("to")); }
+        String where = "d.station_id = ? AND d.tenant_id = ?";
+        List<Object> params = new ArrayList<>(List.of(station.get("id"), auth.tenantId()));
+        if (ctx.q("from") != null && !ctx.q("from").isBlank()) { where += " AND d.business_date >= ?"; params.add(Domain.requireDate(ctx.q("from"), "from")); }
+        if (ctx.q("to") != null && !ctx.q("to").isBlank()) { where += " AND d.business_date <= ?"; params.add(Domain.requireDate(ctx.q("to"), "to")); }
         long total = Db.count("SELECT COUNT(*) AS count FROM density_checks d WHERE " + where, params.toArray());
         params.add(size);
         params.add((page - 1) * size);
-        ctx.ok(Json.shapeAll(Db.all(
+        List<Map<String, Object>> raw = Db.all(
                 """
-                SELECT d.*, t.code AS tank_code, t.name AS tank_name, p.name AS product_name, p.color AS product_color, u.name AS checked_by_name
+                SELECT d.*, t.code AS tank_code, t.name AS tank_name,
+                       p.name AS product_name, p.color AS product_color, p.category AS product_category,
+                       u.name AS checked_by_name
                   FROM density_checks d
                   JOIN tanks t ON t.id = d.tank_id
                   JOIN fuel_products p ON p.id = d.product_id
                   LEFT JOIN users u ON u.id = d.checked_by
                  WHERE %s ORDER BY d.business_date DESC, d.checked_at DESC LIMIT ? OFFSET ?
-                """.formatted(where), params.toArray())), Domain.page(total, page, size));
+                """.formatted(where), params.toArray());
+        List<Map<String, Object>> shaped = new ArrayList<>(raw.size());
+        for (Map<String, Object> row : raw) {
+            Map<String, Object> item = Json.shape(row);
+            item.put("specificationUsed", Domain.densitySpecificationLabel(Db.str(row, "product_category")));
+            shaped.add(item);
+        }
+        ctx.ok(shaped, Domain.page(total, page, size));
     }
 
     private static void addDensity(Web.Ctx ctx) {
         Auth auth = ctx.requireAuth();
         auth.require("density.write");
-        Map<String, Object> tank = Db.one("SELECT * FROM tanks WHERE id = ?", requiredBody(ctx, "tankId"));
-        if (tank == null) throw ApiException.notFound("Tank not found");
-        auth.station(Db.str(tank, "station_id"));
-        String id = Clock.newId("dns");
-        Db.exec(
-                """
-                INSERT INTO density_checks
-                  (id, tenant_id, station_id, tank_id, product_id, business_date, checked_at, observed_density, observed_temp_c, density_at_15c, spec_min, spec_max, within_spec, source, checked_by, note, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                id, auth.tenantId(), tank.get("station_id"), tank.get("id"), tank.get("product_id"),
-                ctx.str("businessDate") == null ? Clock.todayIst() : ctx.str("businessDate"), Clock.nowIso(),
-                requiredBody(ctx, "observedDensity"), ctx.str("observedTempC") == null ? "15" : ctx.str("observedTempC"),
-                ctx.str("densityAt15c") == null ? requiredBody(ctx, "observedDensity") : ctx.str("densityAt15c"),
-                ctx.str("specMin"), ctx.str("specMax"), ctx.body().get("withinSpec") instanceof Boolean flag && !flag ? 0 : 1,
-                ctx.str("source") == null ? "NOZZLE" : ctx.str("source"), auth.userId, ctx.str("note"), Clock.nowIso());
-        ctx.created(Json.shape(Db.one("SELECT * FROM density_checks WHERE id = ?", id)));
+        String tankId = requiredBody(ctx, "tankId");
+        String businessDate = ctx.str("businessDate") == null || ctx.str("businessDate").isBlank()
+                ? Clock.todayIst()
+                : Domain.requireDate(ctx.str("businessDate"), "Business date");
+        String obsRaw = requiredBody(ctx, "observedDensity");
+        String tempRaw = (ctx.str("observedTempC") == null || ctx.str("observedTempC").isBlank()) ? "15.0" : ctx.str("observedTempC");
+        String source = (ctx.str("source") == null || ctx.str("source").isBlank()) ? "NOZZLE" : ctx.str("source").trim().toUpperCase();
+        if (!Set.of("NOZZLE", "TANK", "TT_SAMPLE").contains(source)) {
+            throw ApiException.validation("source", "source must be NOZZLE, TANK, or TT_SAMPLE");
+        }
+
+        Map<String, Object> created = Db.tx(() -> {
+            Map<String, Object> tank = Db.one(
+                    """
+                    SELECT t.*, p.category AS product_category, p.name AS product_name, p.color AS product_color
+                      FROM tanks t
+                      JOIN stations s ON s.id = t.station_id
+                      JOIN fuel_products p ON p.id = t.product_id
+                     WHERE t.id = ? AND s.tenant_id = ?
+                    """, tankId, auth.tenantId());
+            if (tank == null) throw ApiException.notFound("Tank not found");
+            String stationId = Db.str(tank, "station_id");
+            if (ctx.str("stationId") != null && !ctx.str("stationId").isBlank() && !stationId.equals(ctx.str("stationId"))) {
+                throw ApiException.unprocessable("Selected tank does not belong to this station");
+            }
+            auth.station(stationId);
+            Domain.assertDayOpen(stationId, businessDate);
+
+            Domain.DensityEvaluation eval = Domain.evaluateDensityAt15c(Db.str(tank, "product_category"), obsRaw, tempRaw);
+            String id = Clock.newId("dns");
+            String now = Clock.nowIso();
+            Db.exec(
+                    """
+                    INSERT INTO density_checks
+                      (id, tenant_id, station_id, tank_id, product_id, business_date, checked_at,
+                       observed_density, observed_temp_c, density_at_15c, spec_min, spec_max, within_spec,
+                       source, checked_by, note, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    id, auth.tenantId(), stationId, tankId, tank.get("product_id"),
+                    businessDate, now,
+                    eval.observedDensity(), eval.observedTempC(), eval.densityAt15c(),
+                    eval.specMin(), eval.specMax(), eval.withinSpec(),
+                    source, auth.userId, emptyToNull(ctx.str("note")), now);
+            Auth.audit(auth, "DENSITY_CHECK_RECORDED", "DensityCheck", id, stationId,
+                    tank.get("code") + ": obs=" + eval.observedDensity() + " kg/m³ @ " + eval.observedTempC()
+                            + "°C -> @15°C=" + eval.densityAt15c() + " kg/m³ (" + (eval.withinSpec() == 1 ? "IN_SPEC" : "OUT_OF_SPEC")
+                            + " · " + eval.specificationUsed() + ")");
+            Map<String, Object> row = Db.one(
+                    """
+                    SELECT d.*, t.code AS tank_code, t.name AS tank_name,
+                           p.name AS product_name, p.color AS product_color, u.name AS checked_by_name
+                      FROM density_checks d
+                      JOIN tanks t ON t.id = d.tank_id
+                      JOIN fuel_products p ON p.id = d.product_id
+                      LEFT JOIN users u ON u.id = d.checked_by
+                     WHERE d.id = ?
+                    """, id);
+            Map<String, Object> shaped = Json.shape(row);
+            shaped.put("specificationUsed", eval.specificationUsed());
+            return shaped;
+        });
+        ctx.created(created);
     }
 
     private static void deleteDensity(Web.Ctx ctx) {
         Auth auth = ctx.requireAuth();
         auth.require("density.write");
-        Db.exec("DELETE FROM density_checks WHERE id = ? AND tenant_id = ?", ctx.p("id"), auth.tenantId());
+        String id = ctx.p("id");
+        Db.tx(() -> {
+            Map<String, Object> existing = Db.one("SELECT * FROM density_checks WHERE id = ? AND tenant_id = ?", id, auth.tenantId());
+            if (existing == null) throw ApiException.notFound("Density check not found");
+            String stationId = Db.str(existing, "station_id");
+            auth.station(stationId);
+            Domain.assertDayOpen(stationId, Db.str(existing, "business_date").substring(0, 10));
+            Db.exec("DELETE FROM density_checks WHERE id = ?", id);
+            Auth.audit(auth, "DENSITY_CHECK_DELETED", "DensityCheck", id, stationId,
+                    "Deleted density check for " + existing.get("business_date"));
+            return null;
+        });
         ctx.ok(Map.of("deleted", true));
     }
 
@@ -391,12 +542,12 @@ public final class OpsApi {
     private static void lubricants(Web.Ctx ctx) {
         Auth auth = ctx.requireAuth();
         auth.require("lubricants.read");
-        if (ctx.q("stationId") != null) auth.station(ctx.q("stationId"));
+        List<String> stationIds = resolveLubeStationIds(auth, ctx);
         List<Map<String, Object>> out = new ArrayList<>();
         for (Map<String, Object> row : Db.all("SELECT * FROM lube_products WHERE tenant_id = ? ORDER BY name", auth.tenantId())) {
             Map<String, Object> item = Json.shape(row);
             item.put("hsn", row.get("hsn_code"));
-            item.put("stockQty", Money.litres(lubeStock(Db.str(row, "id"), ctx.q("stationId"))));
+            item.put("stockQty", Money.litres(lubeStock(auth.tenantId(), Db.str(row, "id"), stationIds)));
             out.add(item);
         }
         ctx.ok(out);
@@ -405,25 +556,72 @@ public final class OpsApi {
     private static void addLubricant(Web.Ctx ctx) {
         Auth auth = ctx.requireAuth();
         auth.require("lubricants.write");
+        String code = requiredBody(ctx, "code").trim();
+        String name = requiredBody(ctx, "name").trim();
+        BigDecimal gstRate = parseNonNegative(ctx.str("gstRatePct") == null || ctx.str("gstRatePct").isBlank() ? "18" : ctx.str("gstRatePct"), "gstRatePct");
+        BigDecimal purchaseRate = parseNonNegative(ctx.str("purchaseRate") == null || ctx.str("purchaseRate").isBlank() ? "0" : ctx.str("purchaseRate"), "purchaseRate");
+        BigDecimal saleRate = parseNonNegative(ctx.str("saleRate") == null || ctx.str("saleRate").isBlank() ? "0" : ctx.str("saleRate"), "saleRate");
+        if (Db.one("SELECT id FROM lube_products WHERE tenant_id = ? AND code = ?", auth.tenantId(), code) != null) {
+            throw ApiException.conflict("A lubricant SKU with code " + code + " already exists");
+        }
         String id = Clock.newId("lub");
         String now = Clock.nowIso();
         Db.exec(
                 "INSERT INTO lube_products (id, tenant_id, code, name, brand, pack_size, hsn_code, gst_rate_pct, purchase_rate, sale_rate, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)",
-                id, auth.tenantId(), requiredBody(ctx, "code"), requiredBody(ctx, "name"), ctx.str("brand"),
-                ctx.str("packSize") == null ? "1 L" : ctx.str("packSize"), ctx.str("hsn"),
-                ctx.str("gstRatePct") == null ? "18" : ctx.str("gstRatePct"),
-                Money.money(ctx.str("purchaseRate") == null ? "0" : ctx.str("purchaseRate")),
-                Money.money(ctx.str("saleRate") == null ? "0" : ctx.str("saleRate")), now, now);
-        ctx.created(Json.shape(Db.one("SELECT * FROM lube_products WHERE id = ?", id)));
+                id, auth.tenantId(), code, name, emptyToNull(ctx.str("brand")),
+                ctx.str("packSize") == null || ctx.str("packSize").isBlank() ? "1 L" : ctx.str("packSize").trim(),
+                emptyToNull(ctx.str("hsn") != null ? ctx.str("hsn") : ctx.str("hsnCode")),
+                gstRate.stripTrailingZeros().toPlainString(),
+                Money.money(purchaseRate),
+                Money.money(saleRate), now, now);
+        Map<String, Object> row = Db.one("SELECT * FROM lube_products WHERE id = ?", id);
+        Map<String, Object> shaped = Json.shape(row);
+        shaped.put("hsn", row.get("hsn_code"));
+        shaped.put("stockQty", "0.000");
+        ctx.created(shaped);
     }
 
     private static void patchLubricant(Web.Ctx ctx) {
         Auth auth = ctx.requireAuth();
         auth.require("lubricants.write");
-        Db.exec("UPDATE lube_products SET name = COALESCE(?, name), sale_rate = COALESCE(?, sale_rate), is_active = COALESCE(?, is_active), updated_at = ? WHERE id = ? AND tenant_id = ?",
-                ctx.str("name"), ctx.str("saleRate"), ctx.body().containsKey("isActive") ? (Boolean.TRUE.equals(ctx.body().get("isActive")) || "1".equals(ctx.str("isActive")) ? 1 : 0) : null,
-                Clock.nowIso(), ctx.p("id"), auth.tenantId());
-        ctx.ok(Json.shape(Db.one("SELECT * FROM lube_products WHERE id = ?", ctx.p("id"))));
+        List<String> stationIds = resolveLubeStationIds(auth, ctx);
+        String id = ctx.p("id");
+        Map<String, Object> existing = Db.one("SELECT * FROM lube_products WHERE id = ? AND tenant_id = ?", id, auth.tenantId());
+        if (existing == null) throw ApiException.notFound("Lubricant SKU not found");
+
+        String name = (ctx.str("name") != null && !ctx.str("name").isBlank()) ? ctx.str("name").trim() : Db.str(existing, "name");
+        String brand = ctx.body().containsKey("brand") ? emptyToNull(ctx.str("brand")) : Db.str(existing, "brand");
+        String packSize = (ctx.str("packSize") != null && !ctx.str("packSize").isBlank()) ? ctx.str("packSize").trim() : Db.str(existing, "pack_size");
+        String hsn = ctx.body().containsKey("hsn")
+                ? emptyToNull(ctx.str("hsn"))
+                : (ctx.body().containsKey("hsnCode") ? emptyToNull(ctx.str("hsnCode")) : Db.str(existing, "hsn_code"));
+        String gstRate = (ctx.str("gstRatePct") != null && !ctx.str("gstRatePct").isBlank())
+                ? parseNonNegative(ctx.str("gstRatePct"), "gstRatePct").stripTrailingZeros().toPlainString()
+                : Db.str(existing, "gst_rate_pct");
+        String purchaseRate = (ctx.str("purchaseRate") != null && !ctx.str("purchaseRate").isBlank())
+                ? Money.money(parseNonNegative(ctx.str("purchaseRate"), "purchaseRate"))
+                : Db.str(existing, "purchase_rate");
+        String saleRate = (ctx.str("saleRate") != null && !ctx.str("saleRate").isBlank())
+                ? Money.money(parseNonNegative(ctx.str("saleRate"), "saleRate"))
+                : Db.str(existing, "sale_rate");
+        int isActive = ctx.body().containsKey("isActive")
+                ? (Boolean.TRUE.equals(ctx.body().get("isActive")) || "1".equals(ctx.str("isActive")) || "true".equalsIgnoreCase(ctx.str("isActive")) ? 1 : 0)
+                : (int) Db.num(existing, "is_active");
+
+        Db.exec(
+                """
+                UPDATE lube_products
+                   SET name = ?, brand = ?, pack_size = ?, hsn_code = ?, gst_rate_pct = ?,
+                       purchase_rate = ?, sale_rate = ?, is_active = ?, updated_at = ?
+                 WHERE id = ? AND tenant_id = ?
+                """,
+                name, brand, packSize, hsn, gstRate, purchaseRate, saleRate, isActive,
+                Clock.nowIso(), id, auth.tenantId());
+        Map<String, Object> updated = Db.one("SELECT * FROM lube_products WHERE id = ?", id);
+        Map<String, Object> shaped = Json.shape(updated);
+        shaped.put("hsn", updated.get("hsn_code"));
+        shaped.put("stockQty", Money.litres(lubeStock(auth.tenantId(), id, stationIds)));
+        ctx.ok(shaped);
     }
 
     private static void lubeMovements(Web.Ctx ctx) {
@@ -436,14 +634,20 @@ public final class OpsApi {
         List<Map<String, Object>> rows = new ArrayList<>();
         for (Map<String, Object> row : Db.all(
                 """
-                SELECT m.*, p.code AS product_code, p.name AS product_name, p.pack_size, c.name AS customer_name
+                SELECT m.*, p.code AS product_code, p.name AS product_name, p.pack_size, p.gst_rate_pct, c.name AS customer_name
                   FROM lube_movements m
                   JOIN lube_products p ON p.id = m.product_id
                   LEFT JOIN customers c ON c.id = m.customer_id
-                 WHERE m.station_id = ? ORDER BY m.occurred_at DESC LIMIT ? OFFSET ?
+                 WHERE m.station_id = ? ORDER BY m.occurred_at DESC, m.created_at DESC LIMIT ? OFFSET ?
                 """, station.get("id"), size, (page - 1) * size)) {
             Map<String, Object> item = Json.shape(row);
-            item.put("gstAmount", "0.00");
+            String type = Db.str(row, "type");
+            BigDecimal gross = Money.d(row.get("amount")).abs();
+            String gstAmt = ("SALE".equals(type) || "PURCHASE".equals(type))
+                    ? inclusiveGstAmount(gross, Money.d(row.get("gst_rate_pct")))
+                    : "0.00";
+            item.put("amount", Money.money(gross));
+            item.put("gstAmount", gstAmt);
             rows.add(item);
         }
         ctx.ok(rows, Domain.page(total, page, size));
@@ -452,20 +656,148 @@ public final class OpsApi {
     private static void addLubeMovement(Web.Ctx ctx) {
         Auth auth = ctx.requireAuth();
         auth.require("lubricants.write");
-        Map<String, Object> station = auth.station(requiredBody(ctx, "stationId"));
-        String id = Clock.newId("lbm");
-        String qty = requiredBody(ctx, "quantity");
-        if ("SALE".equals(ctx.str("type")) && !qty.startsWith("-")) qty = "-" + qty;
-        Db.exec(
-                """
-                INSERT INTO lube_movements
-                  (id, tenant_id, station_id, product_id, type, quantity, rate, amount, payment_mode, customer_id, vehicle_number, note, occurred_at, created_by, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                id, auth.tenantId(), station.get("id"), requiredBody(ctx, "productId"), ctx.str("type") == null ? "SALE" : ctx.str("type"),
-                qty, Money.money(ctx.str("rate") == null ? "0" : ctx.str("rate")), Money.money(ctx.str("amount") == null ? "0" : ctx.str("amount")),
-                ctx.str("paymentMode"), emptyToNull(ctx.str("customerId")), ctx.str("vehicleNumber"), ctx.str("note"), Clock.nowIso(), auth.userId, Clock.nowIso());
-        ctx.created(Map.of("id", id));
+        String stationId = requiredBody(ctx, "stationId");
+        String productId = requiredBody(ctx, "productId");
+        String type = (ctx.str("type") == null || ctx.str("type").isBlank()) ? "SALE" : ctx.str("type").trim().toUpperCase();
+        if (!Set.of("SALE", "PURCHASE", "ADJUSTMENT", "OPENING").contains(type)) {
+            throw ApiException.validation("type", "Unsupported movement type: " + type);
+        }
+        final BigDecimal rawQty;
+        try {
+            rawQty = new BigDecimal(requiredBody(ctx, "quantity").trim());
+        } catch (NumberFormatException ex) {
+            throw ApiException.validation("quantity", "quantity must be a valid number");
+        }
+        if (rawQty.signum() == 0) {
+            throw ApiException.validation("quantity", "quantity cannot be zero");
+        }
+        if (!"ADJUSTMENT".equals(type) && rawQty.signum() < 0) {
+            throw ApiException.validation("quantity", "quantity must be positive for " + type);
+        }
+
+        Map<String, Object> created = Db.tx(() -> {
+            Map<String, Object> station = auth.station(stationId);
+            Map<String, Object> product = Db.one("SELECT * FROM lube_products WHERE id = ? AND tenant_id = ?", productId, auth.tenantId());
+            if (product == null) throw ApiException.notFound("Lubricant SKU not found");
+            if ("SALE".equals(type) && Db.num(product, "is_active") == 0) {
+                throw ApiException.unprocessable("Inactive lubricant SKU cannot be sold");
+            }
+            String occurredAt = Clock.nowIso();
+            String businessDate = Clock.businessDateOf(occurredAt);
+            Domain.assertDayOpen(stationId, businessDate);
+
+            BigDecimal absQty = rawQty.abs();
+            BigDecimal currentStock = lubeStock(auth.tenantId(), productId, List.of(stationId));
+            if ("SALE".equals(type) && currentStock.compareTo(absQty) < 0) {
+                throw ApiException.unprocessable("Insufficient lubricant stock (available: " + currentStock.stripTrailingZeros().toPlainString() + ")");
+            }
+            if ("ADJUSTMENT".equals(type) && currentStock.add(rawQty).signum() < 0) {
+                throw ApiException.unprocessable("Adjustment would drive lubricant stock below zero");
+            }
+            BigDecimal signedQty = "SALE".equals(type) ? absQty.negate() : ("ADJUSTMENT".equals(type) ? rawQty : absQty);
+
+            BigDecimal defaultRate = Money.d("SALE".equals(type) ? product.get("sale_rate") : product.get("purchase_rate"));
+            BigDecimal rate = (ctx.str("rate") != null && !ctx.str("rate").isBlank())
+                    ? parseNonNegative(ctx.str("rate"), "rate")
+                    : defaultRate;
+            BigDecimal amount = (ctx.str("amount") != null && !ctx.str("amount").isBlank())
+                    ? parseNonNegative(ctx.str("amount"), "amount")
+                    : ("ADJUSTMENT".equals(type) ? BigDecimal.ZERO : absQty.multiply(rate));
+
+            String paymentMode = "SALE".equals(type)
+                    ? ((ctx.str("paymentMode") == null || ctx.str("paymentMode").isBlank()) ? "CASH" : ctx.str("paymentMode").trim().toUpperCase())
+                    : emptyToNull(ctx.str("paymentMode"));
+            String customerId = emptyToNull(ctx.str("customerId"));
+            String supplierId = emptyToNull(ctx.str("supplierId"));
+            if ("SALE".equals(type) && "CREDIT".equals(paymentMode)) {
+                if (customerId == null) {
+                    throw ApiException.validation("customerId", "Customer is required for credit lubricant sales");
+                }
+            }
+            Map<String, Object> customer = null;
+            if (customerId != null) {
+                customer = Db.one("SELECT * FROM customers WHERE id = ? AND tenant_id = ?", customerId, auth.tenantId());
+                if (customer == null) throw ApiException.notFound("Customer not found");
+            }
+            if (supplierId != null) {
+                if (Db.one("SELECT id FROM suppliers WHERE id = ? AND tenant_id = ?", supplierId, auth.tenantId()) == null) {
+                    throw ApiException.notFound("Supplier not found");
+                }
+            }
+
+            String id = Clock.newId("lum");
+            String qtyStr = signedQty.stripTrailingZeros().toPlainString();
+            String rateStr = Money.money(rate);
+            String amtStr = Money.money(amount);
+            String vehicleNo = emptyToNull(ctx.str("vehicleNumber"));
+            String note = emptyToNull(ctx.str("note"));
+
+            Db.exec(
+                    """
+                    INSERT INTO lube_movements
+                      (id, tenant_id, station_id, product_id, type, quantity, rate, amount, payment_mode,
+                       customer_id, supplier_id, reference, vehicle_number, note, occurred_at, created_by, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    id, auth.tenantId(), station.get("id"), productId, type, qtyStr, rateStr, amtStr,
+                    paymentMode, customerId, supplierId, emptyToNull(ctx.str("reference")),
+                    vehicleNo, note, occurredAt, auth.userId, occurredAt);
+
+            if ("SALE".equals(type) && "CREDIT".equals(paymentMode) && customer != null) {
+                BigDecimal curBal = Money.d(customer.get("balance"));
+                BigDecimal limit = Money.d(customer.get("credit_limit"));
+                if (limit.signum() > 0 && curBal.add(amount).compareTo(limit) > 0) {
+                    throw ApiException.unprocessable("Credit limit exceeded for " + customer.get("name"));
+                }
+                int creditDays = (int) Db.num(customer, "credit_days");
+                String dueDate = creditDays > 0 ? Clock.addDays(businessDate, creditDays) : null;
+                long seq = Db.count("SELECT COUNT(*) AS count FROM credit_entries WHERE station_id = ? AND type = 'CREDIT_SALE'", stationId) + 1;
+                String slip = station.get("code") + "-LUB-" + businessDate.replace("-", "") + "-" + String.format("%03d", seq);
+                String entryNote = product.get("name") + " (" + product.get("pack_size") + ") × " + absQty.stripTrailingZeros().toPlainString()
+                        + (note != null ? " · " + note : "");
+                Db.exec(
+                        """
+                        INSERT INTO credit_entries
+                          (id, tenant_id, station_id, customer_id, type, amount, slip_number, vehicle_number,
+                           reference, occurred_at, due_date, note, status, created_by, created_at)
+                        VALUES (?, ?, ?, ?, 'CREDIT_SALE', ?, ?, ?, ?, ?, ?, ?, 'POSTED', ?, ?)
+                        """,
+                        Clock.newId("cre"), auth.tenantId(), stationId, customerId,
+                        amtStr, slip, vehicleNo, "LUBE:" + id, occurredAt, dueDate, entryNote, auth.userId, occurredAt);
+                Db.exec("UPDATE customers SET balance = ?, updated_at = ? WHERE id = ?",
+                        Money.money(curBal.add(amount)), occurredAt, customerId);
+            }
+
+            String gstAmt = ("SALE".equals(type) || "PURCHASE".equals(type))
+                    ? inclusiveGstAmount(amount, Money.d(product.get("gst_rate_pct")))
+                    : "0.00";
+            Auth.audit(auth, "LUBE_" + type, "LubeMovement", id, stationId,
+                    product.get("code") + " " + qtyStr + " @ ₹" + rateStr + " = ₹" + amtStr);
+            return Web.map("id", id, "type", type, "quantity", qtyStr, "rate", rateStr, "amount", amtStr, "gstAmount", gstAmt);
+        });
+        ctx.created(created);
+    }
+
+    static String inclusiveGstAmount(BigDecimal grossInclusive, BigDecimal gstRatePct) {
+        if (grossInclusive == null || grossInclusive.signum() <= 0 || gstRatePct == null || gstRatePct.signum() <= 0) {
+            return "0.00";
+        }
+        BigDecimal divisor = new BigDecimal("100").add(gstRatePct);
+        BigDecimal gst = grossInclusive.multiply(gstRatePct).divide(divisor, 2, RoundingMode.HALF_UP);
+        return Money.money(gst);
+    }
+
+    private static BigDecimal parseNonNegative(String raw, String field) {
+        final BigDecimal val;
+        try {
+            val = new BigDecimal(raw.trim());
+        } catch (NumberFormatException ex) {
+            throw ApiException.validation(field, field + " must be a valid number");
+        }
+        if (val.signum() < 0) {
+            throw ApiException.validation(field, field + " cannot be negative");
+        }
+        return val;
     }
 
     private static boolean isDeviceOnline(Map<String, Object> row) {
@@ -623,20 +955,34 @@ public final class OpsApi {
     private static void manualReading(Web.Ctx ctx) {
         Auth auth = ctx.requireAuth();
         auth.require("readings.manual");
-        Map<String, Object> nozzle = Db.one("SELECT * FROM nozzles WHERE id = ?", requiredBody(ctx, "nozzleId"));
-        if (nozzle == null) throw ApiException.notFound("Nozzle not found");
-        auth.station(Db.str(nozzle, "station_id"));
-        String id = Clock.newId("rdg");
-        Db.exec(
-                """
-                INSERT INTO meter_readings
-                  (id, tenant_id, station_id, nozzle_id, reading_value, unit, quality, source, reading_at, sequence, is_countable, is_simulated, note, created_by, created_at)
-                VALUES (?, ?, ?, ?, ?, 'L', 'VALID', 'MANUAL', ?, 0, 1, 0, ?, ?, ?)
-                """,
-                id, auth.tenantId(), nozzle.get("station_id"), nozzle.get("id"), Money.rate(requiredBody(ctx, "readingValue")),
-                Clock.nowIso(), ctx.str("note"), auth.userId, Clock.nowIso());
-        Auth.audit(auth, "MANUAL_READING", "MeterReading", id, Db.str(nozzle, "station_id"), "Manual totalizer reading");
-        ctx.created(Json.shape(Db.one("SELECT * FROM meter_readings WHERE id = ?", id)));
+        String nozzleId = requiredBody(ctx, "nozzleId");
+        String readingVal = Money.rate(requiredBody(ctx, "readingValue"));
+        Map<String, Object> created = Db.tx(() -> {
+            Map<String, Object> nozzle = Db.one(
+                    "SELECT n.* FROM nozzles n JOIN stations s ON s.id = n.station_id WHERE n.id = ? AND s.tenant_id = ?",
+                    nozzleId, auth.tenantId());
+            if (nozzle == null) throw ApiException.notFound("Nozzle not found");
+            String stationId = Db.str(nozzle, "station_id");
+            auth.station(stationId);
+            String rawAt = ctx.str("readingAt");
+            String readingAt = (rawAt == null || rawAt.isBlank())
+                    ? Clock.nowIso()
+                    : (Clock.isIsoDate(rawAt.trim()) ? Clock.istDayStart(rawAt.trim()) : rawAt.trim());
+            Domain.assertDayOpen(stationId, Clock.businessDateOf(readingAt));
+            String id = Clock.newId("rdg");
+            String now = Clock.nowIso();
+            Db.exec(
+                    """
+                    INSERT INTO meter_readings
+                      (id, tenant_id, station_id, nozzle_id, reading_value, unit, quality, source, reading_at, sequence, is_countable, is_simulated, note, created_by, created_at)
+                    VALUES (?, ?, ?, ?, ?, 'L', 'VALID', 'MANUAL', ?, 0, 1, 0, ?, ?, ?)
+                    """,
+                    id, auth.tenantId(), stationId, nozzle.get("id"), readingVal,
+                    readingAt, ctx.str("note"), auth.userId, now);
+            Auth.audit(auth, "MANUAL_READING", "MeterReading", id, stationId, "Manual totalizer reading");
+            return Json.shape(Db.one("SELECT * FROM meter_readings WHERE id = ?", id));
+        });
+        ctx.created(created);
     }
 
     private static void simulate(Web.Ctx ctx) {
@@ -1055,17 +1401,46 @@ public final class OpsApi {
         if (!auth.superAdmin && !auth.can("platform.manage")) throw ApiException.forbidden();
     }
 
-    private static BigDecimal lubeStock(String productId, String stationId) {
+    private static List<String> resolveLubeStationIds(Auth auth, Web.Ctx ctx) {
+        String stationParam = ctx.q("stationId");
+        if ((stationParam == null || stationParam.isBlank()) && ctx.body != null && ctx.body().containsKey("stationId")) {
+            stationParam = ctx.str("stationId");
+        }
+        if (stationParam != null && !stationParam.isBlank() && !"all".equalsIgnoreCase(stationParam)) {
+            auth.station(stationParam.trim());
+            return List.of(stationParam.trim());
+        }
+        if (auth.allStations) {
+            return null;
+        }
+        return new ArrayList<>(auth.stationIds);
+    }
+
+    private static BigDecimal lubeStock(String tenantId, String productId, List<String> stationIds) {
         BigDecimal total = BigDecimal.ZERO;
-        List<Map<String, Object>> rows = stationId == null
-                ? Db.all("SELECT quantity FROM lube_movements WHERE product_id = ?", productId)
-                : Db.all("SELECT quantity FROM lube_movements WHERE product_id = ? AND station_id = ?", productId, stationId);
+        final List<Map<String, Object>> rows;
+        if (stationIds == null) {
+            rows = Db.all("SELECT quantity FROM lube_movements WHERE tenant_id = ? AND product_id = ?", tenantId, productId);
+        } else if (stationIds.isEmpty()) {
+            return BigDecimal.ZERO;
+        } else {
+            String inSql = String.join(",", Collections.nCopies(stationIds.size(), "?"));
+            List<Object> params = new ArrayList<>(2 + stationIds.size());
+            params.add(tenantId);
+            params.add(productId);
+            params.addAll(stationIds);
+            rows = Db.all(
+                    "SELECT quantity FROM lube_movements WHERE tenant_id = ? AND product_id = ? AND station_id IN (" + inSql + ")",
+                    params.toArray());
+        }
         for (Map<String, Object> row : rows) total = total.add(Money.d(row.get("quantity")));
         return total;
     }
 
-    private static double countStatus(String userId, String month, String status) {
-        return Db.count("SELECT COUNT(*) AS count FROM attendance_records WHERE user_id = ? AND attendance_date LIKE ? AND status = ?", userId, month + "%", status);
+    private static double countStatus(String userId, String stationId, String month, String status) {
+        return Db.count(
+                "SELECT COUNT(*) AS count FROM attendance_records WHERE user_id = ? AND station_id = ? AND attendance_date LIKE ? AND UPPER(status) = ?",
+                userId, stationId, month + "%", status);
     }
 
     private static Map<String, String> defaults() {

@@ -71,10 +71,11 @@ const empty = {
 };
 
 export default function Suppliers() {
-  const { can } = useAuth();
+  const { can, me } = useAuth();
   const { stationId } = useStations();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const isOwner = me?.user?.roleKey === 'OWNER';
 
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -102,7 +103,7 @@ export default function Suppliers() {
   };
 
   const createMutation = useMutation({
-    mutationFn: () => apiPost('/catalog/suppliers', form),
+    mutationFn: () => apiPost('/catalog/suppliers', isOwner ? form : { ...form, openingBalance: '0' }),
     onSuccess: () => {
       toast('Supplier created');
       setCreateOpen(false);
@@ -149,7 +150,12 @@ export default function Suppliers() {
 
       <div className="grid gap-3 sm:grid-cols-3">
         <StatCard label="Suppliers" value={meta.total} hint="Active fuel and service suppliers" icon={<Truck className="h-4 w-4" />} />
-        <StatCard label="Opening balances" value={formatINR(rows.reduce((a, s) => a + Number(s.openingBalance), 0), true)} hint="Carried forward payables" icon={<BookOpen className="h-4 w-4" />} />
+        <StatCard
+          label="Opening balances"
+          value={formatINR(meta.openingBalanceTotal ?? rows.reduce((a, s) => a + Number(s.openingBalance), 0), true)}
+          hint={isOwner ? 'Carried forward payables' : 'Station-scoped (tenant opening restricted)'}
+          icon={<BookOpen className="h-4 w-4" />}
+        />
         <StatCard label="Payment control" value="Ledger-based" hint="Payouts are recorded separately from purchases" icon={<Banknote className="h-4 w-4" />} />
       </div>
 
@@ -217,7 +223,9 @@ export default function Suppliers() {
           <Field label="Phone"><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
           <Field label="Email"><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
           <Field label="Credit days"><Input type="number" value={form.creditDays} onChange={(e) => setForm({ ...form, creditDays: Number(e.target.value) })} /></Field>
-          <Field label="Opening balance (INR)"><Input inputMode="decimal" value={form.openingBalance} onChange={(e) => setForm({ ...form, openingBalance: e.target.value })} /></Field>
+          {isOwner && (
+            <Field label="Opening balance (INR)"><Input inputMode="decimal" value={form.openingBalance} onChange={(e) => setForm({ ...form, openingBalance: e.target.value })} /></Field>
+          )}
           <Field label="Address" className="sm:col-span-2"><Textarea value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></Field>
         </div>
       </Modal>
@@ -254,7 +262,7 @@ export default function Suppliers() {
         open={Boolean(ledgerSupplier)}
         onClose={() => setLedgerSupplier(null)}
         title={ledgerSupplier ? `${ledgerSupplier.name} · supplier ledger` : 'Supplier ledger'}
-        description={ledger.data ? `Closing payable ${formatINR(ledger.data.closingBalance)}` : undefined}
+        description={ledger.data ? `Opening ${formatINR(ledger.data.openingBalance)} · Closing payable ${formatINR(ledger.data.closingBalance)}` : undefined}
         size="xl"
         footer={
           <div className="flex w-full items-center justify-between">

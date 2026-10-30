@@ -96,6 +96,7 @@ export interface ListMeta {
   pageSize: number;
   total: number;
   totalPages: number;
+  openingBalanceTotal?: string;
 }
 
 export interface ListResponse<T> {

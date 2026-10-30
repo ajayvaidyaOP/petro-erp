@@ -148,6 +148,19 @@ public final class ShiftApi {
         int number = (int) Db.count("SELECT COALESCE(MAX(shift_number), 0) + 1 AS count FROM shifts WHERE station_id = ? AND business_date = ?", station.get("id"), date);
         List<Map<String, Object>> nozzles = Db.all("SELECT * FROM nozzles WHERE station_id = ? AND status = 'ACTIVE' ORDER BY number", station.get("id"));
         if (nozzles.isEmpty()) throw ApiException.unprocessable("Configure nozzles before opening a shift");
+        for (Map<String, Object> nozzle : nozzles) {
+            String mappedTankId = Db.str(nozzle, "tank_id");
+            if (mappedTankId == null || mappedTankId.isBlank()) {
+                throw ApiException.unprocessable("Active nozzle " + nozzle.get("label") + " is not mapped to an underground tank");
+            }
+            Map<String, Object> mappedTank = Db.one("SELECT id, station_id, product_id, status FROM tanks WHERE id = ?", mappedTankId);
+            if (mappedTank == null
+                    || !Db.str(station, "id").equals(Db.str(mappedTank, "station_id"))
+                    || !Db.str(nozzle, "product_id").equals(Db.str(mappedTank, "product_id"))
+                    || !"ACTIVE".equals(Db.str(mappedTank, "status"))) {
+                throw ApiException.unprocessable("Active nozzle " + nozzle.get("label") + " must be mapped to an ACTIVE tank of the same fuel product");
+            }
+        }
         String id = Clock.newId("shf");
         String now = Clock.nowIso();
         Db.tx(() -> {
@@ -288,6 +301,7 @@ public final class ShiftApi {
         if (auth.userId.equals(Db.str(shift, "closed_by")) && !"OWNER".equals(auth.roleKey)) {
             throw ApiException.forbidden("A shift must be approved by someone other than the person who closed it");
         }
+        Domain.assertDayOpen(Db.str(shift, "station_id"), Db.str(shift, "business_date").substring(0, 10));
         Db.exec("UPDATE shifts SET status = 'CLOSED', approved_by = ?, approved_at = ?, updated_at = ? WHERE id = ?", auth.userId, Clock.nowIso(), Clock.nowIso(), shift.get("id"));
         Db.exec("UPDATE shift_nozzle_readings SET status = 'APPROVED', updated_at = ? WHERE shift_id = ? AND status != 'REVERSED'", Clock.nowIso(), shift.get("id"));
         ctx.ok(detailOf(Db.one("SELECT * FROM shifts WHERE id = ?", shift.get("id"))));
@@ -296,18 +310,31 @@ public final class ShiftApi {
     private static void reverse(Web.Ctx ctx) {
         Auth auth = ctx.requireAuth();
         auth.require("shifts.approve");
-        Map<String, Object> shift = load(auth, ctx.p("id"));
-        Domain.assertDayOpen(Db.str(shift, "station_id"), Db.str(shift, "business_date"));
-        String reason = required(ctx, "reason");
+        String shiftId = ctx.p("id");
+        String reason = required(ctx, "reason").trim();
         if (reason.length() < 10) throw ApiException.validation("reason", "Reason must be at least 10 characters");
-        for (Map<String, Object> movement : Db.all("SELECT * FROM stock_movements WHERE reference_type = 'SHIFT' AND reference_id = ? AND type = 'DISPENSED'", shift.get("id"))) {
-            Domain.movement(Db.str(shift, "tenant_id"), Db.str(shift, "station_id"), Db.str(movement, "tank_id"), Db.str(movement, "product_id"),
-                    "ADJUSTMENT", Money.litres(Money.d(movement.get("quantity_litres")).negate()), "SHIFT_REVERSAL", Db.str(shift, "id"),
-                    "Reversal of shift #" + shift.get("shift_number") + ": " + reason, auth.userId, false);
-        }
-        Db.exec("UPDATE shifts SET status = 'REVERSED', close_notes = ?, updated_at = ? WHERE id = ?", "REVERSED: " + reason, Clock.nowIso(), shift.get("id"));
-        Db.exec("UPDATE shift_nozzle_readings SET status = 'REVERSED', updated_at = ? WHERE shift_id = ?", Clock.nowIso(), shift.get("id"));
-        ctx.ok(detailOf(Db.one("SELECT * FROM shifts WHERE id = ?", shift.get("id"))));
+        Map<String, Object> reversed = Db.tx(() -> {
+            Map<String, Object> shift = load(auth, shiftId);
+            String currentStatus = Db.str(shift, "status");
+            if ("REVERSED".equals(currentStatus)) {
+                throw ApiException.conflict("This shift has already been reversed");
+            }
+            if (!"CLOSED".equals(currentStatus) && !"FLAGGED".equals(currentStatus)) {
+                throw ApiException.conflict("Only closed or flagged shifts can be reversed");
+            }
+            Domain.assertDayOpen(Db.str(shift, "station_id"), Db.str(shift, "business_date"));
+            for (Map<String, Object> movement : Db.all("SELECT * FROM stock_movements WHERE reference_type = 'SHIFT' AND reference_id = ? AND type = 'DISPENSED'", shift.get("id"))) {
+                Domain.movement(Db.str(shift, "tenant_id"), Db.str(shift, "station_id"), Db.str(movement, "tank_id"), Db.str(movement, "product_id"),
+                        "ADJUSTMENT", Money.litres(Money.d(movement.get("quantity_litres")).abs()), "SHIFT_REVERSAL", Db.str(shift, "id"),
+                        "Reversal of shift #" + shift.get("shift_number") + ": " + reason, auth.userId, false);
+            }
+            String now = Clock.nowIso();
+            Db.exec("UPDATE shifts SET status = 'REVERSED', close_notes = ?, updated_at = ? WHERE id = ?", "REVERSED: " + reason, now, shift.get("id"));
+            Db.exec("UPDATE shift_nozzle_readings SET status = 'REVERSED', updated_at = ? WHERE shift_id = ?", now, shift.get("id"));
+            Auth.audit(auth, "SHIFT_REVERSED", "Shift", Db.str(shift, "id"), Db.str(shift, "station_id"), "Shift #" + shift.get("shift_number") + " reversed: " + reason);
+            return detailOf(Db.one("SELECT * FROM shifts WHERE id = ?", shift.get("id")));
+        });
+        ctx.ok(reversed);
     }
 
     private static void patchNozzle(Web.Ctx ctx) {
