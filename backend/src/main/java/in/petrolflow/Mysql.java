@@ -65,9 +65,9 @@ public final class Mysql implements AutoCloseable {
     public void connect() {
         lock.lock();
         try {
-            open(false);
-            execUnlocked("CREATE DATABASE IF NOT EXISTS `" + database.replace("`", "``") + "` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-            execUnlocked("USE `" + database.replace("`", "``") + "`");
+            // The database is provisioned by an operator. Select it as part of
+            // authentication so this account needs only privileges on that schema.
+            open(true);
             configureSession();
             lastUsedAtMs = System.currentTimeMillis();
         } finally {

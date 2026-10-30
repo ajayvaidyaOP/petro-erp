@@ -21,6 +21,7 @@ public final class BackendTests {
         System.out.println("Running PetroFlow Java 21 backend verification suite...");
         testMoneyAndJson();
         testPasswordsAndPermissions();
+        testMysqlConnectionInitializationWithoutDatabaseCreation();
         if (!Boolean.parseBoolean(System.getenv().getOrDefault("SKIP_DB_TESTS", "false"))) {
             testHttpAndDatabaseIntegration();
         }
@@ -57,15 +58,58 @@ public final class BackendTests {
         check(staffClean.equals(List.of("sales.read")), "Staff permission sanitization blocks escalations");
     }
 
+    private static void testMysqlConnectionInitializationWithoutDatabaseCreation() throws Exception {
+        try (MockMysqlFaultServer mock = new MockMysqlFaultServer()) {
+            Config config = Config.load(Map.ofEntries(
+                    Map.entry("PETROFLOW_DB_HOST", "127.0.0.1"),
+                    Map.entry("PETROFLOW_DB_PORT", String.valueOf(mock.port())),
+                    Map.entry("PETROFLOW_DB_NAME", "precreated_schema_probe"),
+                    Map.entry("PETROFLOW_DB_USER", "schema_scoped_probe"),
+                    Map.entry("PETROFLOW_DB_PASSWORD", ""),
+                    Map.entry("PETROFLOW_DB_POOL_MAX", "2")));
+            try {
+                Db.open(config);
+                check(mock.handshakeSchemas.contains("precreated_schema_probe"),
+                        "Mysql initial handshake selects the configured existing schema");
+                check(mock.sqlCommands.stream().noneMatch(sql -> sql.toUpperCase(java.util.Locale.ROOT).contains("CREATE DATABASE")),
+                        "Mysql connection initialization never issues CREATE DATABASE");
+                check(mock.sqlCommands.stream().noneMatch(sql -> sql.trim().toUpperCase(java.util.Locale.ROOT).startsWith("USE ")),
+                        "Mysql connection initialization never issues USE");
+                check(mock.sqlCommands.stream().anyMatch(sql -> sql.equalsIgnoreCase("SET NAMES utf8mb4")),
+                        "Mysql connection initialization preserves session configuration");
+            } finally {
+                Db.close();
+            }
+        }
+    }
+
     @SuppressWarnings("unchecked")
     private static void testHttpAndDatabaseIntegration() throws Exception {
+        if (!"true".equalsIgnoreCase(System.getenv().getOrDefault("PETROFLOW_TEST_DB_DISPOSABLE", "false"))) {
+            throw new IllegalStateException("Destructive backend integration tests require PETROFLOW_TEST_DB_DISPOSABLE=true");
+        }
         int testPort = Integer.parseInt(System.getenv().getOrDefault("TEST_API_PORT", "4199"));
         String testDb = System.getenv().getOrDefault("TEST_DB_NAME", "petroflow_test");
-        if (!testDb.endsWith("_test") && !testDb.endsWith("_e2e")) {
-            throw new IllegalStateException("Refusing to run destructive integration suite against non-test DB: " + testDb);
+        if (!"petroflow_test".equals(testDb)) {
+            throw new IllegalStateException("Refusing destructive integration tests outside designated disposable schema petroflow_test: " + testDb);
         }
         Config base = Config.load(Map.of("PORT", String.valueOf(testPort), "PETROFLOW_DB_NAME", testDb));
+        if (!("127.0.0.1".equals(base.dbHost) || "localhost".equalsIgnoreCase(base.dbHost))
+                || base.dbPort != 3306
+                || !"petroflow_test_app".equals(base.dbUser)) {
+            throw new IllegalStateException("Destructive integration tests require the isolated local CI MySQL service and petroflow_test_app account");
+        }
+        if (!"true".equalsIgnoreCase(System.getenv().getOrDefault("CI", "false"))
+                || !"true".equalsIgnoreCase(System.getenv().getOrDefault("GITHUB_ACTIONS", "false"))) {
+            throw new IllegalStateException("Destructive backend integration tests are restricted to GitHub Actions disposable MySQL");
+        }
         Db.open(base);
+        Map<String, Object> connectionIdentity = Db.one("SELECT DATABASE() AS selected_database, CURRENT_USER() AS principal");
+        check(testDb.equals(Db.str(connectionIdentity, "selected_database")),
+                "Backend integration connects to the pre-created disposable test schema");
+        check(Db.str(connectionIdentity, "principal") != null
+                        && Db.str(connectionIdentity, "principal").startsWith("petroflow_test_app@"),
+                "Backend integration uses the schema-scoped CI test principal");
         Main.resetDatabase(base);
         Main.apply(base.mysqlDir().resolve("schema.sql"));
         Main.seedIfEmpty(base);
@@ -2679,6 +2723,8 @@ public final class BackendTests {
         final java.util.concurrent.atomic.AtomicBoolean failNextQueryWithDeadlock1213 = new java.util.concurrent.atomic.AtomicBoolean(false);
         final java.util.concurrent.atomic.AtomicInteger deadlockAttempts = new java.util.concurrent.atomic.AtomicInteger(0);
         final java.util.concurrent.atomic.AtomicInteger stallNextQueryMs = new java.util.concurrent.atomic.AtomicInteger(0);
+        final java.util.concurrent.ConcurrentLinkedQueue<String> handshakeSchemas = new java.util.concurrent.ConcurrentLinkedQueue<>();
+        final java.util.concurrent.ConcurrentLinkedQueue<String> sqlCommands = new java.util.concurrent.ConcurrentLinkedQueue<>();
 
         MockMysqlFaultServer() throws Exception {
             this.server = new java.net.ServerSocket(0, 16, java.net.InetAddress.getByName("127.0.0.1"));
@@ -2715,13 +2761,15 @@ public final class BackendTests {
                 greet.write("123456789012\0".getBytes(java.nio.charset.StandardCharsets.US_ASCII)); // scramble2
                 greet.write("mysql_native_password\0".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
                 writePkt(out, 0, greet.toByteArray());
-                readPkt(in); // client handshake response
+                byte[] handshakeResponse = readPkt(in);
+                handshakeSchemas.add(readHandshakeSchema(handshakeResponse));
                 writePkt(out, 2, new byte[]{0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00}); // OK
 
                 while (!s.isClosed()) {
                     byte[] cmd = readPkt(in);
                     if (cmd == null || cmd.length == 0 || cmd[0] == 0x01) break;
                     String sql = new String(cmd, 1, cmd.length - 1, java.nio.charset.StandardCharsets.UTF_8).trim();
+                    sqlCommands.add(sql);
                     if (sql.toUpperCase().contains("SLEEP")) {
                         int stall = stallNextQueryMs.getAndSet(0);
                         if (stall > 0) Thread.sleep(stall);
@@ -2761,6 +2809,27 @@ public final class BackendTests {
             byte[] raw = s.getBytes(java.nio.charset.StandardCharsets.UTF_8);
             b.write(raw.length);
             b.write(raw);
+        }
+
+        private static String readHandshakeSchema(byte[] packet) {
+            if (packet == null || packet.length < 33) return "";
+            int cursor = 32; // capabilities, max packet, charset, reserved bytes
+            while (cursor < packet.length && packet[cursor] != 0) cursor++;
+            if (cursor >= packet.length) return "";
+            cursor++;
+            if (cursor >= packet.length) return "";
+            int authLength = packet[cursor++] & 0xff;
+            if (authLength == 0xfc && cursor + 2 <= packet.length) {
+                authLength = (packet[cursor] & 0xff) | ((packet[cursor + 1] & 0xff) << 8);
+                cursor += 2;
+            } else if (authLength == 0xfd && cursor + 3 <= packet.length) {
+                authLength = (packet[cursor] & 0xff) | ((packet[cursor + 1] & 0xff) << 8) | ((packet[cursor + 2] & 0xff) << 16);
+                cursor += 3;
+            }
+            cursor = Math.min(packet.length, cursor + authLength);
+            int end = cursor;
+            while (end < packet.length && packet[end] != 0) end++;
+            return new String(packet, cursor, end - cursor, java.nio.charset.StandardCharsets.UTF_8);
         }
 
         private static byte[] readPkt(java.io.InputStream in) throws Exception {

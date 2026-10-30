@@ -22,7 +22,7 @@ jobs:
         image: mysql:8.0
         env:
           MYSQL_ROOT_PASSWORD: petroflow
-          MYSQL_DATABASE: petroflow
+          MYSQL_DATABASE: petroflow_test
         ports:
           - 3306:3306
         options: >-
@@ -33,11 +33,39 @@ jobs:
     env:
       MYSQL_HOST: 127.0.0.1
       MYSQL_PORT: '3306'
-      MYSQL_DATABASE: petroflow
-      MYSQL_USER: root
-      MYSQL_PASSWORD: petroflow
+      MYSQL_DATABASE: petroflow_test
+      MYSQL_USER: petroflow_test_app
+      MYSQL_PASSWORD: petroflow_test_only
+      TEST_DB_NAME: petroflow_test
+      PETROFLOW_TEST_DB_DISPOSABLE: 'true'
     steps:
       - uses: actions/checkout@v4
+
+      - name: Provision disposable schemas and scoped test principal (administrator only)
+        env:
+          MYSQL_ROOT_PASSWORD: petroflow
+        run: |
+          MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -h 127.0.0.1 -P 3306 -u root <<'SQL'
+          CREATE DATABASE IF NOT EXISTS petroflow_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+          CREATE USER IF NOT EXISTS 'petroflow_test_app'@'%' IDENTIFIED BY 'petroflow_test_only';
+          -- This fresh job service creates the account; no roles are granted.
+          -- Only petroflow_test is required by db:seed, the backend suite, and mysqldump.
+          -- Schema DDL/reset requires CREATE, ALTER, DROP, INDEX, REFERENCES; app data uses CRUD.
+          GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, INDEX, REFERENCES ON petroflow_test.* TO 'petroflow_test_app'@'%';
+          SHOW GRANTS FOR 'petroflow_test_app'@'%';
+          SELECT user, host, Create_priv, Drop_priv, Grant_priv, File_priv, Process_priv, Super_priv
+            FROM mysql.user WHERE user='petroflow_test_app';
+          SQL
+          grants="$(MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -N -h 127.0.0.1 -P 3306 -u root -e "SHOW GRANTS FOR 'petroflow_test_app'@'%'")"
+          printf '%s\n' "$grants"
+          if printf '%s\n' "$grants" | grep -F 'ON *.*' | grep -vF 'GRANT USAGE ON *.*'; then
+            echo 'Unexpected global privilege on test application account' >&2
+            exit 1
+          fi
+          if printf '%s\n' "$grants" | grep -E '^GRANT .* TO ' | grep -v ' ON '; then
+            echo 'Unexpected role grant on test application account' >&2
+            exit 1
+          fi
 
       - uses: actions/setup-java@v4
         with:
@@ -53,6 +81,9 @@ jobs:
       - name: Install frontend & test dependencies
         run: npm ci
 
+      - name: MySQL schema and seed smoke test (pre-created disposable test schema)
+        run: npm run db:seed
+
       - name: Typecheck frontend & compile Java 21 backend
         run: npm run typecheck
 
@@ -62,11 +93,10 @@ jobs:
       - name: Build frontend assets & package Java API jar
         run: npm run build
 
-      - name: MySQL schema, seed & mysqldump smoke test
+      - name: MySQL mysqldump smoke test (disposable test schema)
         run: |
-          npm run db:seed
-          mysqldump --no-tablespaces -h 127.0.0.1 -P 3306 -u root -ppetroflow petroflow > /tmp/petroflow-backup.sql
-          test -s /tmp/petroflow-backup.sql
+          MYSQL_PWD="$MYSQL_PASSWORD" mysqldump --single-transaction --no-tablespaces -h 127.0.0.1 -P 3306 -u "$MYSQL_USER" petroflow_test > /tmp/petroflow-test-backup.sql
+          test -s /tmp/petroflow-test-backup.sql
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -97,10 +127,32 @@ jobs:
       MYSQL_HOST: 127.0.0.1
       MYSQL_PORT: '3306'
       E2E_MYSQL_DATABASE: petroflow_e2e
-      MYSQL_USER: root
-      MYSQL_PASSWORD: petroflow
+      MYSQL_USER: petroflow_e2e_app
+      MYSQL_PASSWORD: petroflow_e2e_only
     steps:
       - uses: actions/checkout@v4
+
+      - name: Provision E2E-scoped principal (administrator only)
+        env:
+          MYSQL_ROOT_PASSWORD: petroflow
+        run: |
+          MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -h 127.0.0.1 -P 3306 -u root <<'SQL'
+          CREATE DATABASE IF NOT EXISTS petroflow_e2e CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+          CREATE USER IF NOT EXISTS 'petroflow_e2e_app'@'%' IDENTIFIED BY 'petroflow_e2e_only';
+          -- Same schema-local DDL and CRUD privileges; no global or production grants.
+          GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, INDEX, REFERENCES ON petroflow_e2e.* TO 'petroflow_e2e_app'@'%';
+          SHOW GRANTS FOR 'petroflow_e2e_app'@'%';
+          SQL
+          grants="$(MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -N -h 127.0.0.1 -P 3306 -u root -e "SHOW GRANTS FOR 'petroflow_e2e_app'@'%'")"
+          printf '%s\n' "$grants"
+          if printf '%s\n' "$grants" | grep -F 'ON *.*' | grep -vF 'GRANT USAGE ON *.*'; then
+            echo 'Unexpected global privilege on E2E application account' >&2
+            exit 1
+          fi
+          if printf '%s\n' "$grants" | grep -E '^GRANT .* TO ' | grep -v ' ON '; then
+            echo 'Unexpected role grant on E2E application account' >&2
+            exit 1
+          fi
 
       - uses: actions/setup-java@v4
         with:
